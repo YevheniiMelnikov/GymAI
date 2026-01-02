@@ -188,7 +188,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-      target: py-runtime
+      target: api-runtime
       args:
         INSTALL_DEV: true
         EXTRAS: ""
@@ -317,7 +317,7 @@ services:
     container_name: webapp_watch
     working_dir: /app/apps/webapp
     command: >
-      sh -c "npm ci && VITE_OUT_DIR=/app/staticfiles/js-build npm run build:watch"
+      sh -c "npm ci && VITE_OUT_DIR=/app/staticfiles/js-build-v2 npm run build:watch"
     environment:
       CHOKIDAR_USEPOLLING: "true"
       CHOKIDAR_INTERVAL: "800"

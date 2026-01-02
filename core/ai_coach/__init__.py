@@ -1,5 +1,11 @@
 """AI coach domain utilities."""
 
+from .memify import (
+    memify_run_at_key,
+    memify_schedule_ttl,
+    memify_scheduled_key,
+    parse_memify_run_at,
+)
 from .models import AskAiPreparationResult
 from .payloads import (
     AiAttachmentPayload,
@@ -48,4 +54,8 @@ __all__ = [
     "AI_DIET_DELIVERED_KEY",
     "AI_DIET_FAILED_KEY",
     "AI_DIET_TASK_CLAIM_KEY",
+    "memify_run_at_key",
+    "memify_schedule_ttl",
+    "memify_scheduled_key",
+    "parse_memify_run_at",
 ]

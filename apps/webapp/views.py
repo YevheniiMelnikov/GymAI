@@ -1,10 +1,7 @@
 import json
-from datetime import datetime
-from uuid import uuid4
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, cast
-
-import httpx
+from typing import cast
+from uuid import uuid4
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from google.api_core.exceptions import NotFound as GCSNotFound
 from django.shortcuts import render
@@ -43,17 +40,19 @@ from apps.webapp.exercise_replace import (
     apply_sets_update,
     consume_program_replace_limit,
     consume_subscription_replace_limit,
+    parse_sets_payload,
     resolve_exercise_entry,
 )
 from .utils import STATIC_VERSION, transform_days
-
-from .utils import (
-    authenticate,
-    build_payment_gateway,
-    call_repo,
-    ensure_container_ready,
-    parse_program_id,
-    parse_subscription_id,
+from .utils import build_payment_gateway, call_repo, ensure_container_ready, parse_program_id, parse_subscription_id
+from .view_helpers import (
+    build_days_payload,
+    build_profile_payload,
+    fetch_program,
+    parse_timestamp,
+    post_internal_request,
+    resolve_internal_base_url,
+    resolve_profile,
 )
 
 
@@ -72,16 +71,10 @@ async def program_data(request: HttpRequest) -> JsonResponse:
     if pid_error:
         return pid_error
 
-    try:
-        auth_ctx = await authenticate(request, log_request=False)
-    except Exception:
-        logger.exception("Auth resolution failed")
-        return JsonResponse({"error": "server_error"}, status=500)
-    if auth_ctx.error:
-        return auth_ctx.error
-    profile = auth_ctx.profile
-    if profile is None:
-        return JsonResponse({"error": "not_found"}, status=404)
+    profile_or_error = await resolve_profile(request, log_request=False)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
     logger.info(f"program_data_request profile_id={profile.id} source={source} program_id={program_id}")
     try:
         total_programs = await call_repo(lambda pid: ProgramModel.objects.filter(profile_id=pid).count(), profile.id)
@@ -100,60 +93,12 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         days = transform_days(subscription_obj.exercises)
         return JsonResponse({"days": days, "id": str(subscription_obj.id), "language": profile.language})
 
-    program_obj: ProgramModel | ProgramSchema | None = None
-    try:
-        program_obj = cast(
-            ProgramSchema | None,
-            await call_repo(ProgramRepository.get_by_id, profile.id, program_id)
-            if program_id is not None
-            else await call_repo(ProgramRepository.get_latest, profile.id),
-        )
-    except Exception:
-        logger.exception(f"Failed to load program from repo profile_id={profile.id} program_id={program_id}")
-
-    if program_obj is None:
-        try:
-            all_programs = cast(list[ProgramSchema], await call_repo(ProgramRepository.get_all, profile.id))
-            program_obj = all_programs[0] if all_programs else None
-        except Exception:
-            logger.exception(f"Fallback load of all programs failed profile_id={profile.id}")
-
-    if program_obj is None:
-        try:
-            program_obj = await call_repo(
-                lambda pid: ProgramModel.objects.filter(profile_id=pid).order_by("-created_at", "-id").first(),
-                profile.id,
-            )
-            if program_obj is None:
-                await call_repo(lambda pid: ProgramModel.objects.filter(profile_id=pid).count(), profile.id)
-            else:
-                program_pk = getattr(program_obj, "id", None)
-                logger.info(f"Program loaded via direct ORM profile_id={profile.id} program_id={program_pk}")
-        except Exception:
-            logger.exception(f"Direct program lookup failed profile_id={profile.id}")
-
-    if isinstance(program_obj, ProgramModel):
-        try:
-            program_obj = ProgramSchema.model_validate(program_obj)
-        except Exception:
-            logger.exception(f"Failed to normalize ProgramModel for profile_id={profile.id}")
-            program_obj = None
+    program_obj = await fetch_program(profile.id, program_id)
 
     if program_obj is None:
         return JsonResponse({"error": "not_found"}, status=404)
 
-    created_raw = getattr(program_obj, "created_at", None)
-    created_at = 0
-    if isinstance(created_raw, datetime):
-        created_at = int(created_raw.timestamp())
-    else:
-        try:
-            created_at = int(float(created_raw or 0))
-        except (TypeError, ValueError):
-            try:
-                created_at = int(datetime.fromisoformat(str(created_raw)).timestamp())
-            except Exception:
-                created_at = 0
+    created_at = parse_timestamp(getattr(program_obj, "created_at", None))
 
     data: dict[str, object] = {
         "created_at": created_at,
@@ -162,14 +107,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
 
     program_id_value = getattr(program_obj, "id", None)
     if isinstance(program_obj.exercises_by_day, list):
-        days_payload: list[dict[str, Any]] = []
-        for item in program_obj.exercises_by_day:
-            if hasattr(item, "model_dump"):
-                days_payload.append(item.model_dump())
-            elif isinstance(item, dict):
-                days_payload.append(item)
-        if not days_payload:
-            days_payload = cast(list[dict[str, Any]], program_obj.exercises_by_day)
+        days_payload = build_days_payload(program_obj.exercises_by_day)
         transformed = transform_days(days_payload)
         data["days"] = transformed
         data["program"] = transformed
@@ -220,16 +158,10 @@ def exercise_gif(request: HttpRequest, gif_key: str) -> HttpResponse:
 async def programs_history(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    try:
-        auth_ctx = await authenticate(request)
-    except Exception:
-        logger.exception("Auth resolution failed")
-        return JsonResponse({"error": "server_error"}, status=500)
-    if auth_ctx.error:
-        return auth_ctx.error
-    profile = auth_ctx.profile
-    if profile is None:
-        return JsonResponse({"error": "not_found"}, status=404)
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
 
     try:
         programs = cast(
@@ -252,29 +184,16 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
     items = [
         {
             "id": int(p.id),
-            "created_at": int(cast(datetime, p.created_at).timestamp()),
+            "created_at": parse_timestamp(getattr(p, "created_at", None)),
         }
         for p in programs
     ]
     subscription_items: list[dict[str, int]] = []
     for subscription in subscriptions:
-        updated_raw = getattr(subscription, "updated_at", None)
-        updated_at = 0
-        if isinstance(updated_raw, datetime):
-            updated_at = int(updated_raw.timestamp())
-        else:
-            try:
-                updated_at = int(float(updated_raw or 0))
-            except (TypeError, ValueError):
-                try:
-                    updated_at = int(datetime.fromisoformat(str(updated_raw)).timestamp())
-                except Exception:
-                    updated_at = 0
-
         subscription_items.append(
             {
                 "id": int(getattr(subscription, "id", 0)),
-                "created_at": updated_at,
+                "created_at": parse_timestamp(getattr(subscription, "updated_at", None)),
             }
         )
 
@@ -296,16 +215,10 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
     if id_error:
         return id_error
 
-    try:
-        auth_ctx = await authenticate(request)
-    except Exception:
-        logger.exception("Auth resolution failed")
-        return JsonResponse({"error": "server_error"}, status=500)
-    if auth_ctx.error:
-        return auth_ctx.error
-    profile = auth_ctx.profile
-    if profile is None:
-        return JsonResponse({"error": "not_found"}, status=404)
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
 
     if subscription_id is not None:
         subscription = cast(
@@ -336,16 +249,10 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
 async def subscription_status(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    try:
-        auth_ctx = await authenticate(request)
-    except Exception:
-        logger.exception("Auth resolution failed")
-        return JsonResponse({"error": "server_error"}, status=500)
-    if auth_ctx.error:
-        return auth_ctx.error
-    profile = auth_ctx.profile
-    if profile is None:
-        return JsonResponse({"error": "not_found"}, status=404)
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
 
     active = cast(
         Subscription | None,
@@ -374,16 +281,10 @@ async def payment_data(request: HttpRequest) -> JsonResponse:
         logger.warning("Payment data requested without order_id")
         return JsonResponse({"error": "bad_request"}, status=400)
 
-    try:
-        auth_ctx = await authenticate(request)
-    except Exception:
-        logger.exception("Auth resolution failed")
-        return JsonResponse({"error": "server_error"}, status=500)
-    if auth_ctx.error:
-        return auth_ctx.error
-    profile = auth_ctx.profile
-    if profile is None:
-        return JsonResponse({"error": "not_found"}, status=404)
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
 
     try:
         payment = await call_repo(PaymentRepository.get_by_order_id, order_id)
@@ -429,17 +330,10 @@ async def payment_data(request: HttpRequest) -> JsonResponse:
 async def workouts_action(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    try:
-        auth_ctx = await authenticate(request)
-    except Exception:
-        logger.exception("Auth resolution failed")
-        return JsonResponse({"error": "server_error"}, status=500)
-    if auth_ctx.error:
-        return auth_ctx.error
-
-    profile = auth_ctx.profile
-    if profile is None:
-        return JsonResponse({"error": "not_found"}, status=404)
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
 
     try:
         payload = json.loads(request.body or "{}")
@@ -451,17 +345,10 @@ async def workouts_action(request: HttpRequest) -> JsonResponse:
     if action not in {"create_program", "create_subscription"}:
         return JsonResponse({"error": "bad_request"}, status=400)
 
-    profile_dump = {
-        "id": profile.id,
-        "tg_id": profile.tg_id,
-        "language": profile.language or settings.DEFAULT_LANG,
-        "status": profile.status,
-    }
+    profile_dump = build_profile_payload(profile)
     logger.info(f"workouts_action_request profile_id={profile.id} action={action}")
 
-    raw_base_url = (settings.BOT_INTERNAL_URL or "").rstrip("/")
-    fallback_base = f"http://{settings.BOT_INTERNAL_HOST}:{settings.BOT_INTERNAL_PORT}"
-    base_url = raw_base_url or fallback_base
+    base_url, fallback_base = resolve_internal_base_url()
     logger.debug(f"workouts_action_internal_base profile_id={profile.id} base_url={base_url}")
 
     proxy_payload = {
@@ -483,26 +370,19 @@ async def workouts_action(request: HttpRequest) -> JsonResponse:
     headers["Content-Type"] = "application/json"
 
     timeout = internal_request_timeout(settings)
-
-    async def _post(target_url: str) -> httpx.Response:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            return await client.post(target_url, content=body, headers=headers)
-
-    primary_url = f"{base_url}/internal/webapp/workouts/action/"
-    try:
-        resp = await _post(primary_url)
-    except httpx.HTTPError as exc:
-        logger.error(f"workouts_action_call_failed profile_id={profile.id} base_url={base_url} err={exc}")
-        if base_url != fallback_base:
-            fallback_url = f"{fallback_base}/internal/webapp/workouts/action/"
-            logger.info(f"workouts_action_retrying_fallback profile_id={profile.id} fallback={fallback_base}")
-            try:
-                resp = await _post(fallback_url)
-            except httpx.HTTPError as exc2:
-                logger.error(f"workouts_action_call_failed profile_id={profile.id} fallback={fallback_base} err={exc2}")
-                return JsonResponse({"error": "server_error"}, status=502)
-        else:
-            return JsonResponse({"error": "server_error"}, status=502)
+    resp = await post_internal_request(
+        "internal/webapp/workouts/action/",
+        body,
+        headers,
+        base_url=base_url,
+        fallback_base=fallback_base,
+        timeout=timeout,
+        profile_id=profile.id,
+        error_label="workouts_action_call_failed",
+        retry_label="workouts_action_retrying_fallback",
+    )
+    if resp is None:
+        return JsonResponse({"error": "server_error"}, status=502)
 
     if resp.status_code >= 400:
         logger.warning(
@@ -528,17 +408,10 @@ async def workouts_action(request: HttpRequest) -> JsonResponse:
 async def weekly_survey_submit(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    try:
-        auth_ctx = await authenticate(request)
-    except Exception:
-        logger.exception("Auth resolution failed")
-        return JsonResponse({"error": "server_error"}, status=500)
-    if auth_ctx.error:
-        return auth_ctx.error
-
-    profile = auth_ctx.profile
-    if profile is None:
-        return JsonResponse({"error": "not_found"}, status=404)
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
 
     try:
         payload_raw = json.loads(request.body or "{}")
@@ -625,20 +498,13 @@ async def weekly_survey_submit(request: HttpRequest) -> JsonResponse:
     if not queued:
         return JsonResponse({"error": "service_unavailable"}, status=503)
 
-    raw_base_url = (settings.BOT_INTERNAL_URL or "").rstrip("/")
-    fallback_base = f"http://{settings.BOT_INTERNAL_HOST}:{settings.BOT_INTERNAL_PORT}"
-    base_url = raw_base_url or fallback_base
+    base_url, fallback_base = resolve_internal_base_url()
     logger.debug(f"weekly_survey_internal_base profile_id={profile.id} base_url={base_url}")
 
     proxy_payload = {
         "profile_id": profile.id,
         "telegram_id": profile.tg_id,
-        "profile": {
-            "id": profile.id,
-            "tg_id": profile.tg_id,
-            "language": profile.language or settings.DEFAULT_LANG,
-            "status": profile.status,
-        },
+        "profile": build_profile_payload(profile),
     }
     body = json.dumps(proxy_payload).encode("utf-8")
     try:
@@ -654,35 +520,22 @@ async def weekly_survey_submit(request: HttpRequest) -> JsonResponse:
     if headers:
         headers["Content-Type"] = "application/json"
         timeout = internal_request_timeout(settings)
-
-        async def _post(target_url: str) -> httpx.Response:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                return await client.post(target_url, content=body, headers=headers)
-
-        primary_url = f"{base_url}/internal/webapp/weekly-survey/submitted/"
-        try:
-            resp = await _post(primary_url)
-            if resp.status_code >= 400:
-                logger.warning(
-                    "weekly_survey_notify_rejected "
-                    f"profile_id={profile.id} status={resp.status_code} body={resp.text[:200]}"
-                )
-        except httpx.HTTPError as exc:
-            logger.error(f"weekly_survey_notify_failed profile_id={profile.id} base_url={base_url} err={exc}")
-            if base_url != fallback_base:
-                fallback_url = f"{fallback_base}/internal/webapp/weekly-survey/submitted/"
-                logger.info(f"weekly_survey_notify_retry profile_id={profile.id} fallback={fallback_base}")
-                try:
-                    resp = await _post(fallback_url)
-                    if resp.status_code >= 400:
-                        logger.warning(
-                            "weekly_survey_notify_rejected "
-                            f"profile_id={profile.id} status={resp.status_code} body={resp.text[:200]}"
-                        )
-                except httpx.HTTPError as exc2:
-                    logger.error(
-                        f"weekly_survey_notify_failed profile_id={profile.id} fallback={fallback_base} err={exc2}"
-                    )
+        resp = await post_internal_request(
+            "internal/webapp/weekly-survey/submitted/",
+            body,
+            headers,
+            base_url=base_url,
+            fallback_base=fallback_base,
+            timeout=timeout,
+            profile_id=profile.id,
+            error_label="weekly_survey_notify_failed",
+            retry_label="weekly_survey_notify_retry",
+        )
+        if resp is not None and resp.status_code >= 400:
+            logger.warning(
+                "weekly_survey_notify_rejected "
+                f"profile_id={profile.id} status={resp.status_code} body={resp.text[:200]}"
+            )
 
     subscription_log_id = getattr(subscription, "id", None)
     logger.info(
@@ -696,17 +549,10 @@ async def weekly_survey_submit(request: HttpRequest) -> JsonResponse:
 async def update_exercise_sets(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    try:
-        auth_ctx = await authenticate(request)
-    except Exception:
-        logger.exception("Auth resolution failed")
-        return JsonResponse({"error": "server_error"}, status=500)
-    if auth_ctx.error:
-        return auth_ctx.error
-
-    profile = auth_ctx.profile
-    if profile is None:
-        return JsonResponse({"error": "not_found"}, status=404)
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
 
     try:
         payload_raw = json.loads(request.body or "{}")
@@ -727,27 +573,9 @@ async def update_exercise_sets(request: HttpRequest) -> JsonResponse:
         program_id = 0
     if not program_id:
         return JsonResponse({"error": "bad_request"}, status=400)
-    if not isinstance(sets_raw, list) or not sets_raw:
+    sets_payload = parse_sets_payload(sets_raw)
+    if not sets_payload:
         return JsonResponse({"error": "bad_request"}, status=400)
-
-    sets_payload: list[ExerciseSetPayload] = []
-    for entry in sets_raw:
-        if not isinstance(entry, dict):
-            return JsonResponse({"error": "bad_request"}, status=400)
-        reps_raw = entry.get("reps")
-        weight_raw = entry.get("weight")
-        if not isinstance(reps_raw, (int, str)):
-            return JsonResponse({"error": "bad_request"}, status=400)
-        if not isinstance(weight_raw, (int, float, str)):
-            return JsonResponse({"error": "bad_request"}, status=400)
-        try:
-            reps_value = int(str(reps_raw))
-            weight_value = float(str(weight_raw))
-        except (TypeError, ValueError):
-            return JsonResponse({"error": "bad_request"}, status=400)
-        if reps_value < 1 or weight_value < 0:
-            return JsonResponse({"error": "bad_request"}, status=400)
-        sets_payload.append({"reps": reps_value, "weight": weight_value})
 
     weight_unit = str(weight_unit_raw) if weight_unit_raw is not None else None
     payload: UpdateExercisePayload = {
@@ -781,17 +609,10 @@ async def update_exercise_sets(request: HttpRequest) -> JsonResponse:
 async def update_subscription_exercise_sets(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    try:
-        auth_ctx = await authenticate(request)
-    except Exception:
-        logger.exception("Auth resolution failed")
-        return JsonResponse({"error": "server_error"}, status=500)
-    if auth_ctx.error:
-        return auth_ctx.error
-
-    profile = auth_ctx.profile
-    if profile is None:
-        return JsonResponse({"error": "not_found"}, status=404)
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
 
     try:
         payload_raw = json.loads(request.body or "{}")
@@ -812,27 +633,9 @@ async def update_subscription_exercise_sets(request: HttpRequest) -> JsonRespons
         subscription_id = 0
     if not subscription_id:
         return JsonResponse({"error": "bad_request"}, status=400)
-    if not isinstance(sets_raw, list) or not sets_raw:
+    sets_payload = parse_sets_payload(sets_raw)
+    if not sets_payload:
         return JsonResponse({"error": "bad_request"}, status=400)
-
-    sets_payload: list[ExerciseSetPayload] = []
-    for entry in sets_raw:
-        if not isinstance(entry, dict):
-            return JsonResponse({"error": "bad_request"}, status=400)
-        reps_raw = entry.get("reps")
-        weight_raw = entry.get("weight")
-        if not isinstance(reps_raw, (int, str)):
-            return JsonResponse({"error": "bad_request"}, status=400)
-        if not isinstance(weight_raw, (int, float, str)):
-            return JsonResponse({"error": "bad_request"}, status=400)
-        try:
-            reps_value = int(str(reps_raw))
-            weight_value = float(str(weight_raw))
-        except (TypeError, ValueError):
-            return JsonResponse({"error": "bad_request"}, status=400)
-        if reps_value < 1 or weight_value < 0:
-            return JsonResponse({"error": "bad_request"}, status=400)
-        sets_payload.append({"reps": reps_value, "weight": weight_value})
 
     weight_unit = str(weight_unit_raw) if weight_unit_raw is not None else None
     payload: UpdateSubscriptionExercisePayload = {
@@ -878,17 +681,10 @@ async def update_subscription_exercise_sets(request: HttpRequest) -> JsonRespons
 async def replace_exercise(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    try:
-        auth_ctx = await authenticate(request)
-    except Exception:
-        logger.exception("Auth resolution failed")
-        return JsonResponse({"error": "server_error"}, status=500)
-    if auth_ctx.error:
-        return auth_ctx.error
-
-    profile = auth_ctx.profile
-    if profile is None:
-        return JsonResponse({"error": "not_found"}, status=404)
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
 
     try:
         payload_raw = json.loads(request.body or "{}")
@@ -927,17 +723,10 @@ async def replace_exercise(request: HttpRequest) -> JsonResponse:
 async def replace_subscription_exercise(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    try:
-        auth_ctx = await authenticate(request)
-    except Exception:
-        logger.exception("Auth resolution failed")
-        return JsonResponse({"error": "server_error"}, status=500)
-    if auth_ctx.error:
-        return auth_ctx.error
-
-    profile = auth_ctx.profile
-    if profile is None:
-        return JsonResponse({"error": "not_found"}, status=404)
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
 
     try:
         payload_raw = json.loads(request.body or "{}")
@@ -989,17 +778,10 @@ async def replace_subscription_exercise(request: HttpRequest) -> JsonResponse:
 async def _replace_exercise_status(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    try:
-        auth_ctx = await authenticate(request)
-    except Exception:
-        logger.exception("Auth resolution failed")
-        return JsonResponse({"error": "server_error"}, status=500)
-    if auth_ctx.error:
-        return auth_ctx.error
-
-    profile = auth_ctx.profile
-    if profile is None:
-        return JsonResponse({"error": "not_found"}, status=404)
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
 
     task_id_raw = request.GET.get("task_id")
     if not task_id_raw:

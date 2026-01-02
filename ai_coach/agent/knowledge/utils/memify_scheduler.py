@@ -4,7 +4,7 @@ import time
 from loguru import logger
 
 from config.app_settings import settings
-from core.utils.ai_coach_memify import (
+from core.ai_coach import (
     memify_run_at_key,
     memify_schedule_ttl,
     memify_scheduled_key,

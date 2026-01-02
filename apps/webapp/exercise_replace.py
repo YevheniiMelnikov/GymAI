@@ -137,6 +137,30 @@ def format_range(values: list[float]) -> str:
     return f"{format_number(min_value)}-{format_number(max_value)}"
 
 
+def parse_sets_payload(raw_sets: Any) -> list[ExerciseSetPayload] | None:
+    if not isinstance(raw_sets, list) or not raw_sets:
+        return None
+    sets_payload: list[ExerciseSetPayload] = []
+    for entry in raw_sets:
+        if not isinstance(entry, dict):
+            return None
+        reps_raw = entry.get("reps")
+        weight_raw = entry.get("weight")
+        if not isinstance(reps_raw, (int, str)):
+            return None
+        if not isinstance(weight_raw, (int, float, str)):
+            return None
+        try:
+            reps_value = int(str(reps_raw))
+            weight_value = float(str(weight_raw))
+        except (TypeError, ValueError):
+            return None
+        if reps_value < 1 or weight_value < 0:
+            return None
+        sets_payload.append({"reps": reps_value, "weight": weight_value})
+    return sets_payload
+
+
 def apply_sets_update(exercise_entry: dict[str, Any], payload: SetsUpdatePayload) -> None:
     sets_payload = payload["sets"]
     reps_values = [float(item["reps"]) for item in sets_payload]

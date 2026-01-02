@@ -9,100 +9,6 @@ from bot.texts import ButtonText, MessageText, translate
 from config.app_settings import settings
 
 
-@lru_cache(maxsize=None)
-def verification_status_map(lang: str) -> dict[bool, str]:
-    return {True: translate(MessageText.verified, lang), False: translate(MessageText.not_verified, lang)}
-
-
-@lru_cache(maxsize=None)
-def profile_params_map(lang: str) -> dict[str, str]:
-    return {
-        "male": translate(ButtonText.male, lang),
-        "female": translate(ButtonText.female, lang),
-        "enabled": translate(ButtonText.enabled, lang),
-        "disabled": translate(ButtonText.disabled, lang),
-        "created": translate(MessageText.waiting_for_text, lang),
-        "completed": translate(MessageText.default_status, lang),
-    }
-
-
-@lru_cache(maxsize=None)
-def service_types_map(lang: str) -> dict[str, str]:
-    return {
-        "subscription": translate(ButtonText.subscription, lang),
-        "program": translate(ButtonText.program, lang),
-    }
-
-
-def get_profile_attributes(user: Optional[Profile], lang: str) -> dict[str, str]:
-    def attr(name: str) -> str:
-        val = getattr(user, name, "") if user else ""
-        return str(val) if val is not None else ""
-
-    def diet_block() -> str:
-        if user is None:
-            return ""
-        allergies = str(user.diet_allergies or "").strip()
-        products = user.diet_products or []
-        if not allergies and not products:
-            return ""
-        labels = {
-            "eng": {
-                "title": "Diet preferences 🥗",
-                "allergies": "Allergies",
-                "products": "Products",
-            },
-            "ru": {
-                "title": "Пищевые привычки 🥗",
-                "allergies": "Аллергии",
-                "products": "Продукты",
-            },
-            "ua": {
-                "title": "Харчові звички 🥗",
-                "allergies": "Алергії",
-                "products": "Продукти",
-            },
-        }.get(
-            lang,
-            {
-                "title": "Diet preferences 🥗",
-                "allergies": "Allergies",
-                "products": "Products",
-            },
-        )
-        lines = [f"<b>{labels['title']}</b>"]
-        if allergies:
-            lines.append(f"{labels['allergies']}: <em>{allergies}</em>")
-        if products:
-            product_labels = {
-                "plant_food": translate(ButtonText.plant_food, lang),
-                "meat": translate(ButtonText.meat, lang),
-                "fish_seafood": translate(ButtonText.fish_seafood, lang),
-                "eggs": translate(ButtonText.eggs, lang),
-                "dairy": translate(ButtonText.dairy, lang),
-            }
-            translated = [product_labels.get(item, item) for item in products if str(item).strip()]
-            if translated:
-                lines.append(f"{labels['products']}:")
-                lines.extend(f"- <em>{product}</em>" for product in translated)
-        return "\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n" + "\n".join(lines)
-
-    location_key = attr("workout_location").strip().lower()
-    workout_locations = get_workout_locations(lang)
-    experience_key = attr("workout_experience").strip().lower()
-    experience_levels = get_workout_experience_levels(lang)
-    return {
-        "born_in": attr("born_in"),
-        "experience": experience_levels.get(experience_key, attr("workout_experience")),
-        "goals": attr("workout_goals"),
-        "workout_location": workout_locations.get(location_key, "") if location_key else "",
-        "weight": attr("weight"),
-        "height": attr("height"),
-        "notes": attr("health_notes"),
-        "diet_preferences": diet_block(),
-    }
-
-
 StateMessageKey = tuple[State, MessageText | None]
 
 _STATE_MESSAGE_KEYS: dict[str, StateMessageKey] = {
@@ -121,6 +27,62 @@ def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
     state, msg_key = _STATE_MESSAGE_KEYS.get(callback, (States.gender, None))
     message = translate(msg_key, lang) if msg_key else ""
     return state, message
+
+
+def get_profile_attributes(user: Optional[Profile], lang: str) -> dict[str, str]:
+    def attr(name: str) -> str:
+        val = getattr(user, name, "") if user else ""
+        return str(val) if val is not None else ""
+
+    def fill_template(template: str, **values: str) -> str:
+        result = template
+        for key, value in values.items():
+            result = result.replace(f"{{{key}}}", value)
+        return result
+
+    def diet_block() -> str:
+        if user is None:
+            return ""
+        allergies = str(user.diet_allergies or "").strip()
+        products = user.diet_products or []
+        if not allergies and not products:
+            return ""
+        separator = translate(MessageText.diet_preferences_separator, lang)
+        title_line = translate(MessageText.diet_preferences_title_line, lang)
+        allergies_line = translate(MessageText.diet_preferences_allergies_line, lang)
+        products_header = translate(MessageText.diet_preferences_products_header, lang)
+        product_item = translate(MessageText.diet_preferences_product_item, lang)
+        lines = [title_line]
+        if allergies:
+            lines.append(fill_template(allergies_line, allergies=allergies))
+        if products:
+            product_labels = {
+                "plant_food": translate(ButtonText.plant_food, lang),
+                "meat": translate(ButtonText.meat, lang),
+                "fish_seafood": translate(ButtonText.fish_seafood, lang),
+                "eggs": translate(ButtonText.eggs, lang),
+                "dairy": translate(ButtonText.dairy, lang),
+            }
+            translated = [product_labels.get(item, item) for item in products if str(item).strip()]
+            if translated:
+                lines.append(products_header)
+                lines.extend(fill_template(product_item, product=product) for product in translated)
+        return f"{separator}{'\n'.join(lines)}"
+
+    location_key = attr("workout_location").strip().lower()
+    workout_locations = get_workout_locations(lang)
+    experience_key = attr("workout_experience").strip().lower()
+    experience_levels = get_workout_experience_levels(lang)
+    return {
+        "born_in": attr("born_in"),
+        "experience": experience_levels.get(experience_key, attr("workout_experience")),
+        "goals": attr("workout_goals"),
+        "workout_location": workout_locations.get(location_key, "") if location_key else "",
+        "weight": attr("weight"),
+        "height": attr("height"),
+        "notes": attr("health_notes"),
+        "diet_preferences": diet_block(),
+    }
 
 
 @lru_cache(maxsize=None)

@@ -136,6 +136,31 @@ diet_products:
   ru: "Выберите из списка продукты, которые вы употребляете 👇"
   ua: "Оберіть зі списку продукти, які ви вживаєте 👇"
 
+diet_preferences_separator:
+  eng: "\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n"
+  ru: "\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n"
+  ua: "\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n"
+
+diet_preferences_title_line:
+  eng: "<b>Diet preferences 🥗</b>"
+  ru: "<b>Пищевые привычки 🥗</b>"
+  ua: "<b>Харчові звички 🥗</b>"
+
+diet_preferences_allergies_line:
+  eng: "Allergies: <em>{allergies}</em>"
+  ru: "Аллергии: <em>{allergies}</em>"
+  ua: "Алергії: <em>{allergies}</em>"
+
+diet_preferences_products_header:
+  eng: "Products:"
+  ru: "Продукты:"
+  ua: "Продукти:"
+
+diet_preferences_product_item:
+  eng: "- <em>{product}</em>"
+  ru: "- <em>{product}</em>"
+  ua: "- <em>{product}</em>"
+
 your_data_updated:
   eng: "Your data has been updated ✅"
   ru: "Ваши данные были обновлены ✅"

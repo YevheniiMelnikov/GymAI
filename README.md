@@ -132,7 +132,7 @@ In the production compose file the RabbitMQ ports are not published to the host;
 
 ## Frontend (webapp) live-reload
 
-For local development, `docker-compose-local.yml` includes a `webapp_watch` service (`npm run build:watch`) that rebuilds the webapp assets into `staticfiles/js-build`. It is not used in production; for simple backend work you can skip running it.
+For local development, `docker-compose-local.yml` includes a `webapp_watch` service (`npm run build:watch`) that rebuilds the webapp assets into `staticfiles/js-build-v2`. It is not used in production; for simple backend work you can skip running it.
 
 ## Celery
 

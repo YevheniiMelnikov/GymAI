@@ -260,6 +260,7 @@ const CLOSE_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" 
 </svg>`;
 const EXERCISE_EDIT_EVENT = 'exercise-edit-dialog';
 export const EXERCISE_EDIT_SAVED_EVENT = 'exercise-edit-saved';
+export const EXERCISE_TECHNIQUE_EVENT = 'exercise-technique-dialog';
 
 type ProgramSource = 'direct' | 'subscription';
 type ProgramContext = {
@@ -399,6 +400,7 @@ function getExerciseDialog(): ReplaceExerciseDialogController {
     root.dataset.state = 'closed';
     root.setAttribute('aria-hidden', 'true');
     document.removeEventListener('keydown', handleKeydown);
+    window.dispatchEvent(new CustomEvent(EXERCISE_TECHNIQUE_EVENT, { detail: { open: false } }));
   };
 
   const handleKeydown = (event: KeyboardEvent) => {
@@ -418,6 +420,7 @@ function getExerciseDialog(): ReplaceExerciseDialogController {
     root.dataset.state = 'open';
     root.setAttribute('aria-hidden', 'false');
     document.addEventListener('keydown', handleKeydown);
+    window.dispatchEvent(new CustomEvent(EXERCISE_TECHNIQUE_EVENT, { detail: { open: true } }));
     window.requestAnimationFrame(() => {
       panel.focus();
     });
@@ -526,6 +529,7 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
     root.dataset.state = 'closed';
     root.setAttribute('aria-hidden', 'true');
     document.removeEventListener('keydown', handleKeydown);
+    window.dispatchEvent(new CustomEvent(EXERCISE_TECHNIQUE_EVENT, { detail: { open: false } }));
   };
 
   const handleKeydown = (event: KeyboardEvent) => {
@@ -555,6 +559,7 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
     root.dataset.state = 'open';
     root.setAttribute('aria-hidden', 'false');
     document.addEventListener('keydown', handleKeydown);
+    window.dispatchEvent(new CustomEvent(EXERCISE_TECHNIQUE_EVENT, { detail: { open: true } }));
     window.requestAnimationFrame(() => {
       panel.focus();
     });

@@ -1,4 +1,4 @@
-from ai_coach.agent.knowledge.helpers import (
+from ai_coach.agent.knowledge.utils.helpers import (
     KnowledgeEntry,
     filter_entries_for_prompt,
     format_knowledge_entries,

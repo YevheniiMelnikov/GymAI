@@ -19,7 +19,7 @@ from ai_coach.agent.knowledge.schemas import KnowledgeSnippet
 from ai_coach.agent.prompts import COACH_SYSTEM_PROMPT, ASK_AI_USER_PROMPT, agent_instructions
 from ai_coach.agent.tools import toolset
 from ai_coach.agent.utils import get_knowledge_base, resolve_language_name
-from ai_coach.agent.knowledge.helpers import (
+from ai_coach.agent.knowledge.utils.helpers import (
     build_knowledge_entries,
     filter_entries_for_prompt,
     format_knowledge_entries,

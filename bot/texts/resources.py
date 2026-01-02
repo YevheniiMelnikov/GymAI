@@ -97,6 +97,11 @@ class MessageText(AutoName):
     diet_allergies_question = auto()
     diet_allergies = auto()
     diet_products = auto()
+    diet_preferences_separator = auto()
+    diet_preferences_title_line = auto()
+    diet_preferences_allergies_line = auto()
+    diet_preferences_products_header = auto()
+    diet_preferences_product_item = auto()
     diet_service_intro = auto()
 
     edit_profile = auto()
@@ -144,7 +149,6 @@ class MessageText(AutoName):
     new_workout_plan = auto()
     program_updated = auto()
     subscription_created = auto()
-    not_verified = auto()
 
     def __str__(self) -> str:
         return f"messages.{self.name}"

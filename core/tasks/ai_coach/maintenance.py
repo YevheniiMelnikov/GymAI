@@ -12,7 +12,7 @@ from config.app_settings import settings
 from core.celery_app import app
 from core.internal_http import build_internal_hmac_auth_headers, resolve_hmac_credentials
 from core.services import APIService
-from core.utils.ai_coach_memify import (
+from core.ai_coach import (
     memify_run_at_key,
     memify_schedule_ttl,
     memify_scheduled_key,

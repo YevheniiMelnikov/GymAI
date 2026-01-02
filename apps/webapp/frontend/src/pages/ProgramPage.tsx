@@ -11,6 +11,7 @@ import {
 import { applyLang, t } from '../i18n/i18n';
 import {
     EXERCISE_EDIT_SAVED_EVENT,
+    EXERCISE_TECHNIQUE_EVENT,
     fmtDate,
     renderLegacyProgram,
     renderProgramDays,
@@ -63,6 +64,7 @@ const ProgramPage: React.FC = () => {
     const [actionLoading, setActionLoading] = useState(false);
     const [fabPressed, setFabPressed] = useState(false);
     const [isExerciseEditOpen, setIsExerciseEditOpen] = useState(false);
+    const [isTechniqueOpen, setIsTechniqueOpen] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
     const [dateText, setDateText] = useState('');
     const [showSubscriptionConfirm, setShowSubscriptionConfirm] = useState(false);
@@ -111,6 +113,17 @@ const ProgramPage: React.FC = () => {
         window.addEventListener('exercise-edit-dialog', handleEditDialog);
         return () => {
             window.removeEventListener('exercise-edit-dialog', handleEditDialog);
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleTechniqueDialog = (event: Event) => {
+            const detail = (event as CustomEvent<{ open?: boolean }>).detail;
+            setIsTechniqueOpen(Boolean(detail?.open));
+        };
+        window.addEventListener(EXERCISE_TECHNIQUE_EVENT, handleTechniqueDialog);
+        return () => {
+            window.removeEventListener(EXERCISE_TECHNIQUE_EVENT, handleTechniqueDialog);
         };
     }, []);
 
@@ -460,7 +473,7 @@ const ProgramPage: React.FC = () => {
 
                 <div className="history-footer" />
             </div>
-            {creationAction && !isExerciseEditOpen && (
+            {creationAction && !isExerciseEditOpen && !isTechniqueOpen && (
                 <button
                     type="button"
                     style={fabStyle}
