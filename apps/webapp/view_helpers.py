@@ -31,6 +31,28 @@ async def resolve_profile(
     return auth_ctx.profile
 
 
+def normalize_support_contact(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    value = raw.strip()
+    if not value:
+        return None
+    lowered = value.lower()
+    if lowered.startswith("http://") or lowered.startswith("https://"):
+        return value
+    if value.startswith("@"):
+        value = value[1:]
+    if value.startswith("t.me/") or value.startswith("telegram.me/"):
+        return f"https://{value}"
+    return f"https://t.me/{value}"
+
+
+def build_support_contact_payload() -> dict[str, str]:
+    normalized = normalize_support_contact(settings.TG_SUPPORT_CONTACT)
+    url = normalized or settings.TG_SUPPORT_CONTACT or ""
+    return {"url": url}
+
+
 def parse_timestamp(raw: Any) -> int:
     if isinstance(raw, datetime):
         return int(raw.timestamp())
@@ -104,6 +126,34 @@ def build_profile_payload(profile: Profile) -> dict[str, Any]:
         "tg_id": profile.tg_id,
         "language": profile.language or settings.DEFAULT_LANG,
         "status": profile.status,
+    }
+
+
+def build_webapp_profile_payload(profile: Profile) -> dict[str, Any]:
+    def normalize_optional_text(value: object | None) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text or text == "-":
+            return None
+        return text
+
+    return {
+        "id": profile.id,
+        "tg_id": profile.tg_id,
+        "language": profile.language or settings.DEFAULT_LANG,
+        "status": profile.status,
+        "gender": profile.gender,
+        "born_in": profile.born_in,
+        "weight": profile.weight,
+        "height": profile.height,
+        "health_notes": normalize_optional_text(profile.health_notes),
+        "workout_experience": profile.workout_experience,
+        "workout_goals": normalize_optional_text(profile.workout_goals),
+        "diet_allergies": normalize_optional_text(profile.diet_allergies),
+        "diet_products": profile.diet_products or [],
+        "workout_location": profile.workout_location,
+        "credits": profile.credits,
     }
 
 

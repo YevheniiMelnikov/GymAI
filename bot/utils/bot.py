@@ -31,6 +31,7 @@ _WEBAPP_TARGETS: dict[str, _WebAppTarget] = {
     "payment": _WebAppTarget("payment", None, None, None),
     "faq": _WebAppTarget("faq", "direct", "faq", "#/faq"),
     "weekly_survey": _WebAppTarget("weekly_survey", None, None, "#/weekly-survey"),
+    "profile": _WebAppTarget("profile", None, None, "#/profile"),
 }
 
 

@@ -4,6 +4,7 @@ import { getPaymentData, HttpError } from '../api/http';
 import { applyLang, t } from '../i18n/i18n';
 import { readInitData, tmeReady } from '../telegram';
 import TopBar from '../components/TopBar';
+import BottomNav from '../components/BottomNav';
 
 const LIQPAY_SCRIPT_ID = 'liqpay-checkout-script';
 const LIQPAY_SCRIPT_SRC = 'https://static.liqpay.ua/libjs/checkout.js';
@@ -124,7 +125,7 @@ const PaymentPage: React.FC = () => {
     }, [orderId]);
 
     return (
-        <div className="page-container">
+        <div className="page-container with-bottom-nav">
             <TopBar title={t('payment.title')} />
 
             <div className="page-shell">
@@ -167,6 +168,7 @@ const PaymentPage: React.FC = () => {
                     </section>
                 </div>
             </div>
+            <BottomNav />
         </div>
     );
 };

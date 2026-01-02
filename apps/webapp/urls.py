@@ -14,6 +14,27 @@ urlpatterns = [
         "api/subscription/status/", views.subscription_status, name="webapp-subscription-status"
     ),
     path("api/payment/", views.payment_data, name="webapp-payment-data"),  # pyrefly: ignore[no-matching-overload]
+    path("api/profile/", views.profile_data, name="webapp-profile-data"),  # pyrefly: ignore[no-matching-overload]
+    path(  # pyrefly: ignore[no-matching-overload]
+        "api/profile/update/",
+        views.profile_update,
+        name="webapp-profile-update",
+    ),
+    path(  # pyrefly: ignore[no-matching-overload]
+        "api/profile/delete/",
+        views.profile_delete,
+        name="webapp-profile-delete",
+    ),
+    path(  # pyrefly: ignore[no-matching-overload]
+        "api/profile/balance/",
+        views.profile_balance_action,
+        name="webapp-profile-balance",
+    ),
+    path(  # pyrefly: ignore[no-matching-overload]
+        "api/support/",
+        views.support_contact,
+        name="webapp-support-contact",
+    ),
     path(  # pyrefly: ignore[no-matching-overload]
         "api/workouts/action/", views.workouts_action, name="webapp-workouts-action"
     ),

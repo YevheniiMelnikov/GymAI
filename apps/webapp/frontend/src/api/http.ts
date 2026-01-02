@@ -5,6 +5,9 @@ import {
   Program,
   ProgramResp,
   ProgramStructuredResponse,
+  ProfileResp,
+  ProfileUpdatePayload,
+  SupportContactResp,
   SubscriptionResp,
   SubscriptionStatusResp
 } from './types';
@@ -269,6 +272,63 @@ export async function submitWeeklySurvey(payload: WeeklySurveyPayload, initData:
   if (!resp.ok) {
     throw new HttpError(resp.status, statusToMessage(resp.status));
   }
+}
+
+export async function getProfile(initData: string, signal?: AbortSignal): Promise<ProfileResp> {
+  const url = new URL('api/profile/', window.location.href);
+  const headers: Record<string, string> = {};
+  if (initData) headers['X-Telegram-InitData'] = initData;
+  return await getJSON<ProfileResp>(url.toString(), { headers, signal });
+}
+
+export async function updateProfile(payload: ProfileUpdatePayload, initData: string): Promise<ProfileResp> {
+  const url = new URL('api/profile/update/', window.location.href);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (initData) headers['X-Telegram-InitData'] = initData;
+  const resp = await fetch(url.toString(), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) {
+    let errorKey: string | null = null;
+    try {
+      const data = (await resp.json()) as { error?: string | null };
+      if (data && typeof data.error === 'string') {
+        errorKey = data.error;
+      }
+    } catch {
+    }
+    throw new HttpError(resp.status, errorKey ?? statusToMessage(resp.status));
+  }
+  return (await resp.json()) as ProfileResp;
+}
+
+export async function deleteProfile(initData: string): Promise<void> {
+  const url = new URL('api/profile/delete/', window.location.href);
+  const headers: Record<string, string> = {};
+  if (initData) headers['X-Telegram-InitData'] = initData;
+  const resp = await fetch(url.toString(), { method: 'POST', headers });
+  if (!resp.ok) {
+    throw new HttpError(resp.status, statusToMessage(resp.status));
+  }
+}
+
+export async function triggerBalanceAction(initData: string): Promise<void> {
+  const url = new URL('api/profile/balance/', window.location.href);
+  const headers: Record<string, string> = {};
+  if (initData) headers['X-Telegram-InitData'] = initData;
+  const resp = await fetch(url.toString(), { method: 'POST', headers });
+  if (!resp.ok) {
+    throw new HttpError(resp.status, statusToMessage(resp.status));
+  }
+}
+
+export async function getSupportContact(initData: string, signal?: AbortSignal): Promise<SupportContactResp> {
+  const url = new URL('api/support/', window.location.href);
+  const headers: Record<string, string> = {};
+  if (initData) headers['X-Telegram-InitData'] = initData;
+  return await getJSON<SupportContactResp>(url.toString(), { headers, signal });
 }
 
 export async function saveExerciseSets(

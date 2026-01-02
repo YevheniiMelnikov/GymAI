@@ -4,11 +4,9 @@ from typing import Iterable, cast
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
-from aiogram.types import FSInputFile, InputFile, Message
+from aiogram.types import FSInputFile, InputFile
 
 from bot.texts import MessageText, translate
-from bot.utils.bot import answer_msg
-from config.app_settings import settings
 from core.schemas import Profile
 from core.services import APIService
 
@@ -87,35 +85,6 @@ async def send_message(
             disable_web_page_preview=True,
             parse_mode=ParseMode.HTML,
         )
-
-
-async def process_feedback_content(message: Message, profile: Profile, bot: Bot) -> bool:
-    text = translate(MessageText.new_feedback, settings.ADMIN_LANG).format(
-        profile_id=profile.id,
-        feedback=message.text or message.caption or "",
-    )
-
-    if message.text:
-        await bot.send_message(
-            chat_id=settings.ADMIN_ID,
-            text=text,
-            parse_mode=ParseMode.HTML,
-        )
-        return True
-
-    if message.photo:
-        photo_id = message.photo[-1].file_id
-        await bot.send_message(chat_id=settings.ADMIN_ID, text=text, parse_mode=ParseMode.HTML)
-        await bot.send_photo(chat_id=settings.ADMIN_ID, photo=photo_id)
-        return True
-
-    if message.video:
-        await bot.send_message(chat_id=settings.ADMIN_ID, text=text, parse_mode=ParseMode.HTML)
-        await bot.send_video(chat_id=settings.ADMIN_ID, video=message.video.file_id)
-        return True
-
-    await answer_msg(message, translate(MessageText.invalid_content, profile.language))
-    return False
 
 
 def chunk_message(text: str, *, template: str, sender_name: str) -> Iterable[str]:

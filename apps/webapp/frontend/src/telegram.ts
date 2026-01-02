@@ -14,6 +14,8 @@ type TelegramWebApp = {
   ready?: () => void;
   expand?: () => void;
   close?: () => void;
+  openTelegramLink?: (url: string) => void;
+  openLink?: (url: string) => void;
   platform?: string;
   setBackgroundColor?: (color: string) => void;
   setHeaderColor?: (color: string | 'bg_color' | 'secondary_bg_color') => void;
@@ -58,6 +60,22 @@ export function closeWebApp(): void {
     }
   } catch {}
   try { window.close(); } catch {}
+}
+
+export function openTelegramLink(url: string): void {
+  if (!url) return;
+  const webApp = getWebApp();
+  try {
+    webApp?.openTelegramLink?.(url);
+    return;
+  } catch {}
+  try {
+    webApp?.openLink?.(url);
+    return;
+  } catch {}
+  try {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  } catch {}
 }
 
 export function showBackButton(): void {

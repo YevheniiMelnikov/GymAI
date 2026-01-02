@@ -9,14 +9,9 @@ female:
   ua: "Жінка 👩"
 
 feedback:
-  eng: "Give feedback ✍️"
-  ru: "Обратная связь ✍️"
-  ua: "Зворотній зв'язок ✍️"
-
-send_feedback:
-  eng: "Give feedback 💬"
-  ru: "Оставить отзыв 💬"
-  ua: "Написати відгук 💬️️"
+  eng: "FAQ ❓"
+  ru: "Частые вопросы ❓"
+  ua: "Часті питання ❓"
 
 faq:
   eng: "FAQ ❓"

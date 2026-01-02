@@ -5,6 +5,7 @@ import HistoryPage from './pages/HistoryPage';
 import PaymentPage from './pages/PaymentPage';
 import FaqPage from './pages/FaqPage';
 import WeeklySurveyPage from './pages/WeeklySurveyPage';
+import ProfilePage from './pages/ProfilePage';
 import { useTelegramInit } from './hooks/useTelegramInit';
 
 const PAYMENT_ORDER_KEY = 'webapp:payment:order_id';
@@ -37,6 +38,8 @@ const LegacyRedirect = () => {
             navigate(withSearch('/history'), { replace: true });
         } else if (type === 'payment') {
             navigate(withSearch('/payment'), { replace: true });
+        } else if (type === 'profile') {
+            navigate(withSearch('/profile'), { replace: true });
         } else if (type === 'faq') {
             navigate(withSearch('/faq'), { replace: true });
         } else if (type === 'weekly_survey') {
@@ -58,6 +61,7 @@ const App: React.FC = () => {
                 <Route path="/" element={<ProgramPage />} />
                 <Route path="/history" element={<HistoryPage />} />
                 <Route path="/payment" element={<PaymentPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/faq" element={<FaqPage />} />
                 <Route path="/weekly-survey" element={<WeeklySurveyPage />} />
             </Routes>

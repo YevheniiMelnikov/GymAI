@@ -1,6 +1,6 @@
 import json
 from decimal import Decimal, ROUND_HALF_UP
-from typing import cast
+from typing import Any, cast
 from uuid import uuid4
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from google.api_core.exceptions import NotFound as GCSNotFound
@@ -21,6 +21,9 @@ from apps.webapp.weekly_survey import (
     enqueue_subscription_update,
     resolve_plan_age_weeks,
 )
+from apps.profiles.choices import ProfileStatus, WorkoutExperience
+from apps.profiles.repos import ProfileRepository
+from apps.profiles.serializers import ProfileSerializer
 from config.app_settings import settings
 from core.internal_http import build_internal_hmac_auth_headers, internal_request_timeout
 from core.cache import Cache
@@ -48,11 +51,24 @@ from .utils import build_payment_gateway, call_repo, ensure_container_ready, par
 from .view_helpers import (
     build_days_payload,
     build_profile_payload,
+    build_support_contact_payload,
+    build_webapp_profile_payload,
     fetch_program,
     parse_timestamp,
     post_internal_request,
     resolve_internal_base_url,
     resolve_profile,
+)
+
+from django.utils import timezone
+
+
+DIET_PRODUCT_OPTIONS: tuple[str, ...] = (
+    "plant_food",
+    "meat",
+    "fish_seafood",
+    "eggs",
+    "dairy",
 )
 
 
@@ -162,6 +178,8 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
     if isinstance(profile_or_error, JsonResponse):
         return profile_or_error
     profile = profile_or_error
+    if getattr(profile, "status", None) == ProfileStatus.deleted:
+        return JsonResponse({"error": "not_found"}, status=404)
 
     try:
         programs = cast(
@@ -169,7 +187,8 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
             await call_repo(ProgramRepository.get_all, int(getattr(profile, "id", 0))),
         )
     except Exception:
-        logger.exception(f"Failed to fetch programs for profile_id={profile.id}")
+        profile_id = getattr(profile, "id", "unknown")
+        logger.exception(f"Failed to fetch programs for profile_id={profile_id}")
         return JsonResponse({"error": "server_error"}, status=500)
 
     try:
@@ -178,7 +197,8 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
             await call_repo(SubscriptionRepository.get_all, int(getattr(profile, "id", 0))),
         )
     except Exception:
-        logger.exception(f"Failed to fetch subscriptions for profile_id={profile.id}")
+        profile_id = getattr(profile, "id", "unknown")
+        logger.exception(f"Failed to fetch subscriptions for profile_id={profile_id}")
         subscriptions = []
 
     items = [
@@ -328,6 +348,277 @@ async def payment_data(request: HttpRequest) -> JsonResponse:
             "language": profile.language,
         }
     )
+
+
+@require_GET  # type: ignore[misc]
+async def profile_data(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
+    if profile.status == ProfileStatus.deleted:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    return JsonResponse(build_webapp_profile_payload(profile))
+
+
+@csrf_exempt  # type: ignore[bad-specialization]
+@require_POST  # type: ignore[misc]
+async def profile_update(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
+    if profile.status == ProfileStatus.deleted:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    try:
+        payload = json.loads(request.body or "{}")
+    except Exception:
+        logger.warning("profile_update_invalid_payload")
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    if not isinstance(payload, dict):
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    updates: dict[str, Any] = {}
+
+    def read_text(value: object, *, max_len: int) -> tuple[bool, str | None, str | None]:
+        if value is None:
+            return True, None, None
+        if isinstance(value, str):
+            cleaned = value.strip()
+            if len(cleaned) > max_len:
+                return False, None, "profile.error.too_long"
+            return True, cleaned or None, None
+        return False, None, "bad_request"
+
+    def read_int(value: object) -> tuple[bool, int | None]:
+        if value is None or value == "":
+            return True, None
+        if isinstance(value, bool):
+            return False, None
+        try:
+            parsed = int(str(value))
+        except (TypeError, ValueError):
+            return False, None
+        if parsed < 0:
+            return False, None
+        return True, parsed
+
+    def read_choice(value: object, allowed: set[str]) -> tuple[bool, str | None]:
+        if value is None or value == "":
+            return True, None
+        if not isinstance(value, str):
+            return False, None
+        normalized = value.strip().lower()
+        if normalized not in allowed:
+            return False, None
+        return True, normalized
+
+    def read_diet_products(value: object) -> tuple[bool, list[str] | None]:
+        if value is None:
+            return True, None
+        if not isinstance(value, list):
+            return False, None
+        raw = [str(item).strip() for item in value if str(item).strip()]
+        allowed = set(DIET_PRODUCT_OPTIONS)
+        unknown = [item for item in raw if item not in allowed]
+        if unknown:
+            return False, None
+        ordered = [item for item in DIET_PRODUCT_OPTIONS if item in raw]
+        return True, ordered
+
+    text_fields = {
+        "health_notes": 250,
+        "workout_goals": 250,
+        "diet_allergies": 250,
+    }
+    int_fields = {
+        "born_in": read_int,
+        "weight": read_int,
+        "height": read_int,
+    }
+    choice_fields = {
+        "workout_experience": ({choice.value for choice in WorkoutExperience}, read_choice),
+        "workout_location": ({"gym", "home"}, read_choice),
+        "gender": ({"male", "female"}, read_choice),
+    }
+
+    for field_name, max_len in text_fields.items():
+        if field_name in payload:
+            ok, value, error_key = read_text(payload.get(field_name), max_len=max_len)
+            if not ok:
+                error = error_key or "bad_request"
+                return JsonResponse({"error": error, "field": field_name, "max": max_len}, status=400)
+            updates[field_name] = value
+
+    for field_name, reader in int_fields.items():
+        if field_name in payload:
+            ok, value = reader(payload.get(field_name))
+            if not ok:
+                return JsonResponse({"error": "bad_request"}, status=400)
+            updates[field_name] = value
+
+    for field_name, (allowed, reader) in choice_fields.items():
+        if field_name in payload:
+            ok, value = reader(payload.get(field_name), allowed)
+            if not ok:
+                return JsonResponse({"error": "bad_request"}, status=400)
+            updates[field_name] = value
+
+    if "diet_products" in payload:
+        ok, value = read_diet_products(payload.get("diet_products"))
+        if not ok:
+            return JsonResponse({"error": "bad_request"}, status=400)
+        updates["diet_products"] = value
+
+    if not updates:
+        return JsonResponse(build_webapp_profile_payload(profile))
+
+    profile_instance = await call_repo(ProfileRepository.get_model_by_id, int(profile.id))
+    for field_name, value in updates.items():
+        setattr(profile_instance, field_name, value)
+    await call_repo(profile_instance.save, update_fields=list(updates.keys()))
+
+    ProfileRepository.invalidate_cache(profile_id=profile_instance.id, tg_id=profile_instance.tg_id)
+    profile_payload = ProfileSerializer(profile_instance).data
+    await Cache.profile.save_record(profile_instance.id, profile_payload)
+
+    try:
+        from core.tasks.ai_coach.maintenance import sync_profile_knowledge
+
+        getattr(sync_profile_knowledge, "delay")(profile_instance.id, reason="profile_updated")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"profile_update_sync_failed profile_id={profile_instance.id} error={exc!s}")
+
+    return JsonResponse(build_webapp_profile_payload(profile_instance))
+
+
+@csrf_exempt  # type: ignore[bad-specialization]
+@require_POST  # type: ignore[misc]
+async def profile_delete(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
+
+    profile_instance = await call_repo(ProfileRepository.get_model_by_id, int(profile.id))
+    profile_instance.status = ProfileStatus.deleted
+    profile_instance.deleted_at = timezone.now()
+    profile_instance.gift_credits_granted = True
+    profile_instance.gender = None
+    profile_instance.born_in = None
+    profile_instance.weight = None
+    profile_instance.height = None
+    profile_instance.health_notes = None
+    profile_instance.workout_experience = None
+    profile_instance.workout_goals = None
+    profile_instance.workout_location = None
+    await call_repo(
+        profile_instance.save,
+        update_fields=[
+            "status",
+            "deleted_at",
+            "gift_credits_granted",
+            "gender",
+            "born_in",
+            "weight",
+            "height",
+            "health_notes",
+            "workout_experience",
+            "workout_goals",
+            "workout_location",
+        ],
+    )
+    ProfileRepository.invalidate_cache(profile_id=profile_instance.id, tg_id=profile_instance.tg_id)
+    await Cache.profile.delete_record(profile_instance.id)
+
+    try:
+        from core.tasks.ai_coach.maintenance import cleanup_profile_knowledge
+
+        getattr(cleanup_profile_knowledge, "delay")(profile_instance.id, reason="profile_deleted")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"profile_delete_cleanup_failed profile_id={profile_instance.id} error={exc!s}")
+
+    return JsonResponse({"status": "ok"})
+
+
+@csrf_exempt  # type: ignore[bad-specialization]
+@require_POST  # type: ignore[misc]
+async def profile_balance_action(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
+
+    profile_dump = build_profile_payload(profile)
+    logger.info(f"profile_balance_action_request profile_id={profile.id}")
+
+    base_url, fallback_base = resolve_internal_base_url()
+    proxy_payload = {
+        "profile_id": profile.id,
+        "telegram_id": profile.tg_id,
+        "profile": profile_dump,
+    }
+    body = json.dumps(proxy_payload).encode("utf-8")
+    try:
+        headers = build_internal_hmac_auth_headers(
+            key_id=settings.INTERNAL_KEY_ID,
+            secret_key=settings.INTERNAL_API_KEY,
+            body=body,
+        )
+    except Exception:
+        logger.exception("Failed to build internal auth headers for profile_balance_action")
+        return JsonResponse({"error": "server_error"}, status=500)
+    headers["Content-Type"] = "application/json"
+
+    timeout = internal_request_timeout(settings)
+    resp = await post_internal_request(
+        "internal/webapp/profile/balance/",
+        body,
+        headers,
+        base_url=base_url,
+        fallback_base=fallback_base,
+        timeout=timeout,
+        profile_id=profile.id,
+        error_label="profile_balance_action_failed",
+        retry_label="profile_balance_action_retry",
+    )
+    if resp is None:
+        return JsonResponse({"error": "server_error"}, status=502)
+
+    if resp.status_code >= 400:
+        logger.warning(
+            (
+                f"profile_balance_action_rejected profile_id={profile.id} "
+                f"status={resp.status_code} body={resp.text[:200]}"
+            )
+        )
+        if resp.status_code == 400:
+            return JsonResponse({"error": "bad_request"}, status=400)
+        if resp.status_code == 404:
+            return JsonResponse({"error": "not_found"}, status=404)
+        if resp.status_code == 503:
+            return JsonResponse({"error": "service_unavailable"}, status=503)
+        return JsonResponse({"error": "server_error"}, status=502)
+
+    logger.info(f"profile_balance_action_dispatched profile_id={profile.id}")
+    return JsonResponse({"status": "ok"})
+
+
+@require_GET  # type: ignore[misc]
+async def support_contact(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+    return JsonResponse(build_support_contact_payload())
 
 
 @csrf_exempt  # type: ignore[bad-specialization]

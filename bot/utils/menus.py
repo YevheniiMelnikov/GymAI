@@ -73,7 +73,14 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext, *, delete_source: bool = True) -> None:
     language = cast(str, profile.language or settings.DEFAULT_LANG)
     webapp_url = get_webapp_url("program", language)
-    menu = kb.main_menu_kb(language, webapp_url=webapp_url)
+    profile_webapp_url = get_webapp_url("profile", language)
+    faq_webapp_url = get_webapp_url("faq", language)
+    menu = kb.main_menu_kb(
+        language,
+        webapp_url=webapp_url,
+        profile_webapp_url=profile_webapp_url,
+        faq_webapp_url=faq_webapp_url,
+    )
     await state.clear()
     await state.update_data(profile=profile.model_dump(mode="json"))
     await state.set_state(States.main_menu)
@@ -102,8 +109,11 @@ async def show_balance_menu(
     state: FSMContext,
     *,
     already_answered: bool = False,
+    back_webapp_url: str | None = None,
 ) -> None:
     lang = cast(str, profile.language)
+    if back_webapp_url is None:
+        back_webapp_url = get_webapp_url("profile", lang)
     cached_profile = await Cache.profile.get_record(profile.id)
     plans = [p.name for p in ServiceCatalog.credit_packages()]
     file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"credit_packages_{lang}.png"
@@ -115,7 +125,7 @@ async def show_balance_menu(
         callback_obj,
         caption=translate(MessageText.credit_balance_menu, lang).format(credits=cached_profile.credits),
         photo=packages_img,
-        reply_markup=kb.tariff_plans_kb(lang, plans),
+        reply_markup=kb.tariff_plans_kb(lang, plans, back_webapp_url=back_webapp_url),
     )
     callback_target = callback_obj if not isinstance(callback_obj, BotMessageProxy) else None
     await del_msg(callback_target)

@@ -105,3 +105,43 @@ export type PaymentPayloadResp = {
   payment_type?: string;
   language?: string | null;
 };
+
+export type DietProduct = 'plant_food' | 'meat' | 'fish_seafood' | 'eggs' | 'dairy';
+export type WorkoutExperience = 'beginner' | 'amateur' | 'advanced' | 'pro';
+export type WorkoutLocation = 'gym' | 'home';
+export type Gender = 'male' | 'female';
+
+export type ProfileResp = {
+  id: number;
+  tg_id: number | null;
+  language: string;
+  status: string;
+  gender: Gender | null;
+  born_in: number | null;
+  weight: number | null;
+  height: number | null;
+  health_notes: string | null;
+  workout_experience: WorkoutExperience | null;
+  workout_goals: string | null;
+  diet_allergies: string | null;
+  diet_products: DietProduct[];
+  workout_location: WorkoutLocation | null;
+  credits: number | null;
+};
+
+export type ProfileUpdatePayload = {
+  gender?: Gender | null;
+  born_in?: number | null;
+  weight?: number | null;
+  height?: number | null;
+  health_notes?: string | null;
+  workout_experience?: WorkoutExperience | null;
+  workout_goals?: string | null;
+  diet_allergies?: string | null;
+  diet_products?: DietProduct[] | null;
+  workout_location?: WorkoutLocation | null;
+};
+
+export type SupportContactResp = {
+  url: string;
+};

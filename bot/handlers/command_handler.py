@@ -5,18 +5,19 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from core.enums import CommandName, ProfileStatus
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import InlineKeyboardButton as KbBtn, Message, WebAppInfo
 
 from bot.keyboards import select_language_kb
-from bot.states import States
+from bot.keyboard_builder import SafeInlineKeyboardMarkup as KbMarkup
 from loguru import logger
 from config.app_settings import settings
 from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
 from bot.utils.menus import show_main_menu
-from bot.utils.bot import prompt_language_selection
-from bot.texts import MessageText, translate
+from bot.utils.bot import get_webapp_url, prompt_language_selection
+from bot.texts import ButtonText, MessageText, translate
+from bot.states import States
 from core.services import APIService
 
 cmd_router = Router()
@@ -87,8 +88,14 @@ async def cmd_feedback(message: Message, state: FSMContext) -> None:
     profile_data = data.get("profile", {})
     profile = Profile.model_validate(profile_data) if profile_data else None
     language = profile.language if profile else settings.DEFAULT_LANG
-    await message.answer(translate(MessageText.feedback, language))
-    await state.set_state(States.feedback)
+    faq_url = get_webapp_url("faq", language)
+    if faq_url:
+        await message.answer(
+            translate(ButtonText.faq, language),
+            reply_markup=KbMarkup(
+                inline_keyboard=[[KbBtn(text=translate(ButtonText.faq, language), web_app=WebAppInfo(url=faq_url))]]
+            ),
+        )
     with suppress(TelegramBadRequest):
         await message.delete()
 

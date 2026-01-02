@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { renderSegmented, SegmentId } from '../components/Segmented';
 import TopBar from '../components/TopBar';
+import BottomNav from '../components/BottomNav';
 import { applyLang, t } from '../i18n/i18n';
 import { readInitData, readLocale, showBackButton, hideBackButton, onBackButtonClick, offBackButtonClick } from '../telegram';
 import type { HistoryItem, HistoryResp, Locale } from '../api/types';
@@ -148,7 +149,7 @@ const HistoryPage: React.FC = () => {
     };
 
     return (
-        <div className="page-container">
+        <div className="page-container with-bottom-nav">
             <TopBar title={t('page.history')} onBack={handleBack} />
 
             <div className="page-shell">
@@ -290,6 +291,7 @@ const HistoryPage: React.FC = () => {
                     </div>
                 </div>
             </div>
+            <BottomNav />
         </div>
     );
 };

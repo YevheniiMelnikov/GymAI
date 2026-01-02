@@ -15,6 +15,7 @@ from bot.utils.menus import (
     prompt_profile_completion_questionnaire,
     start_program_flow,
     start_subscription_flow,
+    show_balance_menu,
 )
 from bot.utils.bot import answer_msg, get_webapp_url
 from bot.states import States
@@ -155,6 +156,63 @@ async def internal_webapp_weekly_survey_submitted(request: web.Request) -> web.R
     await state.set_state(States.main_menu)
     target = BotMessageProxy(bot=bot, chat_id=chat_id)
     webapp_url = get_webapp_url("program", language)
-    menu = main_menu_kb(language, webapp_url=webapp_url)
+    profile_webapp_url = get_webapp_url("profile", language)
+    faq_webapp_url = get_webapp_url("faq", language)
+    menu = main_menu_kb(
+        language,
+        webapp_url=webapp_url,
+        profile_webapp_url=profile_webapp_url,
+        faq_webapp_url=faq_webapp_url,
+    )
     await answer_msg(target, translate(MessageText.main_menu, language), reply_markup=menu)
+    return web.json_response({"status": "ok"})
+
+
+@require_internal_auth
+async def internal_webapp_profile_balance(request: web.Request) -> web.Response:
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"detail": "bad_request"}, status=400)
+
+    try:
+        profile_id = int(payload.get("profile_id"))
+        telegram_id = int(payload.get("telegram_id"))
+    except (TypeError, ValueError):
+        return web.json_response({"detail": "bad_request"}, status=400)
+
+    profile_payload_raw = payload.get("profile")
+    profile_payload = profile_payload_raw if isinstance(profile_payload_raw, dict) else None
+    profile = await _load_profile(profile_id, fallback_payload=profile_payload)
+    if profile is None:
+        logger.warning(f"webapp_balance_profile_missing profile_id={profile_id}")
+        return web.json_response({"detail": "not_found"}, status=404)
+
+    chat_id = telegram_id
+    if profile.tg_id != telegram_id:
+        logger.warning(
+            f"webapp_balance_tg_mismatch profile_id={profile.id} payload_tg={telegram_id} profile_tg={profile.tg_id}"
+        )
+        chat_id = profile.tg_id
+
+    dispatcher = request.app.get("dp")
+    if dispatcher is None:
+        logger.error("Dispatcher missing for webapp balance action")
+        return web.json_response({"detail": "unavailable"}, status=503)
+
+    bot: Bot = request.app["bot"]
+    state_key = StorageKey(bot_id=bot.id, chat_id=chat_id, user_id=chat_id)
+    state = FSMContext(storage=dispatcher.storage, key=state_key)
+    await state.clear()
+    await state.update_data(profile=profile.model_dump(mode="json"), chat_id=chat_id)
+
+    target = BotMessageProxy(bot=bot, chat_id=chat_id)
+    profile_webapp_url = get_webapp_url("profile", profile.language)
+    await show_balance_menu(
+        target,
+        profile,
+        state,
+        already_answered=True,
+        back_webapp_url=profile_webapp_url,
+    )
     return web.json_response({"status": "ok"})

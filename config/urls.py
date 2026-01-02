@@ -35,6 +35,27 @@ urlpatterns = [
         name="webapp-subscription-status-direct",
     ),
     path("api/payment/", webapp_views.payment_data, name="webapp-payment-data-direct"),  # type: ignore[arg-type]
+    path("api/profile/", webapp_views.profile_data, name="webapp-profile-data-direct"),  # type: ignore[arg-type]
+    path(
+        "api/profile/update/",
+        cast(WebappView, webapp_views.profile_update),
+        name="webapp-profile-update-direct",
+    ),
+    path(
+        "api/profile/delete/",
+        cast(WebappView, webapp_views.profile_delete),
+        name="webapp-profile-delete-direct",
+    ),
+    path(
+        "api/profile/balance/",
+        cast(WebappView, webapp_views.profile_balance_action),
+        name="webapp-profile-balance-direct",
+    ),
+    path(
+        "api/support/",
+        cast(WebappView, webapp_views.support_contact),
+        name="webapp-support-contact-direct",
+    ),
     path("api/workouts/action/", webapp_views.workouts_action, name="webapp-workouts-action-direct"),  # type: ignore[arg-type]
     path(
         "api/weekly-survey/",

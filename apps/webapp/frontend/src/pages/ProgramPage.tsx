@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
     getProgram,
     getSubscription,
@@ -21,6 +21,7 @@ import { readInitData, readLocale, tmeReady } from '../telegram';
 import type { Locale, Program } from '../api/types';
 import { renderSegmented, SegmentId } from '../components/Segmented';
 import TopBar from '../components/TopBar';
+import BottomNav from '../components/BottomNav';
 
 const LAST_WORKOUT_SEGMENT_KEY = 'gymbot.workouts.lastSegment';
 const INTRO_SEEN_KEY = 'gymbot.webapp.introSeen';
@@ -53,7 +54,6 @@ const storeLastWorkoutSegment = (segment: SegmentId): void => {
 
 const ProgramPage: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams();
-    const navigate = useNavigate();
     const searchParamsKey = searchParams.toString();
     const contentRef = useRef<HTMLDivElement>(null);
     const switcherRef = useRef<HTMLDivElement>(null);
@@ -385,7 +385,7 @@ const ProgramPage: React.FC = () => {
 
     const fabStyle: React.CSSProperties = {
         position: 'fixed',
-        bottom: 30,
+        bottom: 'calc(28px + var(--bottom-nav-offset, 0px))',
         right: 20,
         width: 68,
         height: 68,
@@ -404,42 +404,9 @@ const ProgramPage: React.FC = () => {
         transition: 'transform 120ms ease, box-shadow 120ms ease',
     };
 
-    const handleHistoryIconClick = useCallback(() => {
-        const params = new URLSearchParams();
-        params.set('segment', activeSegment);
-        navigate(`/history?${params.toString()}`);
-        const tg = (window as any).Telegram?.WebApp;
-        try {
-            tg?.HapticFeedback?.impactOccurred('medium');
-        } catch {
-        }
-        try {
-            tg?.sendData?.('view_history');
-        } catch {
-        }
-    }, [activeSegment, navigate]);
-
-    const historyIconStyle: React.CSSProperties = {
-        background: 'none',
-        border: 'none',
-        color: 'currentColor',
-        cursor: 'pointer',
-        padding: 0,
-        outline: 'none',
-    };
-
     return (
-        <div className="page-container">
-            <TopBar title={t('program.title')}>
-                <button
-                    type="button"
-                    onClick={handleHistoryIconClick}
-                    aria-label={t('program.view_history')}
-                    style={historyIconStyle}
-                >
-                    <span className="topbar__icon topbar__icon--archive" aria-hidden="true" />
-                </button>
-            </TopBar>
+        <div className="page-container with-bottom-nav">
+            <TopBar title={t('program.title')} />
 
             <div className="page-shell">
                 <div id="content" aria-busy={loading}>
@@ -537,6 +504,7 @@ const ProgramPage: React.FC = () => {
                     </div>
                 </div>
             )}
+            {!isTechniqueOpen && <BottomNav />}
         </div>
     );
 };

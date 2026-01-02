@@ -1,8 +1,19 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
+import BottomNav from '../components/BottomNav';
 import { applyLang, t } from '../i18n/i18n';
-import { closeWebApp, readLocale, showBackButton, hideBackButton, onBackButtonClick, offBackButtonClick } from '../telegram';
+import {
+    closeWebApp,
+    openTelegramLink,
+    readInitData,
+    readLocale,
+    showBackButton,
+    hideBackButton,
+    onBackButtonClick,
+    offBackButtonClick,
+} from '../telegram';
+import { getSupportContact } from '../api/http';
 import type { LangCode, TranslationKey } from '../i18n/i18n';
 
 type FaqAnswer =
@@ -82,6 +93,7 @@ const FaqPage: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [lang, setLang] = useState<LangCode>('en');
+    const [supportUrl, setSupportUrl] = useState<string>('');
     const paramLang = searchParams.get('lang') || undefined;
 
     const handleBack = useCallback(() => {
@@ -92,6 +104,20 @@ const FaqPage: React.FC = () => {
     useEffect(() => {
         void applyLang(paramLang ?? readLocale()).then((resolved) => setLang(resolved));
     }, [paramLang]);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        const initData = readInitData();
+        const fetchSupport = async () => {
+            try {
+                const data = await getSupportContact(initData, controller.signal);
+                setSupportUrl(data.url || '');
+            } catch {
+            }
+        };
+        fetchSupport();
+        return () => controller.abort();
+    }, []);
 
     useEffect(() => {
         showBackButton();
@@ -119,7 +145,7 @@ const FaqPage: React.FC = () => {
     };
 
     return (
-        <div className="page-container" data-lang={lang}>
+        <div className="page-container with-bottom-nav" data-lang={lang}>
             <TopBar title={t('faq.title')} />
             <main className="page-shell">
                 <section className="program-panel">
@@ -132,7 +158,22 @@ const FaqPage: React.FC = () => {
                         ))}
                     </div>
                 </section>
+                {supportUrl && (
+                    <div className="faq-support">
+                        <button
+                            type="button"
+                            className="primary-button faq-support__button"
+                            onClick={() => {
+                                openTelegramLink(supportUrl);
+                                closeWebApp();
+                            }}
+                        >
+                            {t('faq.support')}
+                        </button>
+                    </div>
+                )}
             </main>
+            <BottomNav />
         </div>
     );
 };

@@ -24,9 +24,9 @@
   ua: "Інформація"
 
 /feedback:
-  eng: "Give a feedback"
-  ru: "Оставить отзыв"
-  ua: "Залишити відгук"
+  eng: "FAQ"
+  ru: "FAQ"
+  ua: "FAQ"
 
 /offer:
   eng: "Offer"

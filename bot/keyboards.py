@@ -3,7 +3,6 @@ from aiogram.types import WebAppInfo
 
 from bot.keyboard_builder import KeyboardBuilder, SafeInlineKeyboardMarkup as KbMarkup
 from bot.texts import ButtonText, translate
-from bot.utils.text import normalize_support_contact
 from config.app_settings import settings
 from bot.utils.diet_plans import (
     DIET_PRODUCT_CALLBACK_PREFIX,
@@ -24,16 +23,28 @@ def select_language_kb() -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def main_menu_kb(lang: str, *, webapp_url: str | None = None) -> KbMarkup:
+def main_menu_kb(
+    lang: str,
+    *,
+    webapp_url: str | None = None,
+    profile_webapp_url: str | None = None,
+    faq_webapp_url: str | None = None,
+) -> KbMarkup:
     builder = KeyboardBuilder(lang)
-    buttons = [[builder.add(ButtonText.my_profile, "my_profile")]]
+    if profile_webapp_url:
+        buttons = [[builder.add(ButtonText.my_profile, webapp_url=profile_webapp_url)]]
+    else:
+        buttons = [[builder.add(ButtonText.my_profile, "my_profile")]]
     if webapp_url:
         buttons.append([builder.add(ButtonText.my_program, webapp_url=webapp_url)])
     else:
         buttons.append([builder.add(ButtonText.my_program, "my_workouts")])
     buttons.append([builder.add(ButtonText.ask_ai, "ask_ai", bot_name=settings.BOT_NAME)])
     buttons.append([builder.add(ButtonText.create_diet, "create_diet")])
-    buttons.append([builder.add(ButtonText.feedback, "feedback")])
+    if faq_webapp_url:
+        buttons.append([builder.add(ButtonText.feedback, webapp_url=faq_webapp_url)])
+    else:
+        buttons.append([builder.add(ButtonText.feedback, "feedback")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
@@ -43,10 +54,13 @@ def balance_menu_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def tariff_plans_kb(lang: str, plans: list[str]) -> KbMarkup:
+def tariff_plans_kb(lang: str, plans: list[str], *, back_webapp_url: str | None = None) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [[builder.add(ButtonText[f"{plan}_plan"], f"plan_{plan}")] for plan in plans]
-    buttons.append([builder.add(ButtonText.prev_menu, "back")])
+    if back_webapp_url:
+        buttons.append([builder.add(ButtonText.prev_menu, webapp_url=back_webapp_url)])
+    else:
+        buttons.append([builder.add(ButtonText.prev_menu, "back")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
@@ -162,28 +176,6 @@ def workout_location_kb(lang: str) -> KbMarkup:
         [builder.add(ButtonText.gym_workout, "gym")],
         [builder.add(ButtonText.home_workout, "home")],
     ]
-    return KbMarkup(inline_keyboard=buttons, row_width=1)
-
-
-def feedback_kb(lang: str) -> KbMarkup:
-    builder = KeyboardBuilder(lang)
-    buttons = [[builder.add(ButtonText.prev_menu, "back")]]
-    return KbMarkup(inline_keyboard=buttons, row_width=1)
-
-
-def feedback_menu_kb(lang: str, *, faq_url: str | None = None) -> KbMarkup:
-    builder = KeyboardBuilder(lang)
-    buttons = [
-        [builder.add(ButtonText.send_feedback, "send_feedback")],
-    ]
-    support_url = normalize_support_contact(settings.TG_SUPPORT_CONTACT)
-    if support_url:
-        buttons.append([KbBtn(text=translate(ButtonText.support_contact, lang), url=support_url)])
-    if faq_url:
-        buttons.append([builder.add(ButtonText.faq, webapp_url=faq_url)])
-    else:
-        buttons.append([builder.add(ButtonText.faq, "faq_unavailable")])
-    buttons.append([builder.add(ButtonText.prev_menu, "back")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 

@@ -1,15 +1,15 @@
-from aiogram import Bot, Router, F
+from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, InlineKeyboardButton as KbBtn, WebAppInfo
 from loguru import logger
 
 from bot.states import States
-from bot.texts import MessageText, translate
+from bot.texts import ButtonText, MessageText, translate
+from bot.keyboard_builder import SafeInlineKeyboardMarkup as KbMarkup
 from config.app_settings import settings
 from core.cache import Cache
 from core.schemas import Profile
 from bot.utils.ask_ai import start_ask_ai_prompt
-from bot.utils.chat import process_feedback_content
 from bot.utils.menus import (
     show_main_menu,
     show_profile_editing_menu,
@@ -25,8 +25,6 @@ from bot.utils.bot import del_msg, answer_msg, get_webapp_url
 from core.exceptions import ProfileNotFoundError
 from core.services import APIService
 from bot.keyboards import (
-    feedback_kb,
-    feedback_menu_kb,
     payment_kb,
     yes_no_kb,
 )
@@ -86,11 +84,15 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     if cb_data == "feedback":
         await callback_query.answer()
         faq_url = get_webapp_url("faq", profile.language)
-        await message.answer(
-            translate(MessageText.feedback_menu, profile.language),
-            reply_markup=feedback_menu_kb(profile.language, faq_url=faq_url),
-        )
-        await state.set_state(States.feedback_menu)
+        if faq_url:
+            await message.answer(
+                translate(ButtonText.faq, profile.language),
+                reply_markup=KbMarkup(
+                    inline_keyboard=[
+                        [KbBtn(text=translate(ButtonText.faq, profile.language), web_app=WebAppInfo(url=faq_url))]
+                    ]
+                ),
+            )
         await del_msg(message)
 
     elif cb_data == "ask_ai":
@@ -274,69 +276,3 @@ async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None
         )
         await del_msg(message)
         await state.set_state(States.profile_delete)
-
-
-@menu_router.callback_query(States.feedback)
-async def feedback_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile_data = data.get("profile")
-    if not profile_data:
-        return
-    profile = Profile.model_validate(profile_data)
-    if callback_query.data != "back":
-        return
-
-    message = callback_query.message
-    if message is None or not isinstance(message, Message):
-        await callback_query.answer()
-        return
-
-    await callback_query.answer()
-    await show_main_menu(message, profile, state)
-    await del_msg(callback_query)
-
-
-@menu_router.callback_query(States.feedback_menu)
-async def feedback_submenu(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile_data = data.get("profile")
-    if not profile_data:
-        return
-    profile = Profile.model_validate(profile_data)
-    message = callback_query.message
-    if message is None or not isinstance(message, Message):
-        await callback_query.answer()
-        return
-    cb_data = callback_query.data or ""
-
-    if cb_data == "send_feedback":
-        await callback_query.answer()
-        await message.answer(
-            translate(MessageText.feedback, profile.language),
-            reply_markup=feedback_kb(profile.language),
-        )
-        await state.set_state(States.feedback)
-        await del_msg(message)
-        return
-    if cb_data == "back":
-        await callback_query.answer()
-        await show_main_menu(message, profile, state)
-        await del_msg(callback_query)
-        return
-    if cb_data == "faq_unavailable":
-        await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
-        return
-
-
-@menu_router.message(States.feedback)
-async def handle_feedback(message: Message, state: FSMContext, bot: Bot) -> None:
-    data = await state.get_data()
-    profile_data = data.get("profile")
-    if not profile_data:
-        return
-    profile = Profile.model_validate(profile_data)
-
-    if await process_feedback_content(message, profile, bot):
-        logger.info(f"Profile_id {profile.id} sent feedback")
-        await message.answer(translate(MessageText.feedback_sent, profile.language))
-        await show_main_menu(message, profile, state)
