@@ -27,6 +27,7 @@ class ButtonText(AutoName):
     my_profile = auto()
     my_program = auto()
     balance_status = auto()
+    top_up = auto()
     edit = auto()
     program = auto()
     subscription = auto()
@@ -121,6 +122,7 @@ class MessageText(AutoName):
     weekly_survey_prompt = auto()
 
     payment_failure = auto()
+    payment_success = auto()
     payment_in_progress = auto()
     contract_info_message = auto()
     follow_link = auto()

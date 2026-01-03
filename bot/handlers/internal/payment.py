@@ -1,3 +1,5 @@
+import inspect
+
 from aiohttp import web
 from loguru import logger
 
@@ -23,7 +25,10 @@ async def internal_payment_handler(request: web.Request) -> web.Response:
         return web.json_response({"detail": "Missing order_id or status"}, status=400)
 
     try:
-        await get_container().payment_processor().handle_webhook_event(order_id, status_, err_description)
+        processor = get_container().payment_processor()
+        if inspect.isawaitable(processor):
+            processor = await processor
+        await processor.handle_webhook_event(order_id, status_, err_description)
         return web.json_response({"result": "ok"})
     except Exception as e:
         logger.exception(f"Payment processing failed for {order_id}: {e}")

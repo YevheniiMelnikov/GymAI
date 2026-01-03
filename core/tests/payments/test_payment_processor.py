@@ -12,11 +12,11 @@ from config.app_settings import settings
 
 class DummyNotifier(PaymentNotifier):
     def __init__(self) -> None:
-        self.success_calls: list[tuple[int, str]] = []
+        self.success_calls: list[tuple[int, str, int]] = []
         self.failure_calls: list[tuple[int, str]] = []
 
-    def success(self, profile_id: int, language: str) -> None:
-        self.success_calls.append((profile_id, language))
+    def success(self, profile_id: int, language: str, credits: int) -> None:
+        self.success_calls.append((profile_id, language, credits))
 
     def failure(self, profile_id: int, language: str) -> None:
         self.failure_calls.append((profile_id, language))

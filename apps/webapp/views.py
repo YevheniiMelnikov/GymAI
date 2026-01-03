@@ -11,6 +11,7 @@ from loguru import logger
 from pydantic import ValidationError
 from rest_framework.exceptions import NotFound
 
+from apps.payments.models import Payment
 from apps.payments.repos import PaymentRepository
 from apps.workout_plans.models import Program as ProgramModel
 from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
@@ -27,7 +28,7 @@ from apps.profiles.serializers import ProfileSerializer
 from config.app_settings import settings
 from core.internal_http import build_internal_hmac_auth_headers, internal_request_timeout
 from core.cache import Cache
-from core.enums import WorkoutLocation
+from core.enums import WorkoutLocation, PaymentStatus
 from core.schemas import Program as ProgramSchema, Subscription
 from django.core.cache import cache
 from core.ai_coach.exercise_catalog import load_exercise_catalog
@@ -47,7 +48,14 @@ from apps.webapp.exercise_replace import (
     resolve_exercise_entry,
 )
 from .utils import STATIC_VERSION, transform_days
-from .utils import build_payment_gateway, call_repo, ensure_container_ready, parse_program_id, parse_subscription_id
+from .utils import (
+    build_payment_gateway,
+    call_repo,
+    ensure_container_ready,
+    parse_program_id,
+    parse_subscription_id,
+    resolve_credit_package,
+)
 from .view_helpers import (
     build_days_payload,
     build_profile_payload,
@@ -293,6 +301,75 @@ async def subscription_status(request: HttpRequest) -> JsonResponse:
     if active is not None:
         response["id"] = str(getattr(active, "id", ""))
     return JsonResponse(response)
+
+
+# type checking of async views with require_GET is not supported by stubs
+@csrf_exempt  # type: ignore[bad-specialization]
+@require_POST  # type: ignore[misc]
+async def payment_init(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
+
+    try:
+        payload = json.loads(request.body or "{}")
+    except Exception:
+        logger.warning("payment_init_invalid_payload")
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    if not isinstance(payload, dict):
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    package_id = payload.get("package_id")
+    if not isinstance(package_id, str) or not package_id.strip():
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    package = resolve_credit_package(package_id)
+    if package is None:
+        logger.warning(f"payment_init_unknown_package package_id={package_id} profile_id={profile.id}")
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    order_id = uuid4().hex
+    amount_value = Decimal(package.price).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    try:
+        await call_repo(
+            Payment.objects.create,
+            payment_type="credits",
+            profile_id=profile.id,
+            order_id=order_id,
+            amount=amount_value,
+            status=PaymentStatus.PENDING.value,
+            processed=False,
+        )
+    except Exception:
+        logger.exception(f"payment_init_create_failed profile_id={profile.id} package_id={package.package_id}")
+        return JsonResponse({"error": "server_error"}, status=500)
+
+    gateway = build_payment_gateway()
+    checkout = gateway.build_checkout(
+        "pay",
+        amount_value,
+        order_id,
+        "credits",
+        profile.id,
+    )
+
+    return JsonResponse(
+        {
+            "order_id": order_id,
+            "data": checkout.data,
+            "signature": checkout.signature,
+            "checkout_url": checkout.checkout_url,
+            "amount": str(amount_value),
+            "currency": "UAH",
+            "payment_type": "credits",
+            "language": profile.language,
+        }
+    )
 
 
 # type checking of async views with require_GET is not supported by stubs
@@ -1105,7 +1182,13 @@ async def replace_subscription_exercise_status(request: HttpRequest) -> JsonResp
 
 def index(request: HttpRequest) -> HttpResponse:
     logger.info(f"Webapp hit: {request.method} {request.get_full_path()}")
-    return render(request, "webapp/index.html", {"static_version": STATIC_VERSION})
+    return render(
+        request,
+        "webapp/index.html",
+        {
+            "static_version": STATIC_VERSION,
+        },
+    )
 
 
 def ping(request: HttpRequest) -> HttpResponse:

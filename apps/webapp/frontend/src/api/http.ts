@@ -1,6 +1,7 @@
 import { readLocale } from '../telegram';
 import {
   Locale,
+  PaymentInitResp,
   PaymentPayloadResp,
   Program,
   ProgramResp,
@@ -64,6 +65,8 @@ export type PaymentData = {
   paymentType: string;
   locale: Locale;
 };
+
+export type PaymentInitData = PaymentData & { orderId: string };
 
 export async function getJSON<T>(url: string, options: RequestInit = {}): Promise<T> {
   const resp = await fetch(url, options);
@@ -202,6 +205,35 @@ export async function getPaymentData(
   const raw = await getJSON<PaymentPayloadResp>(url.toString(), { headers, signal });
   const resolvedLocale = normalizeLocale(raw.language, locale);
   return {
+    data: raw.data,
+    signature: raw.signature,
+    checkoutUrl: raw.checkout_url,
+    amount: raw.amount,
+    currency: raw.currency ?? 'UAH',
+    paymentType: raw.payment_type ?? '',
+    locale: resolvedLocale,
+  };
+}
+
+export async function initPayment(
+  packageId: string,
+  initData: string,
+  signal?: AbortSignal
+): Promise<PaymentInitData> {
+  const locale = readLocale();
+  const url = new URL('api/payment/init/', window.location.href);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (initData) headers['X-Telegram-InitData'] = initData;
+
+  const raw = await getJSON<PaymentInitResp>(url.toString(), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ package_id: packageId }),
+    signal,
+  });
+  const resolvedLocale = normalizeLocale(raw.language, locale);
+  return {
+    orderId: raw.order_id,
     data: raw.data,
     signature: raw.signature,
     checkoutUrl: raw.checkout_url,

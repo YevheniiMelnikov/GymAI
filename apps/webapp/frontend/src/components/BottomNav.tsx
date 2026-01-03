@@ -39,7 +39,11 @@ const NAV_ITEMS: Array<Omit<NavItem, 'label'>> = [
     },
 ];
 
-const BottomNav: React.FC = () => {
+type BottomNavProps = {
+    activeKey?: NavItem['key'];
+};
+
+const BottomNav: React.FC<BottomNavProps> = ({ activeKey }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const pathName = location.pathname;
@@ -47,7 +51,7 @@ const BottomNav: React.FC = () => {
     return (
         <nav className="bottom-nav" aria-label="Primary">
             {NAV_ITEMS.map((item) => {
-                const active = item.isActive(pathName);
+                const active = activeKey ? item.key === activeKey : item.isActive(pathName);
                 const label =
                     item.key === 'faq'
                         ? t('nav.faq')

@@ -1,10 +1,9 @@
 import base64
+import hashlib
 import json
 from typing import Any
 
 from django.core.cache import cache
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 from django.http import JsonResponse, HttpRequest
 from loguru import logger
 from rest_framework import generics, status, serializers
@@ -17,7 +16,6 @@ from apps.payments.repos import PaymentRepository
 from apps.payments.serializers import PaymentSerializer
 from apps.payments.tasks import process_payment_webhook
 from config.app_settings import settings
-from core.payment.providers.liqpay import LiqPay
 
 
 class PaymentWebhookView(APIView):
@@ -25,11 +23,12 @@ class PaymentWebhookView(APIView):
 
     @staticmethod
     def _verify_signature(raw_data: str, signature: str) -> bool:
-        lp = LiqPay(settings.PAYMENT_PUB_KEY, settings.PAYMENT_PRIVATE_KEY)
-        expected = lp.str_to_sign(  # pyrefly: ignore[missing-attribute]
-            f"{settings.PAYMENT_PRIVATE_KEY}{raw_data}{settings.PAYMENT_PRIVATE_KEY}"
-        )
-        return signature == expected
+        payload = f"{settings.PAYMENT_PRIVATE_KEY}{raw_data}{settings.PAYMENT_PRIVATE_KEY}".encode("utf-8")
+        expected_sha3 = base64.b64encode(hashlib.sha3_256(payload).digest()).decode("ascii")
+        if signature == expected_sha3:
+            return True
+        expected_sha1 = base64.b64encode(hashlib.sha1(payload).digest()).decode("ascii")
+        return signature == expected_sha1
 
     @staticmethod
     def post(request: HttpRequest, *args, **kwargs) -> JsonResponse:
@@ -38,9 +37,11 @@ class PaymentWebhookView(APIView):
             signature_val = request.POST.get("signature")
 
             if not isinstance(raw_data_val, str) or not isinstance(signature_val, str):
+                logger.warning("payment_webhook_missing_fields")
                 return JsonResponse({"detail": "Missing fields"}, status=status.HTTP_400_BAD_REQUEST)
 
             if not PaymentWebhookView._verify_signature(raw_data_val, signature_val):
+                logger.warning("payment_webhook_invalid_signature")
                 return JsonResponse({"detail": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
@@ -53,6 +54,11 @@ class PaymentWebhookView(APIView):
             order_id = payment_info.get("order_id")
             if order_id:
                 cache.delete(f"payment:{order_id}")
+
+            logger.info(
+                "payment_webhook_received "
+                f"order_id={order_id} status={payment_info.get('status')} payment_id={payment_info.get('payment_id')}"
+            )
 
             process_payment_webhook.delay(  # pyrefly: ignore[not-callable]
                 order_id=order_id,
@@ -67,7 +73,6 @@ class PaymentWebhookView(APIView):
             return JsonResponse({"detail": "Webhook handling error"}, status=status.HTTP_400_BAD_REQUEST)
 
 
-@method_decorator(cache_page(60 * 5), name="dispatch")
 class PaymentListView(generics.ListAPIView):
     serializer_class = PaymentSerializer  # pyrefly: ignore[bad-override]
     permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]

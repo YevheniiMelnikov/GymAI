@@ -53,12 +53,12 @@ class DummyProfileService:
 class DummyNotifier:
     def __init__(self, log: list[str]) -> None:
         self.log = log
-        self.success_calls: list[tuple[int, str]] = []
+        self.success_calls: list[tuple[int, str, int]] = []
         self.failure_calls: list[tuple[int, str]] = []
 
-    def success(self, profile_id: int, language: str) -> None:
+    def success(self, profile_id: int, language: str, credits: int) -> None:
         self.log.append("notify")
-        self.success_calls.append((profile_id, language))
+        self.success_calls.append((profile_id, language, credits))
 
     def failure(self, profile_id: int, language: str) -> None:
         self.log.append("fail")
@@ -70,9 +70,10 @@ class CreditTopupStub:
         self.log = log
         self.calls: list[tuple[Any, Decimal]] = []
 
-    async def __call__(self, profile: Any, amount: Decimal) -> None:
+    async def __call__(self, profile: Any, amount: Decimal) -> int:
         self.log.append("topup")
         self.calls.append((profile, amount))
+        return 500
 
 
 def test_success_payment_strategy() -> None:
@@ -100,7 +101,7 @@ def test_success_payment_strategy() -> None:
         await strategy.handle(payment, profile)
         assert cache.payment.calls == [(1, "credits", PaymentStatus.SUCCESS)]
         assert credit_topup.calls[0][1] == Decimal("10")
-        assert notifier.success_calls == [(1, "eng")]
+        assert notifier.success_calls == [(1, "eng", 500)]
         assert log == ["topup", "notify"]
 
     asyncio.run(runner())

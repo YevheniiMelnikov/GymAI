@@ -21,7 +21,6 @@ def healthcheck_view(_):
 urlpatterns = [
     path("health/", healthcheck_view, name="healthcheck"),
     path("payments-webhook/", PaymentWebhookView.as_view(), name="payments-webhook"),
-    path("payment-webhook/", PaymentWebhookView.as_view(), name="payments-webhook-legacy"),
     path("admin/", admin.site.urls),
     path("api/v1/", include("apps.profiles.urls")),
     path("api/v1/", include("apps.payments.urls")),
@@ -34,6 +33,7 @@ urlpatterns = [
         cast(WebappView, webapp_views.subscription_status),
         name="webapp-subscription-status-direct",
     ),
+    path("api/payment/init/", webapp_views.payment_init, name="webapp-payment-init-direct"),  # type: ignore[arg-type]
     path("api/payment/", webapp_views.payment_data, name="webapp-payment-data-direct"),  # type: ignore[arg-type]
     path("api/profile/", webapp_views.profile_data, name="webapp-profile-data-direct"),  # type: ignore[arg-type]
     path(

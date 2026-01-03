@@ -130,17 +130,14 @@ async def show_balance_menu(
     if back_webapp_url is None:
         back_webapp_url = get_webapp_url("profile", lang)
     cached_profile = await Cache.profile.get_record(profile.id)
-    plans = [p.name for p in ServiceCatalog.credit_packages()]
-    file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"credit_packages_{lang}.png"
-    packages_img = FSInputFile(file_path)
+    topup_webapp_url = get_webapp_url("topup", lang)
     if isinstance(callback_obj, CallbackQuery) and not already_answered:
         await callback_obj.answer()
     await state.set_state(States.choose_plan)
     await answer_msg(
         callback_obj,
-        caption=translate(MessageText.credit_balance_menu, lang).format(credits=cached_profile.credits),
-        photo=packages_img,
-        reply_markup=kb.tariff_plans_kb(lang, plans, back_webapp_url=back_webapp_url),
+        translate(MessageText.credit_balance_menu, lang).format(credits=cached_profile.credits),
+        reply_markup=kb.topup_menu_kb(lang, webapp_url=topup_webapp_url, back_webapp_url=back_webapp_url),
     )
     callback_target = callback_obj if not isinstance(callback_obj, BotMessageProxy) else None
     await del_msg(callback_target)

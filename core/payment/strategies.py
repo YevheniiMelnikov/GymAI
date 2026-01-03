@@ -9,7 +9,7 @@ from core.services import ProfileService
 
 from .types import CacheProtocol, PaymentNotifier
 
-CreditTopupFunc = Callable[[Profile, Decimal], Awaitable[None]]
+CreditTopupFunc = Callable[[Profile, Decimal], Awaitable[int]]
 
 
 class PaymentStrategy(Protocol):
@@ -36,8 +36,8 @@ class SuccessPayment:
             PaymentStatus.SUCCESS,
         )
 
-        await self._credit_topup(profile, payment.amount)
-        self._notifier.success(profile.id, profile.language)
+        credits = await self._credit_topup(profile, payment.amount)
+        self._notifier.success(profile.id, profile.language, credits)
 
 
 class FailurePayment:

@@ -13,6 +13,7 @@ urlpatterns = [
     path(  # pyrefly: ignore[no-matching-overload]
         "api/subscription/status/", views.subscription_status, name="webapp-subscription-status"
     ),
+    path("api/payment/init/", views.payment_init, name="webapp-payment-init"),  # pyrefly: ignore[no-matching-overload]
     path("api/payment/", views.payment_data, name="webapp-payment-data"),  # pyrefly: ignore[no-matching-overload]
     path("api/profile/", views.profile_data, name="webapp-profile-data"),  # pyrefly: ignore[no-matching-overload]
     path(  # pyrefly: ignore[no-matching-overload]

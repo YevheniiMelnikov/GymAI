@@ -64,7 +64,7 @@ class PaymentProcessor:
         except Exception as e:  # noqa: BLE001
             logger.exception(f"Payment processing failed for {payment.id}: {e}")
 
-    async def process_credit_topup(self, profile: Profile, amount: Decimal) -> None:
+    async def process_credit_topup(self, profile: Profile, amount: Decimal) -> int:
         normalized = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         package_map = {package.price: package.credits for package in ServiceCatalog.credit_packages()}
         credits = package_map.get(normalized)
@@ -74,6 +74,7 @@ class PaymentProcessor:
             raise ValueError(message)
         await self.profile_service.adjust_credits(profile.id, credits)
         await self.cache.profile.update_record(profile.id, {"credits": profile.credits + credits})
+        return credits
 
     async def handle_webhook_event(self, order_id: str, status_: str, error: str = "") -> None:
         payment = await self.payment_service.update_payment_status(order_id, status_, error)

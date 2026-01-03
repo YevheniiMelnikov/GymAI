@@ -476,6 +476,8 @@ h1.page-title,
 }
 .payment-actions{
   margin-top: 4px;
+  display: grid;
+  gap: 10px;
 }
 .payment-actions .primary-button{
   width: 100%;
@@ -2007,6 +2009,115 @@ a:hover{ opacity: .9; }
 .profile-checklist__item input{
   width: 16px;
   height: 16px;
+}
+.topup-shell{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0 0;
+}
+.topup-page-shell{
+  gap: 8px;
+  align-self: stretch;
+  width: 100vw;
+  margin-top: calc(-1 * var(--app-padding-top) - 18px);
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding-inline: 0;
+  max-width: none;
+}
+.topup-carousel{
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-snap-stop: always;
+  scroll-behavior: auto;
+  scrollbar-width: none;
+  user-select: none;
+  padding: 0 0 8px;
+  display: flex;
+  gap: 5vw;
+  align-items: center;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-inline: 0;
+}
+.topup-carousel::-webkit-scrollbar{
+  width: 0;
+  height: 0;
+}
+.topup-carousel__card{
+  flex: 0 0 auto;
+  width: 96vw;
+  border-radius: 24px;
+  overflow: hidden;
+  margin-right: -44vw;
+  scroll-snap-align: center;
+  transform: scale(0.90);
+  transition: transform 320ms cubic-bezier(.2,.7,.2,1);
+  z-index: 1;
+  background: transparent;
+  cursor: pointer;
+}
+.topup-carousel__card.is-active{
+  transform: scale(1);
+  z-index: 2;
+}
+.topup-carousel__image{
+  width: 170%;
+  height: auto;
+  display: block;
+  margin-left: -35%;
+  transform-origin: center;
+  pointer-events: none;
+}
+.topup-carousel__card[data-id="start"] .topup-carousel__image{
+  transform: scale(1.06);
+}
+.topup-carousel__dots{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  z-index: 12;
+}
+.topup-carousel__dot{
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--text) 35%, transparent);
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.topup-carousel__dot.is-active{
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 6px color-mix(in oklab, var(--accent) 30%, transparent);
+}
+.topup-pay{
+  width: min(100%, 340px);
+  align-self: center;
+  padding: 14px 18px;
+  font-size: 16px;
+}
+.topup-cta{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--bottom-nav-offset) + env(safe-area-inset-bottom, 0px) + 12px);
+  display: flex;
+  justify-content: center;
+  padding: 0 16px;
+}
+@media (min-width: 900px){
+  .topup-page-shell{
+    margin-top: calc(-1 * var(--app-padding-top) - 18px);
+  }
 }
 .faq-support{
   display: flex;

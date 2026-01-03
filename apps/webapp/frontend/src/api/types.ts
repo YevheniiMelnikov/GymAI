@@ -106,6 +106,17 @@ export type PaymentPayloadResp = {
   language?: string | null;
 };
 
+export type PaymentInitResp = {
+  order_id: string;
+  data: string;
+  signature: string;
+  checkout_url: string;
+  amount: string;
+  currency?: string;
+  payment_type?: string;
+  language?: string | null;
+};
+
 export type DietProduct = 'plant_food' | 'meat' | 'fish_seafood' | 'eggs' | 'dairy';
 export type WorkoutExperience = 'beginner' | 'amateur' | 'advanced' | 'pro';
 export type WorkoutLocation = 'gym' | 'home';

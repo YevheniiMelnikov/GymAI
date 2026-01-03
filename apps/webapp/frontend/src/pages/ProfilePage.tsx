@@ -11,7 +11,7 @@ import {
     onBackButtonClick,
     offBackButtonClick
 } from '../telegram';
-import { deleteProfile, getProfile, HttpError, triggerBalanceAction, updateProfile } from '../api/http';
+import { deleteProfile, getProfile, HttpError, updateProfile } from '../api/http';
 import type {
     DietProduct,
     ProfileResp,
@@ -74,7 +74,6 @@ const ProfilePage: React.FC = () => {
     const [savingField, setSavingField] = useState<EditableField | null>(null);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [isBalanceLoading, setIsBalanceLoading] = useState(false);
     const [balancePressed, setBalancePressed] = useState(false);
     const [openDropdown, setOpenDropdown] = useState<'workout_experience' | 'workout_location' | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -236,24 +235,11 @@ const ProfilePage: React.FC = () => {
             setError(t('open_from_telegram'));
             return;
         }
-        const tg = (window as any).Telegram?.WebApp;
-        try {
-            tg?.HapticFeedback?.impactOccurred('medium');
-        } catch {
-        }
         setBalancePressed(true);
         window.setTimeout(() => setBalancePressed(false), 180);
-        setIsBalanceLoading(true);
-        try {
-            await triggerBalanceAction(initData);
-            closeWebApp();
-        } catch (err) {
-            const messageKey: TranslationKey = err instanceof HttpError ? (err.message as TranslationKey) : 'unexpected_error';
-            setError(t(messageKey));
-        } finally {
-            setIsBalanceLoading(false);
-        }
-    }, [initData]);
+        const query = searchParams.toString();
+        navigate(query ? `/topup?${query}` : '/topup');
+    }, [initData, navigate, searchParams]);
 
     const handleDelete = useCallback(async () => {
         if (!initData) {
@@ -387,9 +373,8 @@ const ProfilePage: React.FC = () => {
                                 type="button"
                                 className={`primary-button profile-balance__button ${balancePressed ? 'is-pressed' : ''}`}
                                 onClick={handleBalance}
-                                disabled={isBalanceLoading}
                             >
-                                {isBalanceLoading ? t('profile.balance.loading') : t('profile.balance.topup')}
+                                {t('profile.balance.topup')}
                             </button>
                         </div>
                     </section>

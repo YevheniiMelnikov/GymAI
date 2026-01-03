@@ -1,12 +1,15 @@
-from core.payment.providers.liqpay import LiqPay
+import base64
+import hashlib
+
+from apps.payments import views as payment_views
 from apps.payments.views import PaymentWebhookView
 
 
 def test_verify_signature(monkeypatch):
-    def fake_str_to_sign(data):
-        return "sig"
+    monkeypatch.setattr(payment_views.settings, "PAYMENT_PRIVATE_KEY", "key", raising=False)
 
-    monkeypatch.setattr(LiqPay, "str_to_sign", staticmethod(fake_str_to_sign), raising=False)
+    payload = b"keydatakey"
+    expected = base64.b64encode(hashlib.sha3_256(payload).digest()).decode("ascii")
 
-    assert PaymentWebhookView._verify_signature("data", "sig") is True
+    assert PaymentWebhookView._verify_signature("data", expected) is True
     assert PaymentWebhookView._verify_signature("data", "bad") is False

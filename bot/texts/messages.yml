@@ -143,6 +143,11 @@ payment_in_progress:
   ru: "Ваш платеж обрабатывается, ожидайте ⏳"
   ua: "Ваш платіж обробляється, очікуйте ⏳"
 
+payment_success:
+  eng: "Payment successful! {credits} GYMCOINS have been added ✅"
+  ru: "Оплата прошла успешно! Начислено {credits} GYMCOINS ✅"
+  ua: "Платіж успішний! Нараховано {credits} GYMCOINS ✅"
+
 
 request_in_progress:
   eng: "Processing your request will take a few minutes, we will notify you when everything is ready ⏳"
@@ -235,9 +240,9 @@ enter_wishes:
   ua: "Вкажіть текстом будь-які дані, які допоможуть {bot_name} скласти персоналізований тренувальний план (відсоток жиру, дата останнього тренування, поточний рівень активності, загальні побажання) ✍️"
 
 credit_balance_menu:
-  eng: "<b>GYMCOINS balance: </b>{credits}\n\nChoose from the available packages 👇"
-  ru: "<b>Баланс GYMCOINS: </b>{credits}\n\nВыберите из доступных пакетов 👇"
-  ua: "<b>Баланс GYMCOINS: </b>{credits}\n\nВиберіть з доступних пакетів 👇"
+  eng: "<b>GYMCOINS balance: </b>{credits}\n\nOpen the top-up page to choose a package 👇"
+  ru: "<b>Баланс GYMCOINS: </b>{credits}\n\nОткройте пополнение, чтобы выбрать пакет 👇"
+  ua: "<b>Баланс GYMCOINS: </b>{credits}\n\nВідкрийте поповнення, щоб вибрати пакет 👇"
 
 not_enough_credits:
   eng: "Not enough GYMCOINS. Please top up your balance."

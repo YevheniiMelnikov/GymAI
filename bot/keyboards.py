@@ -54,6 +54,18 @@ def balance_menu_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
+def topup_menu_kb(lang: str, *, webapp_url: str | None = None, back_webapp_url: str | None = None) -> KbMarkup:
+    builder = KeyboardBuilder(lang)
+    buttons: list[list[KbBtn]] = []
+    if webapp_url:
+        buttons.append([builder.add(ButtonText.top_up, webapp_url=webapp_url)])
+    if back_webapp_url:
+        buttons.append([builder.add(ButtonText.prev_menu, webapp_url=back_webapp_url)])
+    else:
+        buttons.append([builder.add(ButtonText.prev_menu, "back")])
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
 def tariff_plans_kb(lang: str, plans: list[str], *, back_webapp_url: str | None = None) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [[builder.add(ButtonText[f"{plan}_plan"], f"plan_{plan}")] for plan in plans]

@@ -53,7 +53,7 @@ class HTTPPaymentRepository(APIClient):
                 "order_id": order_id,
                 "payment_type": service_type,
                 "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
-                "status": PaymentStatus.PENDING,
+                "status": PaymentStatus.PENDING.value,
                 "processed": False,
             },
         )
@@ -61,7 +61,7 @@ class HTTPPaymentRepository(APIClient):
 
     async def update_payment(self, payment_id: int, data: dict) -> bool:
         status_code, _ = await self._handle_payment_api_request(
-            method="put", endpoint=f"{self.API_BASE_PATH}{payment_id}/", data=data
+            method="patch", endpoint=f"{self.API_BASE_PATH}{payment_id}/", data=data
         )
         return status_code in {200, 204}
 
@@ -82,10 +82,9 @@ class HTTPPaymentRepository(APIClient):
         if payment_id is None or payment is None:
             logger.error(f"Payment {order_id} not found")
             return None
-        try:
-            new_status = PaymentStatus(status_)
-        except Exception as exc:  # noqa: BLE001
-            logger.error(f"Invalid payment status '{status_}' for order_id={order_id}: {exc}")
+        new_status = self._normalize_status(status_)
+        if new_status is None:
+            logger.error(f"Invalid payment status '{status_}' for order_id={order_id}")
             return None
 
         if payment.status == new_status:
@@ -100,7 +99,7 @@ class HTTPPaymentRepository(APIClient):
         ok = await self.update_payment(
             payment_id,
             {
-                "status": new_status,
+                "status": new_status.value,
                 "error": error,
                 "processed": False,
             },
@@ -127,6 +126,46 @@ class HTTPPaymentRepository(APIClient):
             except ValidationError as e:
                 logger.error(f"Invalid payment data from API for order_id={order_id}: {e}")
         return None, None
+
+    @staticmethod
+    def _normalize_status(raw: str) -> PaymentStatus | None:
+        normalized = str(raw or "").strip().lower()
+        if not normalized:
+            return None
+        if normalized in {"success", "sandbox", "subscribed"}:
+            return PaymentStatus.SUCCESS
+        if normalized in {"failure", "error", "reversed", "unsubscribed"}:
+            return PaymentStatus.FAILURE
+        if normalized == "closed":
+            return PaymentStatus.CLOSED
+        if normalized.startswith("wait_"):
+            return PaymentStatus.PENDING
+        if normalized in {
+            "processing",
+            "prepared",
+            "hold_wait",
+            "cash_wait",
+            "invoice_wait",
+            "3ds_verify",
+            "captcha_verify",
+            "cvv_verify",
+            "ivr_verify",
+            "otp_verify",
+            "password_verify",
+            "phone_verify",
+            "pin_verify",
+            "receiver_verify",
+            "sender_verify",
+            "senderapp_verify",
+            "wait_accept",
+            "wait_compensation",
+            "wait_secure",
+            "wait_reserve",
+            "wait_lc",
+            "wait_card",
+        }:
+            return PaymentStatus.PENDING
+        return None
 
     async def get_latest_payment(self, profile_id: int, payment_type: str) -> Payment | None:
         status_code, response = await self._handle_payment_api_request(

@@ -5,6 +5,7 @@ import inspect
 import json
 import os
 import time
+from decimal import Decimal
 from functools import lru_cache
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +32,13 @@ T = TypeVar("T")
 class AuthResult:
     profile: Profile | None
     error: JsonResponse | None
+
+
+@dataclass(frozen=True)
+class CreditPackageInfo:
+    package_id: str
+    credits: int
+    price: Decimal
 
 
 async def ensure_container_ready() -> None:
@@ -134,6 +142,34 @@ def build_payment_gateway() -> LiqPayGateway:
         email=settings.EMAIL,
         checkout_url=settings.CHECKOUT_URL,
     )
+
+
+@lru_cache(maxsize=1)
+def credit_packages() -> dict[str, CreditPackageInfo]:
+    return {
+        "start": CreditPackageInfo(
+            package_id="start",
+            credits=int(settings.PACKAGE_START_CREDITS),
+            price=Decimal(settings.PACKAGE_START_PRICE),
+        ),
+        "optimum": CreditPackageInfo(
+            package_id="optimum",
+            credits=int(settings.PACKAGE_OPTIMUM_CREDITS),
+            price=Decimal(settings.PACKAGE_OPTIMUM_PRICE),
+        ),
+        "max": CreditPackageInfo(
+            package_id="max",
+            credits=int(settings.PACKAGE_MAX_CREDITS),
+            price=Decimal(settings.PACKAGE_MAX_PRICE),
+        ),
+    }
+
+
+def resolve_credit_package(package_id: str) -> CreditPackageInfo | None:
+    normalized = str(package_id or "").strip().lower()
+    if not normalized:
+        return None
+    return credit_packages().get(normalized)
 
 
 def _hash_webapp(token: str, check_string: str) -> str:

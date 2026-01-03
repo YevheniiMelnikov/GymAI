@@ -38,6 +38,11 @@ balance_status:
   ru: "Баланс 💰"
   ua: "Баланс 💰"
 
+top_up:
+  eng: "Top up 💳"
+  ru: "Пополнить 💳"
+  ua: "Поповнити 💳"
+
 edit:
   eng: "Edit ✏️"
   ru: "Редактировать ✏️"

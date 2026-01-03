@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Protocol, Type
+from typing import TYPE_CHECKING, Protocol, Type, runtime_checkable
 
 if TYPE_CHECKING:
     from core.cache.profile import ProfileCacheManager
@@ -14,7 +14,8 @@ class CacheProtocol(Protocol):
     payment: Type[PaymentCacheManager]
 
 
+@runtime_checkable
 class PaymentNotifier(Protocol):
-    def success(self, profile_id: int, language: str) -> None: ...
+    def success(self, profile_id: int, language: str, credits: int) -> None: ...
 
     def failure(self, profile_id: int, language: str) -> None: ...
