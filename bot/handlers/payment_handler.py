@@ -11,10 +11,12 @@ from bot.states import States
 from core.cache.payment import PaymentCacheManager
 from core.enums import PaymentStatus
 from core.services import APIService
-from bot.utils.menus import show_main_menu, show_my_workouts_menu, show_balance_menu
+from bot.utils.menus import show_main_menu, show_balance_menu
 from core.schemas import Profile
 from bot.utils.workout_plans import process_new_program, process_new_subscription
+from bot.utils.split_number import DEFAULT_SPLIT_NUMBER, update_split_number_message
 from bot.texts import MessageText, translate
+from config.app_settings import settings
 
 payment_router = Router()
 
@@ -78,7 +80,10 @@ async def confirm_service(callback_query: CallbackQuery, state: FSMContext) -> N
     profile = Profile.model_validate(data["profile"])
     action = str(callback_query.data or "").lower()
     if action in {"no", "back"}:
-        await show_my_workouts_menu(callback_query, profile, state)
+        await callback_query.answer()
+        count = int(data.get("split_number", DEFAULT_SPLIT_NUMBER))
+        await state.set_state(States.split_number_selection)
+        await update_split_number_message(callback_query, profile.language or settings.DEFAULT_LANG, count)
         return
 
     service_type = data.get("service_type")

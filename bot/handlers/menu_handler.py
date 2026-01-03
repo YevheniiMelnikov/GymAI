@@ -18,10 +18,12 @@ from bot.utils.menus import (
     show_balance_menu,
     prompt_subscription_type,
     start_diet_flow,
+    track_prompt_message,
 )
 from bot.utils.workout_plans import process_new_program, process_new_subscription
 from bot.utils.other import generate_order_id
 from bot.utils.bot import del_msg, answer_msg, get_webapp_url
+from bot.utils.prompts import send_enter_wishes_prompt
 from core.exceptions import ProfileNotFoundError
 from core.services import APIService
 from bot.keyboards import (
@@ -200,9 +202,10 @@ async def split_number_selection(callback_query: CallbackQuery, state: FSMContex
         return
     if action == SPLIT_NUMBER_BACK:
         await callback_query.answer()
-        message = callback_query.message
-        if message and isinstance(message, Message):
-            await show_main_menu(message, profile, state)
+        await state.set_state(States.enter_wishes)
+        prompt = await send_enter_wishes_prompt(callback_query, lang)
+        await track_prompt_message(state, prompt)
+        await del_msg(callback_query)
         return
     if action != SPLIT_NUMBER_CONTINUE:
         await callback_query.answer()

@@ -298,6 +298,10 @@ async def _track_prompt_message(state: FSMContext, message: Message | None) -> N
     await state.update_data(message_ids=message_ids, chat_id=message.chat.id)
 
 
+async def track_prompt_message(state: FSMContext, message: Message | None) -> None:
+    await _track_prompt_message(state, message)
+
+
 async def _start_profile_questionnaire(
     target: InteractionTarget,
     profile: Profile,

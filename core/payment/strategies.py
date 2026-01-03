@@ -57,7 +57,11 @@ class FailurePayment:
             payment.payment_type,
             PaymentStatus.FAILURE,
         )
-        logger.info(f"Payment {payment.id} failed for profile {profile.id}")
+        logger.warning(
+            "payment_failed "
+            f"payment_id={payment.id} order_id={payment.order_id} profile_id={profile.id} "
+            f"status={payment.status} error={payment.error}"
+        )
         self._notifier.failure(profile.id, profile.language)
 
 

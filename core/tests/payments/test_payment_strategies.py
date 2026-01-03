@@ -126,6 +126,7 @@ def test_failure_payment_strategy() -> None:
             status=PaymentStatus.FAILURE,
             created_at=0.0,
             updated_at=0.0,
+            error="declined",
         )
         profile = types.SimpleNamespace(id=1, profile=1, language="eng")
         await strategy.handle(payment, profile)
