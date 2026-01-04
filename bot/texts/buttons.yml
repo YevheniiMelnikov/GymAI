@@ -8,15 +8,10 @@ female:
   ru: "Женщина 👩"
   ua: "Жінка 👩"
 
-feedback:
-  eng: "FAQ ❓"
-  ru: "Частые вопросы ❓"
-  ua: "Часті питання ❓"
-
 faq:
   eng: "FAQ ❓"
-  ru: "FAQ ❓"
-  ua: "FAQ ❓"
+  ru: "Частые вопросы❓"
+  ua: "Часті питання❓"
 
 support_contact:
   eng: "Contact support 🆘"

@@ -5,18 +5,17 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from core.enums import CommandName, ProfileStatus
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardButton as KbBtn, Message, WebAppInfo
+from aiogram.types import Message
 
 from bot.keyboards import select_language_kb
-from bot.keyboard_builder import SafeInlineKeyboardMarkup as KbMarkup
 from loguru import logger
 from config.app_settings import settings
 from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
 from bot.utils.menus import show_main_menu
-from bot.utils.bot import get_webapp_url, prompt_language_selection
-from bot.texts import ButtonText, MessageText, translate
+from bot.utils.bot import prompt_language_selection
+from bot.texts import MessageText, translate
 from bot.states import States
 from core.services import APIService
 
@@ -73,33 +72,6 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         await prompt_language_selection(message, state)
 
 
-@cmd_router.message(Command(CommandName.help))
-async def cmd_help(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile_data = data.get("profile", {})
-    profile = Profile.model_validate(profile_data) if profile_data else None
-    language = profile.language if profile else settings.DEFAULT_LANG
-    await message.answer(translate(MessageText.help, language))
-
-
-@cmd_router.message(Command(CommandName.feedback))
-async def cmd_feedback(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile_data = data.get("profile", {})
-    profile = Profile.model_validate(profile_data) if profile_data else None
-    language = profile.language if profile else settings.DEFAULT_LANG
-    faq_url = get_webapp_url("faq", language)
-    if faq_url:
-        await message.answer(
-            translate(ButtonText.faq, language),
-            reply_markup=KbMarkup(
-                inline_keyboard=[[KbBtn(text=translate(ButtonText.faq, language), web_app=WebAppInfo(url=faq_url))]]
-            ),
-        )
-    with suppress(TelegramBadRequest):
-        await message.delete()
-
-
 @cmd_router.message(Command(CommandName.offer))
 async def cmd_policy(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
@@ -110,22 +82,6 @@ async def cmd_policy(message: Message, state: FSMContext) -> None:
         translate(MessageText.contract_info_message, lang).format(
             public_offer=settings.PUBLIC_OFFER,
             privacy_policy=settings.PRIVACY_POLICY,
-        ),
-        disable_web_page_preview=True,
-    )
-    with suppress(TelegramBadRequest):
-        await message.delete()
-
-
-@cmd_router.message(Command(CommandName.info))
-async def cmd_info(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile_data = data.get("profile", {})
-    profile = Profile.model_validate(profile_data) if profile_data else None
-    lang = profile.language if profile else settings.DEFAULT_LANG
-    await message.answer(
-        translate(MessageText.info, lang).format(
-            offer=settings.PUBLIC_OFFER, email=settings.EMAIL, tg=settings.TG_SUPPORT_CONTACT
         ),
         disable_web_page_preview=True,
     )

@@ -13,6 +13,9 @@ type TelegramWebApp = {
   initDataUnsafe?: TelegramInitData;
   ready?: () => void;
   expand?: () => void;
+  requestFullscreen?: () => void;
+  disableVerticalSwipes?: () => void;
+  enableVerticalSwipes?: () => void;
   close?: () => void;
   openTelegramLink?: (url: string) => void;
   openLink?: (url: string) => void;
@@ -43,12 +46,63 @@ function getWebApp(): TelegramWebApp | null {
   }
 }
 
+function isMobilePlatform(platform?: string): boolean {
+  return platform === 'android' || platform === 'ios';
+}
+
 export function tmeReady(): void {
   try { getWebApp()?.ready?.(); } catch {}
 }
 
 export function tmeExpand(): void {
   try { getWebApp()?.expand?.(); } catch {}
+}
+
+export function tmeRequestFullscreen(): void {
+  try {
+    const webApp = getWebApp();
+    if (!isMobilePlatform(webApp?.platform)) return;
+    webApp?.requestFullscreen?.();
+  } catch {}
+}
+
+export function tmeDisableVerticalSwipes(): void {
+  try { getWebApp()?.disableVerticalSwipes?.(); } catch {}
+}
+
+export function tmeSetHeaderColor(color: string): void {
+  if (!color) return;
+  try { getWebApp()?.setHeaderColor?.(color); } catch {}
+}
+
+export function tmeSetBackgroundColor(color: string): void {
+  if (!color) return;
+  try { getWebApp()?.setBackgroundColor?.(color); } catch {}
+}
+
+export function tmeForceDarkTheme(): void {
+  try {
+    document.documentElement.dataset.theme = 'dark';
+    document.body.dataset.theme = 'dark';
+    document.documentElement.style.setProperty('--tg-theme-bg-color', '#0f141a');
+    document.documentElement.style.setProperty('--tg-theme-secondary-bg-color', '#151b22');
+    document.documentElement.style.setProperty('--tg-theme-text-color', '#e6edf3');
+    document.documentElement.style.setProperty('--tg-theme-hint-color', '#8b98a5');
+    document.documentElement.style.setProperty('--tg-theme-link-color', '#6bb6ff');
+    document.documentElement.style.setProperty('--tg-theme-button-color', '#408ce6');
+    document.documentElement.style.setProperty('--tg-theme-button-text-color', '#0b0f14');
+    document.documentElement.style.backgroundColor = '#0f141a';
+    document.body.style.backgroundColor = '#0f141a';
+  } catch {}
+}
+
+export function tmeEnterFullscreen(): void {
+  tmeReady();
+  tmeExpand();
+  tmeRequestFullscreen();
+  tmeDisableVerticalSwipes();
+  tmeSetHeaderColor('#151b22');
+  tmeSetBackgroundColor('#0f141a');
 }
 
 export function closeWebApp(): void {

@@ -42,9 +42,7 @@ def main_menu_kb(
     buttons.append([builder.add(ButtonText.ask_ai, "ask_ai", bot_name=settings.BOT_NAME)])
     buttons.append([builder.add(ButtonText.create_diet, "create_diet")])
     if faq_webapp_url:
-        buttons.append([builder.add(ButtonText.feedback, webapp_url=faq_webapp_url)])
-    else:
-        buttons.append([builder.add(ButtonText.feedback, "feedback")])
+        buttons.append([builder.add(ButtonText.faq, webapp_url=faq_webapp_url)])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 

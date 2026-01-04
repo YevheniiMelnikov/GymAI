@@ -1,11 +1,10 @@
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, InlineKeyboardButton as KbBtn, WebAppInfo
+from aiogram.types import CallbackQuery, Message
 from loguru import logger
 
 from bot.states import States
-from bot.texts import ButtonText, MessageText, translate
-from bot.keyboard_builder import SafeInlineKeyboardMarkup as KbMarkup
+from bot.texts import MessageText, translate
 from config.app_settings import settings
 from core.cache import Cache
 from core.schemas import Profile
@@ -83,21 +82,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
         return
     cb_data = callback_query.data or ""
 
-    if cb_data == "feedback":
-        await callback_query.answer()
-        faq_url = get_webapp_url("faq", profile.language)
-        if faq_url:
-            await message.answer(
-                translate(ButtonText.faq, profile.language),
-                reply_markup=KbMarkup(
-                    inline_keyboard=[
-                        [KbBtn(text=translate(ButtonText.faq, profile.language), web_app=WebAppInfo(url=faq_url))]
-                    ]
-                ),
-            )
-        await del_msg(message)
-
-    elif cb_data == "ask_ai":
+    if cb_data == "ask_ai":
         await start_ask_ai_prompt(
             callback_query,
             profile,

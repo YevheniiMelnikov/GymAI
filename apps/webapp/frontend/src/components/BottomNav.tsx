@@ -52,6 +52,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeKey }) => {
         <nav className="bottom-nav" aria-label="Primary">
             {NAV_ITEMS.map((item) => {
                 const active = activeKey ? item.key === activeKey : item.isActive(pathName);
+                const shouldNavigate = !active || pathName !== item.path;
                 const label =
                     item.key === 'faq'
                         ? t('nav.faq')
@@ -66,7 +67,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeKey }) => {
                         type="button"
                         className={`bottom-nav__item ${active ? 'is-active' : ''}`}
                         onClick={() => {
-                            if (active) {
+                            if (!shouldNavigate) {
                                 return;
                             }
                             const tg = (window as any).Telegram?.WebApp;

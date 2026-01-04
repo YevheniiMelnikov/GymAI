@@ -47,7 +47,6 @@ class ButtonText(AutoName):
     weight = auto()
     height = auto()
 
-    feedback = auto()
     faq = auto()
     support_contact = auto()
 
@@ -127,8 +126,6 @@ class MessageText(AutoName):
     contract_info_message = auto()
     follow_link = auto()
     main_menu = auto()
-    help = auto()
-    info = auto()
     start = auto()
     saved = auto()
     ask_ai_response_template = auto()

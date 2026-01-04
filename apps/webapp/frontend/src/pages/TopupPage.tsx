@@ -33,7 +33,6 @@ const TopupPage: React.FC = () => {
     const activeIndexRef = useRef(activeIndex);
     const initDoneRef = useRef(false);
     const hapticEnabledRef = useRef(false);
-    const suppressAutoRef = useRef(false);
     const [loadedCount, setLoadedCount] = useState(0);
     const dotsRef = useRef<HTMLDivElement>(null);
     const ctaRef = useRef<HTMLDivElement>(null);
@@ -43,8 +42,6 @@ const TopupPage: React.FC = () => {
     const pointerMovedRef = useRef(false);
     const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
     const swipeStartIndexRef = useRef<number | null>(null);
-    const pendingSnapIndexRef = useRef<number | null>(null);
-    const scrollEndTimeoutRef = useRef<number | null>(null);
     const [paying, setPaying] = useState(false);
     const [payError, setPayError] = useState<string | null>(null);
 
@@ -84,25 +81,15 @@ const TopupPage: React.FC = () => {
         if (!viewport || !card) {
             return false;
         }
-        const previousSnap = viewport.style.scrollSnapType;
-        viewport.style.scrollSnapType = 'none';
         const scrolled = scrollToIndex(DEFAULT_INDEX, 'auto');
         if (!scrolled) {
-            viewport.style.scrollSnapType = previousSnap;
             return false;
         }
-        suppressAutoRef.current = true;
-        window.requestAnimationFrame(() => {
-            viewport.style.scrollSnapType = previousSnap;
-            if (!initDoneRef.current) {
-                setActiveIndex(DEFAULT_INDEX);
-                activeIndexRef.current = DEFAULT_INDEX;
-                initDoneRef.current = true;
-            }
-        });
-        window.setTimeout(() => {
-            suppressAutoRef.current = false;
-        }, 320);
+        if (!initDoneRef.current) {
+            setActiveIndex(DEFAULT_INDEX);
+            activeIndexRef.current = DEFAULT_INDEX;
+            initDoneRef.current = true;
+        }
         return true;
     }, [scrollToIndex]);
 
@@ -215,82 +202,6 @@ const TopupPage: React.FC = () => {
         updateDotsPosition();
     }, [activeIndex, updateDotsPosition]);
 
-    useEffect(() => {
-        const viewport = viewportRef.current;
-        if (!viewport) {
-            return;
-        }
-        let frame: number | null = null;
-
-        const updateActive = () => {
-            if (!initDoneRef.current || suppressAutoRef.current) {
-                return;
-            }
-            const viewportRect = viewport.getBoundingClientRect();
-            const center = viewportRect.left + viewportRect.width / 2;
-            let closestIndex = 0;
-            let closestDistance = Number.POSITIVE_INFINITY;
-            cardRefs.current.forEach((card, index) => {
-                if (!card) {
-                    return;
-                }
-                const rect = card.getBoundingClientRect();
-                const cardCenter = rect.left + rect.width / 2;
-                const distance = Math.abs(center - cardCenter);
-                if (distance < closestDistance) {
-                    closestDistance = distance;
-                    closestIndex = index;
-                }
-            });
-            if (closestDistance < Number.POSITIVE_INFINITY) {
-                setActiveIndex(closestIndex);
-            }
-        };
-
-        const handleScroll = () => {
-            if (frame !== null) {
-                return;
-            }
-            if (!initDoneRef.current) {
-                return;
-            }
-            hapticEnabledRef.current = true;
-            frame = window.requestAnimationFrame(() => {
-                frame = null;
-                updateActive();
-            });
-            if (scrollEndTimeoutRef.current !== null) {
-                window.clearTimeout(scrollEndTimeoutRef.current);
-            }
-            scrollEndTimeoutRef.current = window.setTimeout(() => {
-                scrollEndTimeoutRef.current = null;
-                const pendingIndex = pendingSnapIndexRef.current;
-                if (pendingIndex === null) {
-                    return;
-                }
-                pendingSnapIndexRef.current = null;
-                suppressAutoRef.current = true;
-                setActiveIndex(pendingIndex);
-                scrollToIndex(pendingIndex, 'auto');
-                window.setTimeout(() => {
-                    suppressAutoRef.current = false;
-                }, 220);
-            }, 120);
-        };
-
-        viewport.addEventListener('scroll', handleScroll, { passive: true });
-        updateActive();
-
-        return () => {
-            if (frame !== null) {
-                window.cancelAnimationFrame(frame);
-            }
-            if (scrollEndTimeoutRef.current !== null) {
-                window.clearTimeout(scrollEndTimeoutRef.current);
-            }
-            viewport.removeEventListener('scroll', handleScroll);
-        };
-    }, []);
 
     const handleDotClick = useCallback(
         (index: number) => {
@@ -350,7 +261,6 @@ const TopupPage: React.FC = () => {
     const handleViewportPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
         swipeStartRef.current = { x: event.clientX, y: event.clientY };
         swipeStartIndexRef.current = activeIndexRef.current;
-        pendingSnapIndexRef.current = null;
     }, []);
 
     const handleViewportPointerUp = useCallback(
@@ -372,7 +282,10 @@ const TopupPage: React.FC = () => {
             if (targetIndex === startIndex) {
                 return;
             }
-            pendingSnapIndexRef.current = targetIndex;
+            initDoneRef.current = true;
+            hapticEnabledRef.current = true;
+            setActiveIndex(targetIndex);
+            scrollToIndex(targetIndex, 'auto');
         },
         [cards.length, scrollToIndex]
     );
@@ -440,7 +353,6 @@ const TopupPage: React.FC = () => {
                         ref={viewportRef}
                         onPointerDown={() => {
                             hapticEnabledRef.current = true;
-                            suppressAutoRef.current = false;
                         }}
                         onPointerDownCapture={handleViewportPointerDown}
                         onPointerUp={handleViewportPointerUp}
