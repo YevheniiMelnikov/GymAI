@@ -16,7 +16,6 @@ from core.enums import ProfileStatus, WorkoutLocation
 from core.schemas import Profile
 from core.services.internal import APIService
 
-from aiogram.exceptions import TelegramBadRequest
 
 PROFILE_UPDATE_FIELDS: tuple[str, ...] = (
     "gender",
@@ -288,26 +287,3 @@ async def fetch_user(profile: Profile, *, refresh_if_incomplete: bool = False) -
             return fresh
         logger.warning(f"profile_status_refresh_failed profile_id={profile.id}")
     return user
-
-
-async def answer_profile(
-    cbq: "TgCallbackQuery",
-    profile: Profile,
-    user: Profile,
-    text: str,
-    *,
-    show_balance: bool = False,
-) -> None:
-    from bot.keyboards import profile_menu_kb
-
-    message = cbq.message
-    if message is None:
-        return
-
-    try:
-        await message.answer(
-            text,
-            reply_markup=profile_menu_kb(profile.language, show_balance=show_balance),
-        )
-    except TelegramBadRequest as exc:
-        logger.warning(f"Failed to send profile info for profile {profile.id}: {exc}")

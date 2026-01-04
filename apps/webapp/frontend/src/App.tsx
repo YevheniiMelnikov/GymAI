@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useSearchParams } from 'react-router-dom';
 import ProgramPage from './pages/ProgramPage';
 import HistoryPage from './pages/HistoryPage';
@@ -7,7 +7,10 @@ import TopupPage from './pages/TopupPage';
 import FaqPage from './pages/FaqPage';
 import WeeklySurveyPage from './pages/WeeklySurveyPage';
 import ProfilePage from './pages/ProfilePage';
+import RegistrationRequiredPage from './pages/RegistrationRequiredPage';
 import { useTelegramInit } from './hooks/useTelegramInit';
+import { getProfile, HttpError } from './api/http';
+import { readInitData } from './telegram';
 
 // Component to handle legacy query params redirection
 const LegacyRedirect = () => {
@@ -41,8 +44,52 @@ const LegacyRedirect = () => {
     return null;
 };
 
+type ProfileGate = 'loading' | 'ready' | 'missing';
+
 const App: React.FC = () => {
     useTelegramInit();
+    const [profileGate, setProfileGate] = useState<ProfileGate>('loading');
+    const initData = useMemo(() => readInitData(), []);
+
+    useEffect(() => {
+        if (!initData) {
+            setProfileGate('missing');
+            return;
+        }
+        let active = true;
+        const controller = new AbortController();
+
+        getProfile(initData, controller.signal)
+            .then((profile) => {
+                if (!active) return;
+                if (profile.status !== 'completed') {
+                    setProfileGate('missing');
+                    return;
+                }
+                setProfileGate('ready');
+            })
+            .catch((err) => {
+                if (!active) return;
+                if (err instanceof HttpError && err.status === 404) {
+                    setProfileGate('missing');
+                    return;
+                }
+                setProfileGate('ready');
+            });
+
+        return () => {
+            active = false;
+            controller.abort();
+        };
+    }, [initData]);
+
+    if (profileGate === 'missing') {
+        return <RegistrationRequiredPage />;
+    }
+
+    if (profileGate === 'loading') {
+        return <div className="registration-gate__loading">Завантаження...</div>;
+    }
     return (
         <BrowserRouter>
             <LegacyRedirect />

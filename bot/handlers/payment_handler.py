@@ -53,9 +53,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
 
     profile_data = data.get("profile")
     if not profile_data:
-        await callback_query.answer(
-            translate(MessageText.profile_data_not_found_error, profile.language), show_alert=True
-        )
+        await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
         return
     selected_profile = Profile.model_validate(profile_data)
 

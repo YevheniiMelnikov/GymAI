@@ -617,6 +617,47 @@ async def profile_delete(request: HttpRequest) -> JsonResponse:
     ProfileRepository.invalidate_cache(profile_id=profile_instance.id, tg_id=profile_instance.tg_id)
     await Cache.profile.delete_record(profile_instance.id)
 
+    profile_dump = build_profile_payload(profile)
+    base_url, fallback_base = resolve_internal_base_url()
+    proxy_payload = {
+        "profile_id": profile.id,
+        "telegram_id": profile.tg_id,
+        "profile": profile_dump,
+    }
+    body = json.dumps(proxy_payload).encode("utf-8")
+    try:
+        headers = build_internal_hmac_auth_headers(
+            key_id=settings.INTERNAL_KEY_ID,
+            secret_key=settings.INTERNAL_API_KEY,
+            body=body,
+        )
+        headers["Content-Type"] = "application/json"
+    except Exception:
+        logger.exception("Failed to build internal auth headers for profile_delete")
+        headers = {}
+
+    if headers:
+        resp = await post_internal_request(
+            "internal/webapp/profile/deleted/",
+            body,
+            headers,
+            base_url=base_url,
+            fallback_base=fallback_base,
+            timeout=internal_request_timeout(settings),
+            profile_id=profile.id,
+            error_label="profile_delete_dispatch_failed",
+            retry_label="profile_delete_dispatch_retry",
+        )
+        if resp is None:
+            logger.warning(f"profile_delete_dispatch_failed profile_id={profile.id} status=unreachable")
+        elif resp.status_code != 200:
+            logger.warning(
+                "profile_delete_dispatch_failed profile_id={} status={} body={}",
+                profile.id,
+                resp.status_code,
+                resp.text[:200],
+            )
+
     try:
         from core.tasks.ai_coach.maintenance import cleanup_profile_knowledge
 

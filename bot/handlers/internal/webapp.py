@@ -11,7 +11,6 @@ from bot.types.messaging import BotMessageProxy
 from bot.texts import MessageText, translate
 from bot.keyboards import main_menu_kb
 from bot.utils.menus import (
-    profile_completion_prompt_text,
     prompt_profile_completion_questionnaire,
     start_program_flow,
     start_subscription_flow,
@@ -103,7 +102,7 @@ async def internal_webapp_workout_action(request: web.Request) -> web.Response:
             language=language,
             pending_flow={"name": pending_name},
         )
-        alert_text = profile_completion_prompt_text(profile, language)
+        alert_text = translate(MessageText.finish_registration, language)
         return web.json_response({"status": "ok", "profile_incomplete": True, "message": alert_text})
 
     if action == "create_program":
@@ -215,4 +214,49 @@ async def internal_webapp_profile_balance(request: web.Request) -> web.Response:
         already_answered=True,
         back_webapp_url=profile_webapp_url,
     )
+    return web.json_response({"status": "ok"})
+
+
+@require_internal_auth
+async def internal_webapp_profile_deleted(request: web.Request) -> web.Response:
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"detail": "bad_request"}, status=400)
+
+    try:
+        profile_id = int(payload.get("profile_id"))
+        telegram_id = int(payload.get("telegram_id"))
+    except (TypeError, ValueError):
+        return web.json_response({"detail": "bad_request"}, status=400)
+
+    profile_payload_raw = payload.get("profile")
+    profile_payload = profile_payload_raw if isinstance(profile_payload_raw, dict) else None
+    profile = await _load_profile(profile_id, fallback_payload=profile_payload)
+    if profile is None:
+        logger.warning(f"webapp_profile_delete_missing profile_id={profile_id}")
+        return web.json_response({"detail": "not_found"}, status=404)
+
+    chat_id = telegram_id
+    if profile.tg_id != telegram_id:
+        logger.warning(
+            "webapp_profile_delete_tg_mismatch profile_id={} payload_tg={} profile_tg={}",
+            profile.id,
+            telegram_id,
+            profile.tg_id,
+        )
+        chat_id = profile.tg_id
+
+    dispatcher = request.app.get("dp")
+    if dispatcher is None:
+        logger.error("Dispatcher missing for webapp profile delete action")
+        return web.json_response({"detail": "unavailable"}, status=503)
+
+    bot: Bot = request.app["bot"]
+    state_key = StorageKey(bot_id=bot.id, chat_id=chat_id, user_id=chat_id)
+    state = FSMContext(storage=dispatcher.storage, key=state_key)
+    await state.clear()
+    await state.update_data(profile=None)
+    language = cast(str, profile.language or settings.DEFAULT_LANG)
+    await bot.send_message(chat_id=chat_id, text=translate(MessageText.profile_deleted, language))
     return web.json_response({"status": "ok"})

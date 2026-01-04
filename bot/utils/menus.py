@@ -1,20 +1,16 @@
-from contextlib import suppress
 from typing import Any, TypedDict, cast
 
-from loguru import logger
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, FSInputFile, InlineKeyboardButton as KbBtn, WebAppInfo
 from pathlib import Path
 
 from bot import keyboards as kb
 from bot.keyboard_builder import SafeInlineKeyboardMarkup as KbMarkup
-from bot.keyboards import select_gender_kb, yes_no_kb, confirm_service_kb
+from bot.keyboards import yes_no_kb, confirm_service_kb
 from bot.utils.profiles import fetch_user
 from bot.services.pricing import ServiceCatalog
 from bot.states import States
 from bot.texts import ButtonText, MessageText, translate
-from core.cache import Cache
 from core.enums import ProfileStatus
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
@@ -22,67 +18,6 @@ from config.app_settings import settings
 from bot.types.messaging import BotMessageProxy
 from bot.utils.bot import del_msg, answer_msg, get_webapp_url
 from bot.utils.prompts import send_enter_wishes_prompt
-
-
-async def show_profile_editing_menu(message: Message, profile: Profile, state: FSMContext) -> None:
-    await state.clear()
-    await state.update_data(lang=profile.language)
-
-    user_profile: Profile | None = None
-    reply_markup = None
-    try:
-        user_profile = await Cache.profile.get_record(profile.id)
-    except ProfileNotFoundError:
-        logger.info(f"Profile data not found for profile {profile.id} during profile editing setup.")
-
-    if user_profile:
-        webapp_url = get_webapp_url("profile", profile.language)
-        if webapp_url:
-            await answer_msg(
-                message,
-                translate(ButtonText.my_profile, profile.language),
-                reply_markup=KbMarkup(
-                    inline_keyboard=[
-                        [
-                            KbBtn(
-                                text=translate(ButtonText.my_profile, profile.language),
-                                web_app=WebAppInfo(url=webapp_url),
-                            )
-                        ]
-                    ]
-                ),
-            )
-        await del_msg(cast(Message | CallbackQuery | None, message))
-        return
-
-    state_to_set = States.gender
-    response_text = MessageText.edit_profile
-    reply_markup = kb.edit_profile_kb(profile.language, show_diet=False, show_language=True)
-
-    profile_msg = await answer_msg(
-        message,
-        translate(response_text, profile.language).format(bot_name=settings.BOT_NAME),
-        reply_markup=reply_markup,
-    )
-    if profile_msg is None:
-        logger.error("Failed to send profile editing menu message")
-        return
-
-    with suppress(TelegramBadRequest):
-        await del_msg(cast(Message | CallbackQuery | None, message))
-
-    message_ids = [profile_msg.message_id]
-    if not user_profile:
-        gender_msg = await answer_msg(
-            message,
-            translate(MessageText.choose_gender, profile.language),
-            reply_markup=select_gender_kb(profile.language),
-        )
-        if gender_msg is not None:
-            message_ids.append(gender_msg.message_id)
-
-    await state.update_data(message_ids=message_ids, chat_id=message.chat.id)
-    await state.set_state(state_to_set)
 
 
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext, *, delete_source: bool = True) -> None:
@@ -129,7 +64,7 @@ async def show_balance_menu(
     lang = cast(str, profile.language)
     if back_webapp_url is None:
         back_webapp_url = get_webapp_url("profile", lang)
-    cached_profile = await Cache.profile.get_record(profile.id)
+    cached_profile = await fetch_user(profile, refresh_if_incomplete=True)
     topup_webapp_url = get_webapp_url("topup", lang)
     if isinstance(callback_obj, CallbackQuery) and not already_answered:
         await callback_obj.answer()
@@ -154,7 +89,7 @@ async def ensure_credits(
     language = cast(str, profile.language or settings.DEFAULT_LANG)
     available = credits
     if available is None:
-        cached_profile = await Cache.profile.get_record(profile.id)
+        cached_profile = await fetch_user(profile, refresh_if_incomplete=True)
         available = cached_profile.credits
     if available < required:
         message = translate(MessageText.not_enough_credits, language)
@@ -230,53 +165,6 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
     await callback_query.answer(translate(MessageText.unexpected_error, lang), show_alert=True)
 
 
-async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    lang = cast(str, profile.language)
-
-    try:
-        cached_profile = await fetch_user(profile, refresh_if_incomplete=True)
-    except ProfileNotFoundError:
-        logger.error(f"Profile data not found for profile {profile.id} in show_my_workouts_menu.")
-        await callback_query.answer(translate(MessageText.questionnaire_not_completed, lang), show_alert=True)
-        message = cast(Message, callback_query.message)
-        assert message
-        await show_profile_editing_menu(message, profile, state)
-        return
-
-    message = cast(Message, callback_query.message)
-    assert message
-
-    if cached_profile.status != ProfileStatus.completed:
-        await prompt_profile_completion_questionnaire(
-            callback_query,
-            profile,
-            state,
-            chat_id=callback_query.from_user.id,
-            language=lang,
-        )
-        await del_msg(cast(Message | CallbackQuery | None, callback_query))
-        return
-
-    await callback_query.answer()
-    await show_main_menu(message, profile, state)
-
-
-def profile_completion_prompt_text(profile: Profile, language: str) -> str:
-    if profile.gift_credits_granted:
-        return translate(MessageText.finish_registration, language)
-    return translate(MessageText.finish_registration_to_get_credits, language).format(
-        credits=settings.DEFAULT_CREDITS,
-    )
-
-
-async def _notify_profile_incomplete(target: InteractionTarget, profile: Profile, language: str) -> None:
-    text = profile_completion_prompt_text(profile, language)
-    if isinstance(target, CallbackQuery):
-        await target.answer(text, show_alert=True)
-        return
-    await answer_msg(target, text)
-
-
 def _extract_chat_id(target: InteractionTarget) -> int | None:
     if isinstance(target, CallbackQuery):
         user = target.from_user
@@ -334,7 +222,11 @@ async def prompt_profile_completion_questionnaire(
     pending_flow: dict[str, object] | None = None,
 ) -> None:
     lang = language or cast(str, profile.language or settings.DEFAULT_LANG)
-    await _notify_profile_incomplete(target, profile, lang)
+    text = translate(MessageText.finish_registration, lang)
+    if isinstance(target, CallbackQuery):
+        await target.answer(text, show_alert=True)
+    else:
+        await answer_msg(target, text)
     await _start_profile_questionnaire(
         target,
         profile,
@@ -343,28 +235,6 @@ async def prompt_profile_completion_questionnaire(
         chat_id=chat_id,
         pending_flow=pending_flow,
     )
-
-
-async def _ensure_profile_completed(
-    target: InteractionTarget,
-    profile: Profile,
-    state: FSMContext,
-    *,
-    pending_flow: dict[str, object] | None = None,
-) -> Profile | None:
-    cached_profile = await fetch_user(profile, refresh_if_incomplete=True)
-    if cached_profile.status == ProfileStatus.completed:
-        return cached_profile
-    language = cast(str, profile.language or settings.DEFAULT_LANG)
-    await _notify_profile_incomplete(target, cached_profile, language)
-    await _start_profile_questionnaire(
-        target,
-        profile,
-        state,
-        language=language,
-        pending_flow=pending_flow,
-    )
-    return None
 
 
 async def process_ai_service_selection(
@@ -408,13 +278,14 @@ async def process_ai_service_selection(
 
 
 async def start_program_flow(target: InteractionTarget, profile: Profile, state: FSMContext) -> None:
-    cached_profile = await _ensure_profile_completed(
-        target,
-        profile,
-        state,
-        pending_flow={"name": "start_program_flow"},
-    )
-    if cached_profile is None:
+    cached_profile = await fetch_user(profile, refresh_if_incomplete=True)
+    if cached_profile.status != ProfileStatus.completed:
+        await prompt_profile_completion_questionnaire(
+            target,
+            profile,
+            state,
+            pending_flow={"name": "start_program_flow"},
+        )
         return
     await state.update_data(service_type="program")
     await process_ai_service_selection(
@@ -426,13 +297,14 @@ async def start_program_flow(target: InteractionTarget, profile: Profile, state:
 
 
 async def start_subscription_flow(target: InteractionTarget, profile: Profile, state: FSMContext) -> None:
-    cached_profile = await _ensure_profile_completed(
-        target,
-        profile,
-        state,
-        pending_flow={"name": "start_subscription_flow"},
-    )
-    if cached_profile is None:
+    cached_profile = await fetch_user(profile, refresh_if_incomplete=True)
+    if cached_profile.status != ProfileStatus.completed:
+        await prompt_profile_completion_questionnaire(
+            target,
+            profile,
+            state,
+            pending_flow={"name": "start_subscription_flow"},
+        )
         return
     language = cast(str, profile.language or settings.DEFAULT_LANG)
     await state.update_data(service_type="subscription", subscription_flow=True)
@@ -461,16 +333,17 @@ async def start_diet_flow(
     if isinstance(target, CallbackQuery):
         await target.answer()
     try:
-        user_profile = await _ensure_profile_completed(
+        user_profile = await fetch_user(profile, refresh_if_incomplete=True)
+    except (ProfileNotFoundError, ValueError):
+        await answer_msg(target, translate(MessageText.unexpected_error, language))
+        return
+    if user_profile.status != ProfileStatus.completed:
+        await prompt_profile_completion_questionnaire(
             target,
             profile,
             state,
             pending_flow={"name": "start_diet_flow"},
         )
-    except ValueError:
-        await answer_msg(target, translate(MessageText.unexpected_error, language))
-        return
-    if user_profile is None:
         if delete_origin:
             await del_msg(target if isinstance(target, (CallbackQuery, Message)) else None)
         return

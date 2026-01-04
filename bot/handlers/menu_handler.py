@@ -1,6 +1,7 @@
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from typing import cast
 from loguru import logger
 
 from bot.states import States
@@ -11,10 +12,7 @@ from core.schemas import Profile
 from bot.utils.ask_ai import start_ask_ai_prompt
 from bot.utils.menus import (
     show_main_menu,
-    show_profile_editing_menu,
-    show_my_workouts_menu,
     show_my_profile_menu,
-    show_balance_menu,
     prompt_subscription_type,
     start_diet_flow,
     track_prompt_message,
@@ -27,7 +25,6 @@ from core.exceptions import ProfileNotFoundError
 from core.services import APIService
 from bot.keyboards import (
     payment_kb,
-    yes_no_kb,
 )
 from bot.services.pricing import ServiceCatalog
 from bot.utils.split_number import (
@@ -99,9 +96,6 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     elif cb_data == "my_profile":
         await show_my_profile_menu(callback_query, profile, state)
 
-    elif cb_data == "my_workouts":
-        await show_my_workouts_menu(callback_query, profile, state)
-
 
 @menu_router.callback_query(States.choose_plan)
 async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
@@ -124,9 +118,7 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
         try:
             user_profile: Profile = await Cache.profile.get_record(profile.id)
         except ProfileNotFoundError:
-            await callback_query.answer(
-                translate(MessageText.questionnaire_not_completed, profile.language), show_alert=True
-            )
+            await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
             await del_msg(callback_query)
             return
 
@@ -219,7 +211,9 @@ async def subscription_choice(callback_query: CallbackQuery, state: FSMContext) 
     cb_data = callback_query.data or ""
 
     if cb_data == "back":
-        await show_my_workouts_menu(callback_query, profile, state)
+        message = callback_query.message
+        if message is not None:
+            await show_main_menu(cast(Message, message), profile, state, delete_source=False)
         return
 
     if not cb_data.startswith("subscription_type_"):
@@ -236,31 +230,3 @@ async def subscription_choice(callback_query: CallbackQuery, state: FSMContext) 
     await state.update_data(ai_service=service_name, required=required)
     await del_msg(callback_query)
     await process_new_subscription(callback_query, profile, state, confirmed=False)
-
-
-@menu_router.callback_query(States.profile)
-async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
-    await callback_query.answer()
-    data = await state.get_data()
-    profile_data = data.get("profile")
-    if not profile_data:
-        return
-    profile = Profile.model_validate(profile_data)
-    message = callback_query.message
-    if message is None or not isinstance(message, Message):
-        return
-    cb_data = callback_query.data or ""
-
-    if cb_data == "profile_edit":
-        await show_profile_editing_menu(message, profile, state)
-    elif cb_data == "balance":
-        await show_balance_menu(callback_query, profile, state)
-    elif cb_data == "back":
-        await show_main_menu(message, profile, state)
-    else:
-        await message.answer(
-            translate(MessageText.delete_confirmation, profile.language),
-            reply_markup=yes_no_kb(profile.language),
-        )
-        await del_msg(message)
-        await state.set_state(States.profile_delete)

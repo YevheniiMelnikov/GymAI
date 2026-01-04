@@ -13,7 +13,7 @@ from config.app_settings import settings
 from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
-from bot.utils.menus import show_main_menu
+from bot.utils.menus import prompt_profile_completion_questionnaire, show_main_menu
 from bot.utils.bot import prompt_language_selection
 from bot.texts import MessageText, translate
 from bot.states import States
@@ -43,13 +43,23 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
         profile = await APIService.profile.get_profile_by_tg_id(message.from_user.id)
         if profile is None or profile.status == ProfileStatus.deleted:
             raise ProfileNotFoundError(message.from_user.id)
+        if profile.status != ProfileStatus.completed:
+            await state.update_data(
+                lang=profile.language or settings.DEFAULT_LANG, profile=profile.model_dump(mode="json")
+            )
+            await prompt_profile_completion_questionnaire(message, profile, state)
+            with suppress(TelegramBadRequest):
+                await message.delete()
+            return
         await Cache.profile.save_record(profile.id, profile.model_dump(mode="json"))
         await state.update_data(lang=profile.language, profile=profile.model_dump(mode="json"))
         await show_main_menu(message, profile, state)
         with suppress(TelegramBadRequest):
             await message.delete()
     except ProfileNotFoundError:
-        await prompt_language_selection(message, state)
+        data = await state.get_data()
+        lang = data.get("lang", settings.DEFAULT_LANG)
+        await message.answer(translate(MessageText.finish_registration, lang))
 
 
 @cmd_router.message(Command(CommandName.start))
@@ -62,6 +72,14 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         profile = await APIService.profile.get_profile_by_tg_id(message.from_user.id)
         if profile is None or profile.status == ProfileStatus.deleted:
             raise ProfileNotFoundError(message.from_user.id)
+        if profile.status != ProfileStatus.completed:
+            await state.update_data(
+                lang=profile.language or settings.DEFAULT_LANG, profile=profile.model_dump(mode="json")
+            )
+            await prompt_profile_completion_questionnaire(message, profile, state)
+            with suppress(TelegramBadRequest):
+                await message.delete()
+            return
         await Cache.profile.save_record(profile.id, profile.model_dump(mode="json"))
         await state.update_data(lang=profile.language, profile=profile.model_dump(mode="json"))
         await show_main_menu(message, profile, state)

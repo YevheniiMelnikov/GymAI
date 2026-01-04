@@ -9,6 +9,7 @@ from .webapp import (
     internal_webapp_workout_action,
     internal_webapp_weekly_survey_submitted,
     internal_webapp_profile_balance,
+    internal_webapp_profile_deleted,
 )
 
 __all__ = (
@@ -21,4 +22,5 @@ __all__ = (
     "internal_webapp_workout_action",
     "internal_webapp_weekly_survey_submitted",
     "internal_webapp_profile_balance",
+    "internal_webapp_profile_deleted",
 )

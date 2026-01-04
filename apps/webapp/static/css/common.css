@@ -159,6 +159,76 @@ main#app{
   user-select: none;
 }
 
+.registration-gate{
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+  min-height: calc(100dvh - var(--app-padding-top) - var(--app-padding-bottom));
+}
+
+.registration-gate__card{
+  background: linear-gradient(160deg, color-mix(in oklab, var(--surface) 90%, var(--bg)), var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 22px 20px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.registration-gate__eyebrow{
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.registration-gate__title{
+  margin: 0;
+  font-family: "Euclid Circular A","Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.registration-gate__text{
+  margin: 0;
+  color: color-mix(in oklab, var(--text) 85%, var(--muted));
+}
+
+.registration-gate__steps{
+  display: grid;
+  gap: 8px;
+}
+
+.registration-gate__step{
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--bg) 60%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  font-size: 14px;
+}
+
+.registration-gate__button{
+  width: 100%;
+}
+
+.registration-gate__hint{
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.registration-gate__loading{
+  margin: auto;
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+}
+
 
 .app-header{
   display: flex;

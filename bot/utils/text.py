@@ -1,29 +1,7 @@
 from functools import lru_cache
-from aiogram.fsm.state import State
 
-from bot.states import States
-from bot.texts import ButtonText, MessageText, translate
+from bot.texts import ButtonText, translate
 from config.app_settings import settings
-
-
-StateMessageKey = tuple[State, MessageText | None]
-
-_STATE_MESSAGE_KEYS: dict[str, StateMessageKey] = {
-    "workout_experience": (States.workout_experience, MessageText.workout_experience),
-    "workout_goals": (States.workout_goals, MessageText.workout_goals),
-    "workout_location": (States.workout_location, MessageText.workout_location),
-    "weight": (States.weight, MessageText.weight),
-    "height": (States.height, MessageText.height),
-    "health_notes": (States.health_notes_choice, MessageText.health_notes_question),
-    "diet_allergies": (States.diet_allergies_choice, MessageText.diet_allergies_question),
-    "diet_products": (States.diet_products, MessageText.diet_products),
-}
-
-
-def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
-    state, msg_key = _STATE_MESSAGE_KEYS.get(callback, (States.gender, None))
-    message = translate(msg_key, lang) if msg_key else ""
-    return state, message
 
 
 @lru_cache(maxsize=None)

@@ -23,8 +23,6 @@ class States(StatesGroup):
     diet_products = State()
     diet_confirm_service = State()
 
-    edit_profile = State()
-    profile = State()
     profile_delete = State()
 
     handle_payment = State()

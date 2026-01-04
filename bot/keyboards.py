@@ -31,14 +31,11 @@ def main_menu_kb(
     faq_webapp_url: str | None = None,
 ) -> KbMarkup:
     builder = KeyboardBuilder(lang)
+    buttons: list[list[KbBtn]] = []
     if profile_webapp_url:
-        buttons = [[builder.add(ButtonText.my_profile, webapp_url=profile_webapp_url)]]
-    else:
-        buttons = [[builder.add(ButtonText.my_profile, "my_profile")]]
+        buttons.append([builder.add(ButtonText.my_profile, webapp_url=profile_webapp_url)])
     if webapp_url:
         buttons.append([builder.add(ButtonText.my_program, webapp_url=webapp_url)])
-    else:
-        buttons.append([builder.add(ButtonText.my_program, "my_workouts")])
     buttons.append([builder.add(ButtonText.ask_ai, "ask_ai", bot_name=settings.BOT_NAME)])
     buttons.append([builder.add(ButtonText.create_diet, "create_diet")])
     if faq_webapp_url:
@@ -64,16 +61,6 @@ def topup_menu_kb(lang: str, *, webapp_url: str | None = None, back_webapp_url: 
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def tariff_plans_kb(lang: str, plans: list[str], *, back_webapp_url: str | None = None) -> KbMarkup:
-    builder = KeyboardBuilder(lang)
-    buttons = [[builder.add(ButtonText[f"{plan}_plan"], f"plan_{plan}")] for plan in plans]
-    if back_webapp_url:
-        buttons.append([builder.add(ButtonText.prev_menu, webapp_url=back_webapp_url)])
-    else:
-        buttons.append([builder.add(ButtonText.prev_menu, "back")])
-    return KbMarkup(inline_keyboard=buttons, row_width=1)
-
-
 def select_gender_kb(lang: str) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [
@@ -81,40 +68,6 @@ def select_gender_kb(lang: str) -> KbMarkup:
         [builder.add(ButtonText.female, "female")],
     ]
     return KbMarkup(inline_keyboard=buttons)
-
-
-def profile_menu_kb(lang: str, show_balance: bool = False) -> KbMarkup:
-    builder = KeyboardBuilder(lang)
-    buttons: list[list[KbBtn]] = []
-    if show_balance:
-        buttons.append([builder.add(ButtonText.balance_status, "balance")])
-    buttons.extend(
-        [
-            [builder.add(ButtonText.edit, "profile_edit")],
-            [builder.add(ButtonText.delete, "profile_delete")],
-            [builder.add(ButtonText.prev_menu, "back")],
-        ]
-    )
-    return KbMarkup(inline_keyboard=buttons, row_width=1)
-
-
-def edit_profile_kb(lang: str, *, show_diet: bool = False, show_language: bool = False) -> KbMarkup:
-    builder = KeyboardBuilder(lang)
-    buttons = [
-        [builder.add(ButtonText.workout_experience, "workout_experience")],
-        [builder.add(ButtonText.workout_goals, "workout_goals")],
-        [builder.add(ButtonText.workout_location, "workout_location")],
-        [builder.add(ButtonText.weight, "weight")],
-        [builder.add(ButtonText.height, "height")],
-        [builder.add(ButtonText.health_notes, "health_notes")],
-        [builder.add(ButtonText.prev_menu, "back")],
-    ]
-    if show_diet:
-        buttons.insert(-1, [builder.add(ButtonText.diet_allergies, "diet_allergies")])
-        buttons.insert(-1, [builder.add(ButtonText.diet_products, "diet_products")])
-    if show_language:
-        buttons.insert(-1, [builder.add(ButtonText.language, "language")])
-    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
 def workout_experience_kb(lang: str) -> KbMarkup:
