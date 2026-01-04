@@ -383,7 +383,7 @@ const ProfilePage: React.FC = () => {
     return (
         <div className="page-container with-bottom-nav" data-lang={lang}>
             <TopBar
-                title={view === 'edit' && editingField ? t(`profile.field.${editingField}` as TranslationKey) : t('profile.title')}
+                title={view === 'edit' ? t('profile.edit') : t('profile.title')}
                 onBack={view === 'edit' ? handleBack : undefined}
             />
 
@@ -576,6 +576,7 @@ const ProfilePage: React.FC = () => {
                         <div className="profile-pane profile-pane--edit">
                             {editingField && (
                                 <div className="profile-edit">
+                                    <p className="profile-edit__title">{t(`profile.field.${editingField}` as TranslationKey)}</p>
                                     {editingField === 'weight' && (
                                         <>
                                             <input

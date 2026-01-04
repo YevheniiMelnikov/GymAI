@@ -2017,10 +2017,11 @@ a:hover{ opacity: .9; }
 .tooltip__bubble{
   position: absolute;
   top: 32px;
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 10;
-  width: clamp(220px, 70vw, 280px);
-  min-height: 120px;
+  width: clamp(160px, 60vw, 210px);
+  aspect-ratio: 5 / 3;
   padding: 12px 14px;
   border-radius: 14px;
   background: #eef2f8;
@@ -2029,6 +2030,7 @@ a:hover{ opacity: .9; }
   line-height: 1.4;
   box-shadow: 0 12px 30px color-mix(in oklab, #1c2430 18%, transparent);
   border: 1px solid color-mix(in oklab, #1c2430 10%, transparent);
+  overflow: auto;
 }
 
 .profile-balance{
@@ -2123,6 +2125,11 @@ a:hover{ opacity: .9; }
   flex-direction: column;
   gap: 14px;
   padding: 8px 4px 0;
+}
+.profile-edit__title{
+  font-size: clamp(18px, 4vw, 24px);
+  font-weight: 700;
+  color: var(--text);
 }
 .profile-edit__input{
   width: 100%;
@@ -2296,6 +2303,17 @@ a:hover{ opacity: .9; }
 @media (min-width: 900px){
   .topup-page-shell{
     margin-top: calc(-1 * var(--app-padding-top) + 24px);
+  }
+}
+@media (hover: hover) and (pointer: fine){
+  .topup-carousel{
+    margin-top: -66px;
+  }
+  .topup-carousel__dots{
+    transform: translate(-50%, -16px);
+  }
+  .topup-page .topbar__title{
+    left: calc(50% - 53px);
   }
 }
 .faq-support{
