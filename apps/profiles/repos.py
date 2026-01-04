@@ -1,4 +1,4 @@
-from typing import cast, Dict, Any
+from typing import cast
 from django.core.cache import cache
 from rest_framework.exceptions import NotFound
 
@@ -17,15 +17,17 @@ class ProfileRepository:
 
     @staticmethod
     def get_by_id(profile_id: int) -> Profile:
-        def fetch_profile() -> Dict[str, Any]:
+        cache_key = f"profile:{profile_id}"
+        cached = cache.get(cache_key)
+        if isinstance(cached, dict):
+            exists = Profile.objects.filter(pk=profile_id).only("id").exists()  # pyrefly: ignore[missing-attribute]
+            if not exists:
+                cache.delete(cache_key)
+                raise NotFound(f"Profile pk={profile_id} not found")
+        else:
             instance = ProfileRepository.get_model_by_id(profile_id)
-            return ProfileSerializer(instance).data
-
-        cached = cache.get_or_set(
-            f"profile:{profile_id}",
-            fetch_profile,
-            settings.CACHE_TTL,
-        )
+            cached = ProfileSerializer(instance).data
+            cache.set(cache_key, cached, settings.CACHE_TTL)
 
         if isinstance(cached, dict):
             profile = Profile(**cached)
@@ -43,18 +45,20 @@ class ProfileRepository:
 
     @staticmethod
     def get_by_telegram_id(tg_id: int) -> Profile:
-        def fetch_profile() -> Dict[str, Any]:
+        cache_key = f"profile:tg:{tg_id}"
+        cached = cache.get(cache_key)
+        if isinstance(cached, dict):
+            exists = Profile.objects.filter(tg_id=tg_id).only("id").exists()  # pyrefly: ignore[missing-attribute]
+            if not exists:
+                cache.delete(cache_key)
+                raise NotFound(f"Profile with tg_id={tg_id} not found")
+        else:
             try:
                 instance = Profile.objects.get(tg_id=tg_id)  # pyrefly: ignore[missing-attribute]
             except Profile.DoesNotExist:  # pyrefly: ignore[missing-attribute]
                 raise NotFound(f"Profile with tg_id={tg_id} not found")
-            return ProfileSerializer(instance).data
-
-        cached = cache.get_or_set(
-            f"profile:tg:{tg_id}",
-            fetch_profile,
-            settings.CACHE_TTL,
-        )
+            cached = ProfileSerializer(instance).data
+            cache.set(cache_key, cached, settings.CACHE_TTL)
 
         if isinstance(cached, dict):
             profile = Profile(**cached)

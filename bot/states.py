@@ -26,7 +26,6 @@ class States(StatesGroup):
     profile_delete = State()
 
     handle_payment = State()
-    choose_plan = State()
     ask_ai_question = State()
     choose_subscription = State()
     split_number_selection = State()

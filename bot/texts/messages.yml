@@ -39,9 +39,9 @@ start:
   ua: "Буде кілька запитань, це не займе багато часу 🙂"
 
 finish_registration:
-  eng: "Please complete your registration in the bot and answer a few questions to continue."
-  ru: "Чтобы продолжить, завершите регистрацию в боте и ответьте на несколько вопросов."
-  ua: "Щоб продовжити, завершіть реєстрацію в боті та дайте відповідь на кілька запитань."
+  eng: "Please complete your registration in the bot and answer a few questions to continue"
+  ru: "Чтобы продолжить, завершите регистрацию в боте и ответьте на несколько вопросов"
+  ua: "Щоб продовжити, завершіть реєстрацію в боті та дайте відповідь на кілька запитань"
 
 workout_goals:
   eng: "Describe your training goals (weight loss, muscle gain, wellness, etc.) 🎯"
@@ -128,8 +128,6 @@ payment_in_progress:
   ru: "Ваш платеж обрабатывается, ожидайте ⏳"
   ua: "Ваш платіж обробляється, очікуйте ⏳"
 
-
-
 request_in_progress:
   eng: "Processing your request will take a few minutes, we will notify you when everything is ready ⏳"
   ru: "Обработка вашего запроса займет несколько минут, мы уведомим вас когда всё будет готово ⏳"
@@ -175,12 +173,10 @@ subscription_type_prompt:
   ru: "Выберите тип вашей подписки 👇"
   ua: "Оберіть тип вашої підписки 👇"
 
-
 coach_agent_error:
   eng: "An error occurred while processing your request. Please contact <a href='{tg}'>support</a> ✍️"
   ru: "При обработке вашего запроса возникла ошибка. Пожалуйста, свяжитесь с <a href='{tg}'>поддержкой</a> ✍️"
   ua: "Під час обробки вашого запиту сталася помилка. Будь ласка, зверніться до <a href='{tg}'>підтримки</a> ✍️"
-
 
 profile_deleted:
   eng: "Your profile has been deleted\nIf you wish, you can create a new one using the command /start"
@@ -217,10 +213,16 @@ not_enough_credits:
   ru: "Недостаточно GYMCOINS. Пополните баланс."
   ua: "Недостатньо GYMCOINS. Поповніть баланс."
 
+initial_credits_granted:
+  eng: "{credits} bonus GYMCOINS have been added to your account 🎉"
+  ru: "На ваш баланс начислено {credits} бонусных GYMCOINS 🎉"
+  ua: "На ваш рахунок зараховано {credits} бонусних GYMCOINS 🎉"
+
 confirm_service:
   eng: "Your balance: {balance} GYMCOINS \nPrice: {price} GYMCOINS"
   ru: "Ваш баланс: {balance} GYMCOINS \nСтоимость: {price} GYMCOINS"
   ua: "Ваш баланс: {balance} GYMCOINS \nВартість: {price} GYMCOINS"
+
 payment_failure:
   eng: "An error occurred during your payments, please try again later\nYou can contact <a href='mailto:{mail}'>support</a> by mail or in telegram: <a href='{tg}'>support</a> ✍️"
   ru: "Во время вашего платежа возникла ошибка, повторите попытку позже\nСвязаться с <a href='mailto:{mail}'>поддержкой</a> можно по почте или в телеграм: <a href='{tg}'>поддержкой</a> ✍️"

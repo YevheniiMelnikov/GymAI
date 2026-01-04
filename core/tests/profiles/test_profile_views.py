@@ -27,6 +27,7 @@ class _ProfileStub:
         self.status = ProfileStatus.deleted
         self.deleted_at = "deleted"
         self.language = None
+        self.gift_credits_granted = False
         self.saved_fields: list[str] = []
 
     def save(self, *, update_fields: list[str]) -> None:
@@ -76,6 +77,7 @@ def test_profile_create_restores_deleted(monkeypatch: pytest.MonkeyPatch) -> Non
     assert response.status_code == 201
     assert profile.status == ProfileStatus.created
     assert profile.deleted_at is None
+    assert profile.gift_credits_granted is True
     assert profile.language == "uk"
     assert enqueue_calls == [(profile.id, "profile_restored")]
 

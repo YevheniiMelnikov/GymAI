@@ -20,7 +20,7 @@ from bot.utils.diet_plans import (
 )
 from bot.utils.menus import reset_main_menu_state, show_balance_menu, show_main_menu
 from bot.utils.ai_coach import enqueue_diet_plan_generation
-from bot.utils.profiles import fetch_user, update_diet_preferences, update_profile_data
+from bot.utils.profiles import fetch_user, update_diet_preferences
 from config.app_settings import settings
 from core.schemas import Profile
 from uuid import uuid4
@@ -46,8 +46,6 @@ async def diet_allergies_choice(callback_query: CallbackQuery, state: FSMContext
     profile = Profile.model_validate(data["profile"])
     lang = profile.language or settings.DEFAULT_LANG
     await callback_query.answer()
-    edit_mode = bool(data.get("edit_mode"))
-
     if (callback_query.data or "").lower() == "yes":
         message = callback_query.message
         if message is not None:
@@ -59,13 +57,6 @@ async def diet_allergies_choice(callback_query: CallbackQuery, state: FSMContext
         await del_msg(callback_query)
         return
 
-    await state.update_data(diet_allergies="", diet_products=None if edit_mode else [])
-    if edit_mode:
-        message = callback_query.message
-        if message is not None:
-            await update_profile_data(cast(Message, message), state, message.bot)
-        await del_msg(callback_query)
-        return
     await state.update_data(diet_products=[])
     await state.set_state(States.diet_products)
     await _prompt_diet_products(callback_query, lang, [])
@@ -79,12 +70,7 @@ async def diet_allergies(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     lang = profile.language or settings.DEFAULT_LANG
-    edit_mode = bool(data.get("edit_mode"))
-    await state.update_data(diet_allergies=message.text.strip(), diet_products=None if edit_mode else [])
-    if edit_mode:
-        await update_profile_data(cast(Message, message), state, message.bot)
-        await del_msg(message)
-        return
+    await state.update_data(diet_allergies=message.text.strip())
     await state.update_data(diet_products=[])
     await state.set_state(States.diet_products)
     await _prompt_diet_products(message, lang, [])
@@ -97,20 +83,12 @@ async def diet_products(callback_query: CallbackQuery, state: FSMContext) -> Non
     profile = Profile.model_validate(data["profile"])
     lang = profile.language or settings.DEFAULT_LANG
     payload = callback_query.data or ""
-    edit_mode = bool(data.get("edit_mode"))
-
     if payload == DIET_PRODUCTS_BACK:
         await show_main_menu(cast(Message, callback_query.message), profile, state)
         await del_msg(callback_query)
         return
 
     if payload == DIET_PRODUCTS_DONE:
-        if edit_mode:
-            message = callback_query.message
-            if message is not None:
-                await update_profile_data(cast(Message, message), state, message.bot)
-            await del_msg(callback_query)
-            return
         try:
             user_profile = await fetch_user(profile)
         except ValueError:

@@ -120,9 +120,10 @@ class ProfileAPIList(generics.ListCreateAPIView):
             if existing.status == ProfileStatus.deleted:
                 existing.status = ProfileStatus.created
                 existing.deleted_at = None
+                existing.gift_credits_granted = True
                 if language:
                     existing.language = language
-                existing.save(update_fields=["status", "deleted_at", "language"])
+                existing.save(update_fields=["status", "deleted_at", "gift_credits_granted", "language"])
                 restored = True
             ProfileRepository.invalidate_cache(profile_id=existing.id, tg_id=tg_id)
             if restored:
@@ -145,7 +146,7 @@ class ProfileAPIList(generics.ListCreateAPIView):
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"Failed to enqueue profile sync profile_id={profile_id}: {exc}")
         try:
-            from ai_coach.agent.knowledge.utils.memify_scheduler import schedule_profile_memify_sync
+            from core.ai_coach.memify_scheduler import schedule_profile_memify_sync
 
             schedule_profile_memify_sync(profile_id, reason=reason)
         except Exception as exc:  # noqa: BLE001

@@ -10,6 +10,7 @@ from config.app_settings import settings
 from core.cache import Cache
 from core.schemas import Profile
 from bot.utils.ask_ai import start_ask_ai_prompt
+from bot.services.pricing import ServiceCatalog
 from bot.utils.menus import (
     show_main_menu,
     show_my_profile_menu,
@@ -18,15 +19,9 @@ from bot.utils.menus import (
     track_prompt_message,
 )
 from bot.utils.workout_plans import process_new_program, process_new_subscription
-from bot.utils.other import generate_order_id
-from bot.utils.bot import del_msg, answer_msg, get_webapp_url
+from bot.utils.bot import del_msg
 from bot.utils.prompts import send_enter_wishes_prompt
-from core.exceptions import ProfileNotFoundError
 from core.services import APIService
-from bot.keyboards import (
-    payment_kb,
-)
-from bot.services.pricing import ServiceCatalog
 from bot.utils.split_number import (
     SPLIT_NUMBER_BACK,
     SPLIT_NUMBER_CONTINUE,
@@ -79,6 +74,10 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
         return
     cb_data = callback_query.data or ""
 
+    if cb_data == "back":
+        await show_my_profile_menu(callback_query, profile, state)
+        return
+
     if cb_data == "ask_ai":
         await start_ask_ai_prompt(
             callback_query,
@@ -95,58 +94,6 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
 
     elif cb_data == "my_profile":
         await show_my_profile_menu(callback_query, profile, state)
-
-
-@menu_router.callback_query(States.choose_plan)
-async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile = Profile.model_validate(data.get("profile"))
-    cb_data = callback_query.data or ""
-
-    if cb_data == "back":
-        await show_my_profile_menu(callback_query, profile, state)
-        return
-
-    if cb_data.startswith("plan_"):
-        plan_name = cb_data.split("_", 1)[1]
-        packages = {p.name: p for p in ServiceCatalog.credit_packages()}
-        pkg = packages.get(plan_name)
-        if not pkg:
-            await callback_query.answer()
-            return
-
-        try:
-            user_profile: Profile = await Cache.profile.get_record(profile.id)
-        except ProfileNotFoundError:
-            await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
-            await del_msg(callback_query)
-            return
-
-        order_id = generate_order_id()
-        await APIService.payment.create_payment(user_profile.id, "credits", order_id, pkg.price)
-        webapp_url = get_webapp_url(
-            "payment",
-            profile.language,
-            {"order_id": order_id, "payment_type": "credits"},
-        )
-        link: str | None = None
-        if webapp_url is None:
-            logger.warning("WEBAPP_PUBLIC_URL is missing, falling back to LiqPay link for payment")
-            link = await APIService.payment.get_payment_link(
-                "pay",
-                pkg.price,
-                order_id,
-                "credits",
-                user_profile.id,
-            )
-        await state.update_data(order_id=order_id, amount=str(pkg.price), service_type="credits")
-        await state.set_state(States.handle_payment)
-        await answer_msg(
-            callback_query,
-            translate(MessageText.follow_link, profile.language).format(amount=format(pkg.price, "f")),
-            reply_markup=payment_kb(profile.language, "credits", webapp_url=webapp_url, link=link),
-        )
-    await del_msg(callback_query)
 
 
 @menu_router.callback_query(States.split_number_selection)

@@ -68,7 +68,7 @@ async def show_balance_menu(
     topup_webapp_url = get_webapp_url("topup", lang)
     if isinstance(callback_obj, CallbackQuery) and not already_answered:
         await callback_obj.answer()
-    await state.set_state(States.choose_plan)
+    await state.set_state(States.main_menu)
     await answer_msg(
         callback_obj,
         translate(MessageText.credit_balance_menu, lang).format(credits=cached_profile.credits),

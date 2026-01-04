@@ -77,8 +77,6 @@ class MessageText(AutoName):
     diet_service_intro = auto()
 
     finish_registration = auto()
-    credit_balance_menu = auto()
-    not_enough_credits = auto()
     subscription_type_prompt = auto()
     confirm_service = auto()
     weekly_survey_submitted = auto()
@@ -108,6 +106,10 @@ class MessageText(AutoName):
     new_workout_plan = auto()
     program_updated = auto()
     subscription_created = auto()
+
+    credit_balance_menu = auto()
+    not_enough_credits = auto()
+    initial_credits_granted = auto()
 
     def __str__(self) -> str:
         return f"messages.{self.name}"

@@ -95,7 +95,7 @@ async def gender(callback_query: CallbackQuery, state: FSMContext) -> None:
 
 
 @questionnaire_router.message(States.born_in)
-async def born_in(message: Message, state: FSMContext, bot: Bot) -> None:
+async def born_in(message: Message, state: FSMContext) -> None:
     if not message.text:
         return
 
@@ -111,22 +111,20 @@ async def born_in(message: Message, state: FSMContext, bot: Bot) -> None:
         born_in=str(year),
         chat_id=message.chat.id,
     )
-    await send_policy_confirmation(cast(Message, message), state)
-    await state.set_state(States.accept_policy)
+    prompt = await answer_msg(message, translate(MessageText.workout_goals, lang))
+    await state.update_data(chat_id=message.chat.id, message_ids=[prompt.message_id] if prompt else [])
+    await state.set_state(States.workout_goals)
+    await del_msg(cast(Message | CallbackQuery | None, message))
 
 
 @questionnaire_router.message(States.workout_goals)
-async def workout_goals(message: Message, state: FSMContext, bot: Bot) -> None:
+async def workout_goals(message: Message, state: FSMContext) -> None:
     if not message.text:
         return
 
     await delete_messages(state)
     await state.update_data(workout_goals=message.text)
     data = await state.get_data()
-    if data.get("edit_mode"):
-        await update_profile_data(cast(Message, message), state, bot)
-        return
-
     lang = data.get("lang", settings.DEFAULT_LANG)
     msg = await answer_msg(
         message,
@@ -139,16 +137,12 @@ async def workout_goals(message: Message, state: FSMContext, bot: Bot) -> None:
 
 
 @questionnaire_router.callback_query(States.workout_location)
-async def workout_location(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+async def workout_location(callback_query: CallbackQuery, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
     await callback_query.answer(translate(MessageText.saved, lang))
     await state.update_data(workout_location=callback_query.data)
-    if data.get("edit_mode"):
-        if callback_query.message is not None:
-            await update_profile_data(cast(Message, callback_query.message), state, bot)
-        return
 
     if callback_query.message is not None:
         msg = await answer_msg(
@@ -165,16 +159,12 @@ async def workout_location(callback_query: CallbackQuery, state: FSMContext, bot
 
 
 @questionnaire_router.callback_query(States.workout_experience)
-async def workout_experience(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
     await callback_query.answer(translate(MessageText.saved, lang))
     await state.update_data(workout_experience=callback_query.data)
-    if data.get("edit_mode"):
-        if callback_query.message is not None:
-            await update_profile_data(cast(Message, callback_query.message), state, bot)
-        return
 
     if callback_query.message is not None:
         msg = await answer_msg(cast(Message, callback_query.message), translate(MessageText.weight, lang))
@@ -184,7 +174,7 @@ async def workout_experience(callback_query: CallbackQuery, state: FSMContext, b
 
 
 @questionnaire_router.message(States.weight)
-async def weight(message: Message, state: FSMContext, bot: Bot) -> None:
+async def weight(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
     await delete_messages(state)
@@ -201,9 +191,6 @@ async def weight(message: Message, state: FSMContext, bot: Bot) -> None:
         return
 
     await state.update_data(weight=weight_value)
-    if data.get("edit_mode"):
-        await update_profile_data(cast(Message, message), state, bot)
-        return
 
     prompt = await answer_msg(message, translate(MessageText.height, lang))
     await state.update_data(chat_id=message.chat.id, message_ids=[prompt.message_id] if prompt else [])
@@ -212,7 +199,7 @@ async def weight(message: Message, state: FSMContext, bot: Bot) -> None:
 
 
 @questionnaire_router.message(States.height)
-async def height(message: Message, state: FSMContext, bot: Bot) -> None:
+async def height(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
     await delete_messages(state)
@@ -229,9 +216,6 @@ async def height(message: Message, state: FSMContext, bot: Bot) -> None:
         return
 
     await state.update_data(height=height_value)
-    if data.get("edit_mode"):
-        await update_profile_data(cast(Message, message), state, bot)
-        return
 
     prompt = await answer_msg(
         message,
@@ -244,7 +228,7 @@ async def height(message: Message, state: FSMContext, bot: Bot) -> None:
 
 
 @questionnaire_router.callback_query(States.health_notes_choice)
-async def health_notes_choice(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+async def health_notes_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
     await callback_query.answer()
@@ -266,28 +250,22 @@ async def health_notes_choice(callback_query: CallbackQuery, state: FSMContext, 
         return
 
     await state.update_data(health_notes=HEALTH_NOTES_PLACEHOLDER, status=ProfileStatus.completed)
-    if not data.get("edit_mode"):
-        if await should_grant_gift_credits(callback_query.from_user.id):
-            await state.update_data(credits_delta=settings.DEFAULT_CREDITS)
-
     if callback_query.message is not None:
-        await update_profile_data(cast(Message, callback_query.message), state, bot)
+        await send_policy_confirmation(cast(Message, callback_query.message), state)
+    await state.set_state(States.accept_policy)
     await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
 
 @questionnaire_router.message(States.health_notes)
-async def health_notes(message: Message, state: FSMContext, bot: Bot) -> None:
+async def health_notes(message: Message, state: FSMContext) -> None:
     if not message.text:
         return
 
     await delete_messages(state)
-    data = await state.get_data()
     await state.update_data(health_notes=message.text, status=ProfileStatus.completed)
-    if not data.get("edit_mode"):
-        if await should_grant_gift_credits(message.from_user.id):
-            await state.update_data(credits_delta=settings.DEFAULT_CREDITS)
-
-    await update_profile_data(cast(Message, message), state, bot)
+    await send_policy_confirmation(cast(Message, message), state)
+    await state.set_state(States.accept_policy)
+    return
 
 
 @questionnaire_router.message(States.enter_wishes)
@@ -384,20 +362,23 @@ async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMC
 
 @questionnaire_router.callback_query(States.accept_policy)
 async def process_policy(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    await callback_query.answer()
-    await delete_messages(state)
-
     if callback_query.data == "yes":
         message = callback_query.message
+        data = await state.get_data()
+        if await should_grant_gift_credits(callback_query.from_user.id):
+            await state.update_data(credits_delta=settings.DEFAULT_CREDITS)
+            lang = data.get("lang", settings.DEFAULT_LANG)
+            alert_text = translate(MessageText.initial_credits_granted, lang).format(credits=settings.DEFAULT_CREDITS)
+            await callback_query.answer(alert_text, show_alert=True)
+        else:
+            await callback_query.answer()
+        await delete_messages(state)
         if message is not None:
-            lang = (await state.get_data()).get("lang", settings.DEFAULT_LANG)
-            prompt = await answer_msg(cast(Message, message), translate(MessageText.workout_goals, lang))
-            await state.update_data(
-                chat_id=message.chat.id,
-                message_ids=[prompt.message_id] if prompt else [],
-            )
-        await state.set_state(States.workout_goals)
+            await update_profile_data(cast(Message, message), state, bot)
+        return
     else:
+        await callback_query.answer()
+        await delete_messages(state)
         await state.clear()
         if callback_query.message is not None:
             start_msg = await callback_query.message.answer(translate(MessageText.start, settings.DEFAULT_LANG))
