@@ -28,7 +28,8 @@ type EditableField =
     | 'workout_location'
     | 'health_notes'
     | 'diet_allergies'
-    | 'diet_products';
+    | 'diet_products'
+    | 'language';
 
 type DraftState = {
     weight?: string;
@@ -39,6 +40,7 @@ type DraftState = {
     health_notes?: string;
     diet_allergies?: string;
     diet_products?: DietProduct[];
+    language?: string;
 };
 
 const DIET_PRODUCT_OPTIONS: Array<{ value: DietProduct; labelKey: TranslationKey }> = [
@@ -61,6 +63,12 @@ const LOCATION_OPTIONS: Array<{ value: WorkoutLocation; labelKey: TranslationKey
     { value: 'home', labelKey: 'profile.workout_location.home' },
 ];
 
+const LANGUAGE_OPTIONS: Array<{ value: string; labelKey: TranslationKey }> = [
+    { value: 'ua', labelKey: 'profile.language.ua' },
+    { value: 'ru', labelKey: 'profile.language.ru' },
+    { value: 'eng', labelKey: 'profile.language.eng' },
+];
+
 const ProfilePage: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -75,7 +83,7 @@ const ProfilePage: React.FC = () => {
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [balancePressed, setBalancePressed] = useState(false);
-    const [openDropdown, setOpenDropdown] = useState<'workout_experience' | 'workout_location' | null>(null);
+    const [openDropdown, setOpenDropdown] = useState<'workout_experience' | 'workout_location' | 'language' | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const paramLang = searchParams.get('lang') || undefined;
 
@@ -140,6 +148,8 @@ const ProfilePage: React.FC = () => {
         const nextDraft: DraftState = { ...draft };
         if (field === 'diet_products') {
             nextDraft.diet_products = profile.diet_products ?? [];
+        } else if (field === 'language') {
+            nextDraft.language = profile.language ?? '';
         } else if (field === 'weight') {
             nextDraft.weight = profile.weight !== null && profile.weight !== undefined ? String(profile.weight) : '';
         } else if (field === 'height') {
@@ -212,6 +222,8 @@ const ProfilePage: React.FC = () => {
             payload.diet_allergies = draft.diet_allergies ? draft.diet_allergies.trim() : null;
         } else if (editingField === 'diet_products') {
             payload.diet_products = draft.diet_products ?? [];
+        } else if (editingField === 'language') {
+            payload.language = draft.language ? draft.language : null;
         }
 
         setSavingField(editingField);
@@ -219,6 +231,10 @@ const ProfilePage: React.FC = () => {
         try {
             const updated = await updateProfile(payload, initData);
             setProfile(updated);
+            if (editingField === 'language' && updated.language) {
+                const appliedLang = await applyLang(updated.language);
+                setLang(appliedLang);
+            }
             setEditingField(null);
             setView('list');
             setOpenDropdown(null);
@@ -237,9 +253,13 @@ const ProfilePage: React.FC = () => {
         }
         setBalancePressed(true);
         window.setTimeout(() => setBalancePressed(false), 180);
-        const query = searchParams.toString();
-        navigate(query ? `/topup?${query}` : '/topup');
-    }, [initData, navigate, searchParams]);
+        const query = new URLSearchParams(searchParams);
+        if (!query.get('lang')) {
+            query.set('lang', lang);
+        }
+        const queryString = query.toString();
+        navigate(queryString ? `/topup?${queryString}` : '/topup');
+    }, [initData, lang, navigate, searchParams]);
 
     const handleDelete = useCallback(async () => {
         if (!initData) {
@@ -285,6 +305,14 @@ const ProfilePage: React.FC = () => {
         return option ? t(option.labelKey) : profile.workout_location;
     }, [profile]);
 
+    const languageLabel = useMemo(() => {
+        if (!profile?.language) {
+            return t('profile.empty');
+        }
+        const option = LANGUAGE_OPTIONS.find((item) => item.value === profile.language);
+        return option ? t(option.labelKey) : profile.language;
+    }, [profile]);
+
     const dietLabel = useMemo(() => {
         if (!profile?.diet_products || profile.diet_products.length === 0) {
             return t('profile.empty');
@@ -320,8 +348,8 @@ const ProfilePage: React.FC = () => {
 
     const resolveDropdownLabel = useCallback(
         (
-            value: WorkoutExperience | WorkoutLocation | '' | null | undefined,
-            options: Array<{ value: WorkoutExperience | WorkoutLocation; labelKey: TranslationKey }>
+            value: WorkoutExperience | WorkoutLocation | string | '' | null | undefined,
+            options: Array<{ value: WorkoutExperience | WorkoutLocation | string; labelKey: TranslationKey }>
         ) => {
             if (!value) {
                 return t('profile.empty');
@@ -513,6 +541,23 @@ const ProfilePage: React.FC = () => {
                                     <div>
                                         <p className="profile-row__label">{t('profile.field.diet_products')}</p>
                                         <p className="profile-row__value">{dietLabel}</p>
+                                    </div>
+                                    <span className="profile-row__chevron" aria-hidden="true">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                                            <path
+                                                d="M7 10l5 5 5-5"
+                                                stroke="currentColor"
+                                                strokeWidth="1.6"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            />
+                                        </svg>
+                                    </span>
+                                </button>
+                                <button type="button" className="profile-row" onClick={() => startEdit('language')}>
+                                    <div>
+                                        <p className="profile-row__label">{t('profile.field.language')}</p>
+                                        <p className="profile-row__value">{languageLabel}</p>
                                     </div>
                                     <span className="profile-row__chevron" aria-hidden="true">
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
@@ -754,6 +799,55 @@ const ProfilePage: React.FC = () => {
                                                 })}
                                             </div>
                                             {renderActions('diet_products')}
+                                        </>
+                                    )}
+                                    {editingField === 'language' && (
+                                        <>
+                                            <div className="sort-menu profile-select" ref={dropdownRef}>
+                                                <button
+                                                    type="button"
+                                                    className="sort-trigger profile-select__trigger"
+                                                    onClick={() => setOpenDropdown((prev) => (prev === 'language' ? null : 'language'))}
+                                                >
+                                                    <span>
+                                                        {resolveDropdownLabel(
+                                                            draft.language ?? profile?.language,
+                                                            LANGUAGE_OPTIONS
+                                                        )}
+                                                    </span>
+                                                    <span className="sort-trigger__chevron" aria-hidden="true">
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                                                            <path
+                                                                d="M7 10l5 5 5-5"
+                                                                stroke="currentColor"
+                                                                strokeWidth="1.6"
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                            />
+                                                        </svg>
+                                                    </span>
+                                                </button>
+                                                {openDropdown === 'language' && (
+                                                    <div className="sort-dropdown profile-select__dropdown" role="listbox">
+                                                        {LANGUAGE_OPTIONS.map((item) => (
+                                                            <button
+                                                                key={item.value}
+                                                                type="button"
+                                                                className={`sort-option ${
+                                                                    (draft.language ?? profile?.language) === item.value ? 'is-active' : ''
+                                                                }`}
+                                                                onClick={() => {
+                                                                    setDraft((prev) => ({ ...prev, language: item.value }));
+                                                                    setOpenDropdown(null);
+                                                                }}
+                                                            >
+                                                                {t(item.labelKey)}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {renderActions('language')}
                                         </>
                                     )}
                                 </div>

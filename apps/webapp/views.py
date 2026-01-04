@@ -1,12 +1,13 @@
 import json
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, cast
+from typing import cast
 from uuid import uuid4
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from google.api_core.exceptions import NotFound as GCSNotFound
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
 from loguru import logger
 from pydantic import ValidationError
 from rest_framework.exceptions import NotFound
@@ -22,13 +23,14 @@ from apps.webapp.weekly_survey import (
     enqueue_subscription_update,
     resolve_plan_age_weeks,
 )
-from apps.profiles.choices import ProfileStatus, WorkoutExperience
+from apps.profiles.choices import ProfileStatus
+from apps.profiles.models import Profile
 from apps.profiles.repos import ProfileRepository
 from apps.profiles.serializers import ProfileSerializer
 from config.app_settings import settings
 from core.internal_http import build_internal_hmac_auth_headers, internal_request_timeout
 from core.cache import Cache
-from core.enums import WorkoutLocation, PaymentStatus
+from core.enums import WorkoutLocation, PaymentStatus, WorkoutPlanType
 from core.schemas import Program as ProgramSchema, Subscription
 from django.core.cache import cache
 from core.ai_coach.exercise_catalog import load_exercise_catalog
@@ -55,29 +57,25 @@ from .utils import (
     parse_program_id,
     parse_subscription_id,
     resolve_credit_package,
+    resolve_workout_location,
+    workout_plan_pricing,
 )
 from .view_helpers import (
     build_days_payload,
     build_profile_payload,
     build_support_contact_payload,
     build_webapp_profile_payload,
+    build_workout_plan_options_payload,
+    create_subscription_record,
     fetch_program,
+    parse_profile_updates,
     parse_timestamp,
     post_internal_request,
     resolve_internal_base_url,
     resolve_profile,
+    resolve_workout_plan_required,
 )
-
-from django.utils import timezone
-
-
-DIET_PRODUCT_OPTIONS: tuple[str, ...] = (
-    "plant_food",
-    "meat",
-    "fish_seafood",
-    "eggs",
-    "dairy",
-)
+from .workout_flow import WorkoutPlanRequest, enqueue_workout_plan_generation
 
 
 # type checking of async views with require_GET is not supported by stubs
@@ -462,97 +460,9 @@ async def profile_update(request: HttpRequest) -> JsonResponse:
     if not isinstance(payload, dict):
         return JsonResponse({"error": "bad_request"}, status=400)
 
-    updates: dict[str, Any] = {}
-
-    def read_text(value: object, *, max_len: int) -> tuple[bool, str | None, str | None]:
-        if value is None:
-            return True, None, None
-        if isinstance(value, str):
-            cleaned = value.strip()
-            if len(cleaned) > max_len:
-                return False, None, "profile.error.too_long"
-            return True, cleaned or None, None
-        return False, None, "bad_request"
-
-    def read_int(value: object) -> tuple[bool, int | None]:
-        if value is None or value == "":
-            return True, None
-        if isinstance(value, bool):
-            return False, None
-        try:
-            parsed = int(str(value))
-        except (TypeError, ValueError):
-            return False, None
-        if parsed < 0:
-            return False, None
-        return True, parsed
-
-    def read_choice(value: object, allowed: set[str]) -> tuple[bool, str | None]:
-        if value is None or value == "":
-            return True, None
-        if not isinstance(value, str):
-            return False, None
-        normalized = value.strip().lower()
-        if normalized not in allowed:
-            return False, None
-        return True, normalized
-
-    def read_diet_products(value: object) -> tuple[bool, list[str] | None]:
-        if value is None:
-            return True, None
-        if not isinstance(value, list):
-            return False, None
-        raw = [str(item).strip() for item in value if str(item).strip()]
-        allowed = set(DIET_PRODUCT_OPTIONS)
-        unknown = [item for item in raw if item not in allowed]
-        if unknown:
-            return False, None
-        ordered = [item for item in DIET_PRODUCT_OPTIONS if item in raw]
-        return True, ordered
-
-    text_fields = {
-        "health_notes": 250,
-        "workout_goals": 250,
-        "diet_allergies": 250,
-    }
-    int_fields = {
-        "born_in": read_int,
-        "weight": read_int,
-        "height": read_int,
-    }
-    choice_fields = {
-        "workout_experience": ({choice.value for choice in WorkoutExperience}, read_choice),
-        "workout_location": ({"gym", "home"}, read_choice),
-        "gender": ({"male", "female"}, read_choice),
-    }
-
-    for field_name, max_len in text_fields.items():
-        if field_name in payload:
-            ok, value, error_key = read_text(payload.get(field_name), max_len=max_len)
-            if not ok:
-                error = error_key or "bad_request"
-                return JsonResponse({"error": error, "field": field_name, "max": max_len}, status=400)
-            updates[field_name] = value
-
-    for field_name, reader in int_fields.items():
-        if field_name in payload:
-            ok, value = reader(payload.get(field_name))
-            if not ok:
-                return JsonResponse({"error": "bad_request"}, status=400)
-            updates[field_name] = value
-
-    for field_name, (allowed, reader) in choice_fields.items():
-        if field_name in payload:
-            ok, value = reader(payload.get(field_name), allowed)
-            if not ok:
-                return JsonResponse({"error": "bad_request"}, status=400)
-            updates[field_name] = value
-
-    if "diet_products" in payload:
-        ok, value = read_diet_products(payload.get("diet_products"))
-        if not ok:
-            return JsonResponse({"error": "bad_request"}, status=400)
-        updates["diet_products"] = value
+    updates, error = parse_profile_updates(payload)
+    if error:
+        return JsonResponse(error, status=400)
 
     if not updates:
         return JsonResponse(build_webapp_profile_payload(profile))
@@ -815,6 +725,108 @@ async def workouts_action(request: HttpRequest) -> JsonResponse:
 
     logger.info(f"workouts_action_dispatched profile_id={profile.id} action={action}")
     return JsonResponse({"status": "ok"})
+
+
+@require_GET  # type: ignore[misc]
+async def workout_plan_options(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+
+    pricing = workout_plan_pricing()
+    return JsonResponse(build_workout_plan_options_payload(pricing))
+
+
+@csrf_exempt  # type: ignore[bad-specialization]
+@require_POST  # type: ignore[misc]
+async def workout_plan_create(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
+
+    try:
+        payload_raw = json.loads(request.body or "{}")
+    except Exception:
+        logger.warning("workout_plan_create_invalid_payload")
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    try:
+        payload = WorkoutPlanRequest.model_validate(payload_raw)
+    except ValidationError as exc:
+        logger.warning(f"workout_plan_create_invalid_schema error={exc!s}")
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    pricing = workout_plan_pricing()
+    required = resolve_workout_plan_required(pricing, payload, profile_id=profile.id)
+    if required is None:
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    credits = int(getattr(profile, "credits", 0) or 0)
+    if credits < required:
+        return JsonResponse({"error": "not_enough_credits"}, status=400)
+
+    workout_location = resolve_workout_location(profile)
+    if workout_location is None:
+        logger.warning(f"workout_plan_location_missing profile_id={profile.id}")
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    split_number = int(payload.split_number)
+    wishes = payload.wishes
+    language = str(getattr(profile, "language", settings.DEFAULT_LANG) or settings.DEFAULT_LANG)
+    subscription_id: int | None = None
+    previous_subscription_id: int | None = None
+
+    if payload.plan_type is WorkoutPlanType.SUBSCRIPTION:
+        subscription_id, previous_subscription_id = await create_subscription_record(
+            profile=profile,
+            payload=payload,
+            required=required,
+            workout_location=workout_location,
+            split_number=split_number,
+            wishes=wishes,
+        )
+        if not subscription_id:
+            logger.error(f"workout_plan_subscription_create_failed profile_id={profile.id}")
+            return JsonResponse({"error": "server_error"}, status=500)
+
+    new_credits = max(0, credits - required)
+    await call_repo(Profile.objects.filter(id=profile.id).update, credits=new_credits)
+    await call_repo(ProfileRepository.invalidate_cache, profile.id, getattr(profile, "tg_id", None))
+    await Cache.profile.update_record(profile.id, {"credits": new_credits})
+
+    if payload.plan_type is WorkoutPlanType.SUBSCRIPTION and subscription_id is not None:
+        await Cache.workout.update_subscription(
+            profile.id,
+            {
+                "id": subscription_id,
+                "enabled": False,
+                "period": payload.period.value if payload.period else None,
+                "price": required,
+                "workout_location": workout_location.value,
+                "wishes": wishes,
+                "split_number": split_number,
+            },
+        )
+
+    queued = enqueue_workout_plan_generation(
+        profile_id=profile.id,
+        language=language,
+        plan_type=payload.plan_type,
+        workout_location=workout_location,
+        wishes=wishes,
+        split_number=split_number,
+        period=payload.period,
+        previous_subscription_id=previous_subscription_id,
+    )
+    if not queued:
+        return JsonResponse({"error": "server_error"}, status=500)
+
+    return JsonResponse({"status": "ok", "subscription_id": subscription_id})
 
 
 @csrf_exempt  # type: ignore[bad-specialization]

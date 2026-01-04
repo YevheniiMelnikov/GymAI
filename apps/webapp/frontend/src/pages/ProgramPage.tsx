@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     getProgram,
     getSubscription,
     getSubscriptionStatus,
     HttpError,
-    triggerWorkoutAction,
     WorkoutAction
 } from '../api/http';
 import { applyLang, t } from '../i18n/i18n';
@@ -53,6 +52,7 @@ const storeLastWorkoutSegment = (segment: SegmentId): void => {
 };
 
 const ProgramPage: React.FC = () => {
+    const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const searchParamsKey = searchParams.toString();
     const contentRef = useRef<HTMLDivElement>(null);
@@ -249,37 +249,17 @@ const ProgramPage: React.FC = () => {
         };
     }, [programId, activeSegment, paramLang, refreshKey]);
 
-    const handleWorkoutAction = useCallback(
-        async (nextAction: WorkoutAction | null) => {
-            if (!nextAction) {
-                return;
-            }
-            const initData = readInitData();
-            const tg = (window as any).Telegram?.WebApp;
-            if (!initData) {
-                window.alert(t('open_from_telegram'));
-                return;
-            }
-            setActionLoading(true);
-            try {
-                const payload =
-                    nextAction === 'create_program' ? 'create_new_program' : 'create_new_subscription';
-                try {
-                    tg?.sendData(payload);
-                } catch {
-                }
-                await triggerWorkoutAction(nextAction, initData);
-                tg?.close();
-            } catch (err) {
-                const messageKey = err instanceof HttpError ? (err.message as any) : ('program.action_error' as any);
-                const translated = t(messageKey);
-                console.error('workouts_action_failed', err);
-                window.alert(translated || t('program.action_error'));
-            } finally {
-                setActionLoading(false);
-            }
+    const navigateToFlow = useCallback(
+        (plan: 'program' | 'subscription') => {
+            const nextParams = new URLSearchParams(searchParamsKey);
+            nextParams.delete('id');
+            nextParams.delete('subscription_id');
+            nextParams.delete('source');
+            nextParams.set('plan', plan);
+            const query = nextParams.toString();
+            navigate(query ? `/workout-flow?${query}` : '/workout-flow');
         },
-        []
+        [navigate, searchParamsKey]
     );
 
     const creationAction: WorkoutAction | null =
@@ -319,13 +299,13 @@ const ProgramPage: React.FC = () => {
                 setActionLoading(false);
             }
         }
-        await handleWorkoutAction(creationAction);
-    }, [creationAction, handleWorkoutAction]);
+        navigateToFlow(creationAction === 'create_program' ? 'program' : 'subscription');
+    }, [creationAction, navigateToFlow]);
 
     const handleSubscriptionConfirm = useCallback(async () => {
         setShowSubscriptionConfirm(false);
-        await handleWorkoutAction('create_subscription');
-    }, [handleWorkoutAction]);
+        navigateToFlow('subscription');
+    }, [navigateToFlow]);
 
     const handleSubscriptionCancel = useCallback(() => {
         setShowSubscriptionConfirm(false);
@@ -385,7 +365,7 @@ const ProgramPage: React.FC = () => {
 
     const fabStyle: React.CSSProperties = {
         position: 'fixed',
-        bottom: 'calc(28px + var(--bottom-nav-offset, 0px))',
+        bottom: 'calc(56px + var(--bottom-nav-offset, 0px))',
         right: 20,
         width: 68,
         height: 68,

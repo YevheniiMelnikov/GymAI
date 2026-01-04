@@ -13,10 +13,7 @@ from core.enums import PaymentStatus
 from core.services import APIService
 from bot.utils.menus import show_main_menu, show_balance_menu
 from core.schemas import Profile
-from bot.utils.workout_plans import process_new_program, process_new_subscription
-from bot.utils.split_number import DEFAULT_SPLIT_NUMBER, update_split_number_message
 from bot.texts import MessageText, translate
-from config.app_settings import settings
 
 payment_router = Router()
 
@@ -70,31 +67,3 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
         await show_main_menu(msg, profile, state)
 
     await del_msg(callback_query)
-
-
-@payment_router.callback_query(States.confirm_service)
-async def confirm_service(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile = Profile.model_validate(data["profile"])
-    action = str(callback_query.data or "").lower()
-    if action in {"no", "back"}:
-        await callback_query.answer()
-        count = int(data.get("split_number", DEFAULT_SPLIT_NUMBER))
-        await state.set_state(States.split_number_selection)
-        await update_split_number_message(callback_query, profile.language or settings.DEFAULT_LANG, count)
-        return
-
-    service_type = data.get("service_type")
-    if service_type == "subscription":
-        if action not in {"confirm_generate", "yes"}:
-            await callback_query.answer()
-            return
-        await process_new_subscription(callback_query, profile, state, confirmed=True)
-        return
-    if service_type == "program":
-        if action not in {"confirm_generate", "yes"}:
-            await callback_query.answer()
-            return
-        await process_new_program(callback_query, profile, state, confirmed=True)
-        return
-    await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)

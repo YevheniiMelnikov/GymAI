@@ -40,6 +40,16 @@ urlpatterns = [
         "api/workouts/action/", views.workouts_action, name="webapp-workouts-action"
     ),
     path(  # pyrefly: ignore[no-matching-overload]
+        "api/workouts/options/",
+        views.workout_plan_options,
+        name="webapp-workouts-options",
+    ),
+    path(  # pyrefly: ignore[no-matching-overload]
+        "api/workouts/create/",
+        views.workout_plan_create,
+        name="webapp-workouts-create",
+    ),
+    path(  # pyrefly: ignore[no-matching-overload]
         "api/weekly-survey/",
         views.weekly_survey_submit,
         name="webapp-weekly-survey-submit",

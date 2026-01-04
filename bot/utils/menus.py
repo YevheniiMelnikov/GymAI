@@ -8,7 +8,6 @@ from bot import keyboards as kb
 from bot.keyboard_builder import SafeInlineKeyboardMarkup as KbMarkup
 from bot.keyboards import yes_no_kb, confirm_service_kb
 from bot.utils.profiles import fetch_user
-from bot.services.pricing import ServiceCatalog
 from bot.states import States
 from bot.texts import ButtonText, MessageText, translate
 from core.enums import ProfileStatus
@@ -17,7 +16,6 @@ from core.schemas import Profile
 from config.app_settings import settings
 from bot.types.messaging import BotMessageProxy
 from bot.utils.bot import del_msg, answer_msg, get_webapp_url
-from bot.utils.prompts import send_enter_wishes_prompt
 
 
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext, *, delete_source: bool = True) -> None:
@@ -177,19 +175,6 @@ def _extract_chat_id(target: InteractionTarget) -> int | None:
     return None
 
 
-async def _track_prompt_message(state: FSMContext, message: Message | None) -> None:
-    if message is None:
-        return
-    data = await state.get_data()
-    message_ids = list(data.get("message_ids", []))
-    message_ids.append(message.message_id)
-    await state.update_data(message_ids=message_ids, chat_id=message.chat.id)
-
-
-async def track_prompt_message(state: FSMContext, message: Message | None) -> None:
-    await _track_prompt_message(state, message)
-
-
 async def _start_profile_questionnaire(
     target: InteractionTarget,
     profile: Profile,
@@ -235,95 +220,6 @@ async def prompt_profile_completion_questionnaire(
         chat_id=chat_id,
         pending_flow=pending_flow,
     )
-
-
-async def process_ai_service_selection(
-    interaction: InteractionTarget,
-    profile: Profile,
-    state: FSMContext,
-    *,
-    service_name: str,
-) -> bool:
-    language = cast(str, profile.language or settings.DEFAULT_LANG)
-    data = await state.get_data()
-    profile_data = data.get("profile")
-    if not profile_data:
-        await answer_msg(interaction, translate(MessageText.unexpected_error, language))
-        return False
-
-    selected_profile = Profile.model_validate(profile_data)
-    services = {service.name: service.credits for service in ServiceCatalog.ai_services()}
-    required = services.get(service_name)
-    if required is None:
-        await answer_msg(interaction, translate(MessageText.unexpected_error, language))
-        return False
-
-    if not await ensure_credits(
-        interaction,
-        profile,
-        state,
-        required=required,
-        credits=selected_profile.credits,
-    ):
-        return False
-
-    await state.update_data(
-        ai_service=service_name,
-        required=required,
-    )
-    await state.set_state(States.enter_wishes)
-    prompt = await send_enter_wishes_prompt(interaction, language)
-    await _track_prompt_message(state, prompt)
-    return True
-
-
-async def start_program_flow(target: InteractionTarget, profile: Profile, state: FSMContext) -> None:
-    cached_profile = await fetch_user(profile, refresh_if_incomplete=True)
-    if cached_profile.status != ProfileStatus.completed:
-        await prompt_profile_completion_questionnaire(
-            target,
-            profile,
-            state,
-            pending_flow={"name": "start_program_flow"},
-        )
-        return
-    await state.update_data(service_type="program")
-    await process_ai_service_selection(
-        target,
-        profile,
-        state,
-        service_name="program",
-    )
-
-
-async def start_subscription_flow(target: InteractionTarget, profile: Profile, state: FSMContext) -> None:
-    cached_profile = await fetch_user(profile, refresh_if_incomplete=True)
-    if cached_profile.status != ProfileStatus.completed:
-        await prompt_profile_completion_questionnaire(
-            target,
-            profile,
-            state,
-            pending_flow={"name": "start_subscription_flow"},
-        )
-        return
-    language = cast(str, profile.language or settings.DEFAULT_LANG)
-    await state.update_data(service_type="subscription", subscription_flow=True)
-    await state.set_state(States.enter_wishes)
-    prompt = await send_enter_wishes_prompt(target, language)
-    await _track_prompt_message(state, prompt)
-
-
-async def prompt_subscription_type(target: InteractionTarget, profile: Profile, state: FSMContext) -> None:
-    language = cast(str, profile.language or settings.DEFAULT_LANG)
-    services = [(service.name, service.credits) for service in ServiceCatalog.subscription_services()]
-    await state.update_data(subscription_flow=False)
-    await state.set_state(States.choose_subscription)
-    prompt = await answer_msg(
-        target,
-        translate(MessageText.subscription_type_prompt, language),
-        reply_markup=kb.subscription_type_kb(language, services),
-    )
-    await _track_prompt_message(state, prompt)
 
 
 async def start_diet_flow(

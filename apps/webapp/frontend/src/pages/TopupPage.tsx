@@ -2,9 +2,18 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
-import { applyLang, t, type TranslationKey } from '../i18n/i18n';
+import { applyLang, LANG_CHANGED_EVENT, t, type TranslationKey } from '../i18n/i18n';
 import { HttpError, initPayment } from '../api/http';
-import { closeWebApp, openTelegramLink, readInitData } from '../telegram';
+import {
+    closeWebApp,
+    hideBackButton,
+    offBackButtonClick,
+    onBackButtonClick,
+    openTelegramLink,
+    readInitData,
+    readLocale,
+    showBackButton,
+} from '../telegram';
 
 const STATIC_PREFIX = ((window as any).__STATIC_PREFIX__ as string | undefined) ?? '/static/';
 
@@ -24,7 +33,6 @@ const DEFAULT_INDEX = 1;
 const TopupPage: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const searchQuery = searchParams.toString();
     const paramLang = searchParams.get('lang') || undefined;
     const viewportRef = useRef<HTMLDivElement>(null);
     const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
@@ -45,9 +53,38 @@ const TopupPage: React.FC = () => {
     const [paying, setPaying] = useState(false);
     const [payError, setPayError] = useState<string | null>(null);
 
-    useEffect(() => {
-        void applyLang(paramLang);
+    const [, setLangCode] = useState<string | null>(null);
+    const lockedLang = useMemo(() => {
+        let stored: string | null = null;
+        try {
+            stored = window.sessionStorage.getItem('app:lang');
+        } catch {
+        }
+        const docLang = document.documentElement.lang || undefined;
+        return paramLang ?? stored ?? docLang ?? readLocale();
     }, [paramLang]);
+
+    useEffect(() => {
+        void applyLang(lockedLang).then((resolved) => {
+            setLangCode(resolved);
+        });
+    }, [lockedLang]);
+
+    useEffect(() => {
+        const handleLangChange = () => {
+            if (document.documentElement.lang !== lockedLang) {
+                void applyLang(lockedLang).then((resolved) => {
+                    setLangCode(resolved);
+                });
+            } else {
+                setLangCode(lockedLang);
+            }
+        };
+        window.addEventListener(LANG_CHANGED_EVENT, handleLangChange);
+        return () => {
+            window.removeEventListener(LANG_CHANGED_EVENT, handleLangChange);
+        };
+    }, [lockedLang]);
 
     const cards = useMemo(() => PACKAGES, []);
 
@@ -67,11 +104,19 @@ const TopupPage: React.FC = () => {
     }, [activeIndex]);
 
     const scrollToIndex = useCallback((index: number, behavior: ScrollBehavior) => {
+        const viewport = viewportRef.current;
         const card = cardRefs.current[index];
-        if (!card) {
+        if (!viewport || !card) {
             return false;
         }
-        card.scrollIntoView({ behavior, inline: 'center', block: 'nearest' });
+        const target = card.offsetLeft - (viewport.clientWidth - card.clientWidth) / 2;
+        const maxScroll = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+        const next = Math.max(0, Math.min(target, maxScroll));
+        try {
+            viewport.scrollTo({ left: next, behavior });
+        } catch {
+            viewport.scrollLeft = next;
+        }
         return true;
     }, []);
 
@@ -112,8 +157,8 @@ const TopupPage: React.FC = () => {
         const cardRect = activeCard.getBoundingClientRect();
         const ctaRect = cta.getBoundingClientRect();
         const dotsRect = dots.getBoundingClientRect();
-        const center = (cardRect.bottom + ctaRect.top) / 2;
-        const minTop = cardRect.bottom + 8;
+        const center = cardRect.bottom + (ctaRect.top - cardRect.bottom) * 0.35;
+        const minTop = cardRect.bottom + 2;
         const maxTop = ctaRect.top - dotsRect.height - 8;
         let nextTop = center - dotsRect.height / 2;
         if (maxTop >= minTop) {
@@ -176,6 +221,34 @@ const TopupPage: React.FC = () => {
     }, [measure]);
 
     useEffect(() => {
+        const main = document.querySelector('main#app') as HTMLElement | null;
+        const prevBodyOverflow = document.body.style.overflow;
+        const prevHtmlOverflow = document.documentElement.style.overflow;
+        const prevBodyPosition = document.body.style.position;
+        const prevBodyWidth = document.body.style.width;
+        const prevBodyHeight = document.body.style.height;
+        const prevMainOverflow = main?.style.overflow ?? '';
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
+        document.body.style.height = '100%';
+        if (main) {
+            main.style.overflow = 'hidden';
+        }
+        return () => {
+            document.body.style.overflow = prevBodyOverflow;
+            document.documentElement.style.overflow = prevHtmlOverflow;
+            document.body.style.position = prevBodyPosition;
+            document.body.style.width = prevBodyWidth;
+            document.body.style.height = prevBodyHeight;
+            if (main) {
+                main.style.overflow = prevMainOverflow;
+            }
+        };
+    }, []);
+
+    useEffect(() => {
         let frame: number | null = null;
         const schedule = () => {
             if (frame !== null) {
@@ -203,24 +276,32 @@ const TopupPage: React.FC = () => {
     }, [activeIndex, updateDotsPosition]);
 
 
+    const ensureLang = useCallback(() => {
+        if (document.documentElement.lang !== lockedLang) {
+            void applyLang(lockedLang);
+        }
+    }, [lockedLang]);
+
     const handleDotClick = useCallback(
         (index: number) => {
+            ensureLang();
             initDoneRef.current = true;
             hapticEnabledRef.current = true;
             setActiveIndex(index);
             scrollToIndex(index, 'auto');
         },
-        [scrollToIndex]
+        [ensureLang, scrollToIndex]
     );
 
     const handleCardClick = useCallback(
         (index: number) => {
+            ensureLang();
             initDoneRef.current = true;
             hapticEnabledRef.current = true;
             setActiveIndex(index);
             scrollToIndex(index, 'auto');
         },
-        [scrollToIndex]
+        [ensureLang, scrollToIndex]
     );
 
     const handleCardPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
@@ -282,12 +363,13 @@ const TopupPage: React.FC = () => {
             if (targetIndex === startIndex) {
                 return;
             }
+            ensureLang();
             initDoneRef.current = true;
             hapticEnabledRef.current = true;
             setActiveIndex(targetIndex);
             scrollToIndex(targetIndex, 'auto');
         },
-        [cards.length, scrollToIndex]
+        [cards.length, ensureLang, scrollToIndex]
     );
 
     const handleViewportClick = useCallback(
@@ -340,12 +422,23 @@ const TopupPage: React.FC = () => {
         }
     }, [activeIndex, cards, paying]);
 
+    const handleSystemBack = useCallback(() => {
+        const query = searchParams.toString();
+        navigate(query ? `/profile?${query}` : '/profile');
+    }, [navigate, searchParams]);
+
+    useEffect(() => {
+        showBackButton();
+        onBackButtonClick(handleSystemBack);
+        return () => {
+            offBackButtonClick(handleSystemBack);
+            hideBackButton();
+        };
+    }, [handleSystemBack]);
+
     return (
-        <div className="page-container with-bottom-nav">
-            <TopBar
-                title={t('topup.title')}
-                onBack={() => navigate(searchQuery ? `/profile?${searchQuery}` : '/profile')}
-            />
+        <div className="page-container with-bottom-nav topup-page">
+            <TopBar title={t('topup.title')} />
             <main className="page-shell topup-page-shell">
                 <section className="topup-shell">
                     <div

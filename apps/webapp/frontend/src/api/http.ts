@@ -10,7 +10,9 @@ import {
   ProfileUpdatePayload,
   SupportContactResp,
   SubscriptionResp,
-  SubscriptionStatusResp
+  SubscriptionStatusResp,
+  WorkoutPlanKind,
+  WorkoutPlanOptionsResp
 } from './types';
 
 const KNOWN_LOCALES: readonly Locale[] = ['en', 'ru', 'uk'];
@@ -263,6 +265,54 @@ export async function triggerWorkoutAction(action: WorkoutAction, initData: stri
     await resp.json();
   } catch {
   }
+}
+
+export type WorkoutPlanCreatePayload = {
+  plan_type: WorkoutPlanKind;
+  split_number: number;
+  period?: '1m' | '6m' | '12m';
+  wishes?: string;
+};
+
+export type WorkoutPlanCreateResp = {
+  status: string;
+  subscription_id?: number | null;
+};
+
+export async function getWorkoutPlanOptions(
+  initData: string,
+  signal?: AbortSignal
+): Promise<WorkoutPlanOptionsResp> {
+  const url = new URL('api/workouts/options/', window.location.href);
+  const headers: Record<string, string> = {};
+  if (initData) headers['X-Telegram-InitData'] = initData;
+  return await getJSON<WorkoutPlanOptionsResp>(url.toString(), { headers, signal });
+}
+
+export async function createWorkoutPlan(
+  payload: WorkoutPlanCreatePayload,
+  initData: string
+): Promise<WorkoutPlanCreateResp> {
+  const url = new URL('api/workouts/create/', window.location.href);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (initData) headers['X-Telegram-InitData'] = initData;
+  const resp = await fetch(url.toString(), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload)
+  });
+  if (!resp.ok) {
+    let errorKey = statusToMessage(resp.status);
+    try {
+      const data = (await resp.json()) as { error?: string | null };
+      if (data && typeof data.error === 'string') {
+        errorKey = data.error;
+      }
+    } catch {
+    }
+    throw new HttpError(resp.status, errorKey);
+  }
+  return (await resp.json()) as WorkoutPlanCreateResp;
 }
 
 export type ExerciseSetPayload = {

@@ -6,7 +6,6 @@ type TopBarProps = {
 };
 
 const TopBar: React.FC<React.PropsWithChildren<TopBarProps>> = ({ title, onBack, children }) => {
-    const leadingStyle: React.CSSProperties = { marginLeft: '-12px' };
     const swipeRef = useRef({
         startX: 0,
         startY: 0,
@@ -118,7 +117,7 @@ const TopBar: React.FC<React.PropsWithChildren<TopBarProps>> = ({ title, onBack,
 
     return (
         <header className="topbar" role="banner">
-            <div className="topbar__leading" style={leadingStyle}>
+            <div className="topbar__leading">
                 <span aria-hidden="true" className="topbar__spacer" />
             </div>
 

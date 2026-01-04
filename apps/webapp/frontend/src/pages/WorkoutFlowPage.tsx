@@ -1,0 +1,407 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+    createWorkoutPlan,
+    getProfile,
+    getWorkoutPlanOptions,
+    HttpError,
+    type WorkoutPlanCreatePayload,
+} from '../api/http';
+import type { ProfileResp, SubscriptionPlanOption, WorkoutPlanKind, WorkoutPlanOptionsResp } from '../api/types';
+import { applyLang, t } from '../i18n/i18n';
+import BottomNav from '../components/BottomNav';
+import {
+    closeWebApp,
+    hideBackButton,
+    onBackButtonClick,
+    offBackButtonClick,
+    readInitData,
+    showBackButton,
+    tmeReady,
+} from '../telegram';
+
+const DEFAULT_SPLIT_NUMBER = 3;
+const MIN_SPLIT_NUMBER = 1;
+const MAX_SPLIT_NUMBER = 7;
+
+const WorkoutFlowPage: React.FC = () => {
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const paramLang = searchParams.get('lang') || undefined;
+    const planParam = searchParams.get('plan') || 'program';
+    const plan: WorkoutPlanKind = planParam === 'subscription' ? 'subscription' : 'program';
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [profile, setProfile] = useState<ProfileResp | null>(null);
+    const [options, setOptions] = useState<WorkoutPlanOptionsResp | null>(null);
+    const [stepIndex, setStepIndex] = useState(0);
+    const [splitNumber, setSplitNumber] = useState(DEFAULT_SPLIT_NUMBER);
+    const [selectedPeriod, setSelectedPeriod] = useState<SubscriptionPlanOption | null>(null);
+    const [wishes, setWishes] = useState('');
+    const [showTopupModal, setShowTopupModal] = useState(false);
+    const [showProcessingModal, setShowProcessingModal] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [tooltipOpen, setTooltipOpen] = useState(false);
+    const tooltipRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        void applyLang(paramLang);
+    }, [paramLang]);
+
+    useEffect(() => {
+        if (!profile?.language) {
+            return;
+        }
+        void applyLang(profile.language);
+    }, [profile?.language]);
+
+    useEffect(() => {
+        const initData = readInitData();
+        if (!initData) {
+            setError(t('open_from_telegram'));
+            setLoading(false);
+            return;
+        }
+        const controller = new AbortController();
+        setLoading(true);
+        setError(null);
+        Promise.all([getProfile(initData, controller.signal), getWorkoutPlanOptions(initData, controller.signal)])
+            .then(([profileData, optionsData]) => {
+                setProfile(profileData);
+                setOptions(optionsData);
+                tmeReady();
+            })
+            .catch(() => {
+                setError(t('unexpected_error'));
+            })
+            .finally(() => {
+                setLoading(false);
+            });
+        return () => controller.abort();
+    }, []);
+
+    useEffect(() => {
+        if (!tooltipOpen) {
+            return;
+        }
+        const handleClick = (event: MouseEvent) => {
+            if (!tooltipRef.current || tooltipRef.current.contains(event.target as Node)) {
+                return;
+            }
+            setTooltipOpen(false);
+        };
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setTooltipOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClick);
+        document.addEventListener('keydown', handleEscape);
+        return () => {
+            document.removeEventListener('mousedown', handleClick);
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [tooltipOpen]);
+
+    useEffect(() => {
+        const handleBack = () => {
+            if (stepIndex > 0) {
+                setStepIndex((prev) => Math.max(0, prev - 1));
+                return;
+            }
+            if (window.history.length > 1) {
+                navigate(-1);
+                return;
+            }
+            navigate('/');
+        };
+        showBackButton();
+        onBackButtonClick(handleBack);
+        return () => {
+            offBackButtonClick(handleBack);
+            hideBackButton();
+        };
+    }, [navigate, stepIndex]);
+
+    useEffect(() => {
+        if (!options || !profile) {
+            return;
+        }
+        if (plan !== 'program') {
+            return;
+        }
+        const balance = profile.credits ?? 0;
+        if (balance < options.program_price) {
+            setShowTopupModal(true);
+        }
+    }, [options, plan, profile]);
+
+    const steps = useMemo(() => (plan === 'subscription' ? ['subscription', 'days', 'wishes'] : ['days', 'wishes']), [plan]);
+    const stepsCount = steps.length;
+    const translatePercent = (100 / stepsCount) * stepIndex;
+    const trackStyle: React.CSSProperties = {
+        width: `${stepsCount * 100}%`,
+        transform: `translateX(-${translatePercent}%)`,
+    };
+    const paneStyle: React.CSSProperties = {
+        width: `${100 / stepsCount}%`,
+    };
+
+    const goToTopup = useCallback(() => {
+        const query = searchParams.toString();
+        navigate(query ? `/topup?${query}` : '/topup');
+    }, [navigate, searchParams]);
+
+    const incrementSplit = useCallback(() => {
+        setSplitNumber((prev) => Math.min(MAX_SPLIT_NUMBER, prev + 1));
+    }, []);
+
+    const decrementSplit = useCallback(() => {
+        setSplitNumber((prev) => Math.max(MIN_SPLIT_NUMBER, prev - 1));
+    }, []);
+
+    const handleSubscriptionSelect = useCallback(
+        (option: SubscriptionPlanOption) => {
+            const balance = profile?.credits ?? 0;
+            if (balance < option.price) {
+                setShowTopupModal(true);
+                return;
+            }
+            setSelectedPeriod(option);
+        },
+        [profile]
+    );
+
+    const handleGenerate = useCallback(async () => {
+        if (submitting) {
+            return;
+        }
+        const initData = readInitData();
+        if (!initData) {
+            window.alert(t('open_from_telegram'));
+            return;
+        }
+        if (plan === 'subscription' && !selectedPeriod) {
+            window.alert(t('workout_flow.subscription.title'));
+            return;
+        }
+        const payload: WorkoutPlanCreatePayload = {
+            plan_type: plan,
+            split_number: splitNumber,
+            wishes,
+        };
+        if (plan === 'subscription' && selectedPeriod) {
+            payload.period = selectedPeriod.period;
+        }
+        setSubmitting(true);
+        try {
+            await createWorkoutPlan(payload, initData);
+            setShowProcessingModal(true);
+        } catch (err) {
+            if (err instanceof HttpError && err.message === 'not_enough_credits') {
+                setShowTopupModal(true);
+                return;
+            }
+            const messageKey = err instanceof HttpError ? (err.message as any) : ('program.action_error' as any);
+            window.alert(t(messageKey));
+        } finally {
+            setSubmitting(false);
+        }
+    }, [plan, selectedPeriod, splitNumber, submitting, wishes]);
+
+    const subscriptionTitleForPeriod = useCallback((period: SubscriptionPlanOption['period']) => {
+        if (period === '1m') {
+            return t('workout_flow.subscription.option.one_month');
+        }
+        if (period === '6m') {
+            return t('workout_flow.subscription.option.six_months');
+        }
+        return t('workout_flow.subscription.option.twelve_months');
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="page-container workout-flow-page">
+                <div className="page-shell">
+                    <div className="notice">{t('workout_flow.loading')}</div>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="page-container workout-flow-page">
+                <div className="page-shell">
+                    <div className="error-block">{error}</div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="page-container workout-flow-page">
+            <div className="page-shell">
+                <section className="workout-flow" aria-live="polite">
+                    <div className="workout-flow__track" style={trackStyle}>
+                        {plan === 'subscription' && options && (
+                            <div className="workout-flow__pane" style={paneStyle}>
+                                <div className="workout-flow__pane-inner">
+                                    <h2 className="workout-flow__title">{t('workout_flow.subscription.title')}</h2>
+                                    <div className="workout-flow__balance">
+                                        <span className="workout-flow__balance-label">
+                                            {t('profile.balance.title')}
+                                        </span>
+                                        <span className="workout-flow__balance-value">
+                                            {t('profile.balance.label', { count: profile?.credits ?? 0 })}
+                                        </span>
+                                    </div>
+                                    <div className="subscription-options">
+                                        {options.subscriptions.map((option) => {
+                                            const active = selectedPeriod?.period === option.period;
+                                            return (
+                                                <button
+                                                    key={option.period}
+                                                    type="button"
+                                                    className={`subscription-option ${active ? 'is-active' : ''}`}
+                                                    onClick={() => handleSubscriptionSelect(option)}
+                                                >
+                                                    <span className="subscription-option__title">
+                                                        {subscriptionTitleForPeriod(option.period)}
+                                                    </span>
+                                                    <span className="subscription-option__price">
+                                                        {t('profile.balance.label', { count: option.price })}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="primary-button workout-flow__next"
+                                        disabled={!selectedPeriod}
+                                        onClick={() => setStepIndex(1)}
+                                    >
+                                        {t('workout_flow.next')}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        <div className="workout-flow__pane" style={paneStyle}>
+                            <div className="workout-flow__pane-inner">
+                                <h2 className="workout-flow__title">{t('workout_flow.days.title')}</h2>
+                                <div className="day-selector">
+                                    <button
+                                        type="button"
+                                        className="day-selector__btn"
+                                        onClick={decrementSplit}
+                                        aria-label={t('workout_flow.days.decrease')}
+                                    >
+                                        -
+                                    </button>
+                                    <div className="day-selector__value">{splitNumber}</div>
+                                    <button
+                                        type="button"
+                                        className="day-selector__btn"
+                                        onClick={incrementSplit}
+                                        aria-label={t('workout_flow.days.increase')}
+                                    >
+                                        +
+                                    </button>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="primary-button workout-flow__next"
+                                    onClick={() => setStepIndex(plan === 'subscription' ? 2 : 1)}
+                                >
+                                    {t('workout_flow.next')}
+                                </button>
+                            </div>
+                        </div>
+                        <div className="workout-flow__pane" style={paneStyle}>
+                            <div className="workout-flow__pane-inner">
+                                <div className="workout-flow__wishes-head">
+                                    <h2 className="workout-flow__title">
+                                        <span className="workout-flow__title-inline">
+                                            {t('workout_flow.wishes.title')}
+                                            {'\u00a0'}
+                                            <span className="tooltip" ref={tooltipRef}>
+                                                <button
+                                                    type="button"
+                                            className="tooltip__button"
+                                            aria-label={t('workout_flow.wishes.tooltip_label')}
+                                            onClick={() => setTooltipOpen((prev) => !prev)}
+                                            onMouseEnter={() => setTooltipOpen(true)}
+                                            onMouseLeave={() => setTooltipOpen(false)}
+                                        >
+                                            i
+                                        </button>
+                                        {tooltipOpen && (
+                                            <div className="tooltip__bubble" role="tooltip">
+                                                {t('workout_flow.wishes.tooltip')}
+                                            </div>
+                                        )}
+                                            </span>
+                                        </span>
+                                    </h2>
+                                </div>
+                                <textarea
+                                    className="workout-flow__textarea"
+                                    rows={5}
+                                    value={wishes}
+                                    onChange={(event) => setWishes(event.target.value)}
+                                />
+                                <button
+                                    type="button"
+                                    className="primary-button workout-flow__generate"
+                                    onClick={handleGenerate}
+                                    disabled={submitting}
+                                >
+                                    {submitting ? t('workout_flow.generating') : t('workout_flow.generate')}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                {!showTopupModal && !showProcessingModal && <BottomNav activeKey="workouts" />}
+            </div>
+            {showTopupModal && (
+                <div role="dialog" aria-modal="true" className="subscription-confirm">
+                    <div className="subscription-confirm__dialog">
+                        <h3 className="subscription-confirm__title">{t('workout_flow.topup.title')}</h3>
+                        <p className="subscription-confirm__body">{t('workout_flow.topup.body')}</p>
+                        <div className="subscription-confirm__actions">
+                            <button
+                                type="button"
+                                className="subscription-confirm__btn subscription-confirm__btn--confirm"
+                                onClick={goToTopup}
+                            >
+                                {t('workout_flow.topup.cta')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showProcessingModal && (
+                <div role="dialog" aria-modal="true" className="subscription-confirm">
+                    <div className="subscription-confirm__dialog">
+                        <p className="subscription-confirm__body">
+                            {t('workout_flow.processing')}
+                        </p>
+                        <div className="subscription-confirm__actions">
+                            <button
+                                type="button"
+                                className="subscription-confirm__btn subscription-confirm__btn--confirm"
+                                onClick={closeWebApp}
+                            >
+                                {t('workout_flow.processing_ok')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default WorkoutFlowPage;

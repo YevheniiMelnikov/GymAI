@@ -7,7 +7,6 @@ import os
 import time
 from decimal import Decimal
 from functools import lru_cache
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable, TypeVar, cast
 from urllib.parse import parse_qsl, quote
@@ -20,25 +19,14 @@ from rest_framework.exceptions import NotFound
 from apps.profiles.models import Profile
 from config.app_settings import settings
 from core.payment.providers.liqpay import LiqPayGateway
+from core.enums import SubscriptionPeriod, WorkoutLocation
+from .schemas import AuthResult, CreditPackageInfo, SubscriptionPlanOption, WorkoutPlanPricing
 
 from apps.profiles.repos import ProfileRepository
 from core.ai_coach.exercise_catalog import search_exercises
 from core.services.gstorage_service import ExerciseGIFStorage
 
 T = TypeVar("T")
-
-
-@dataclass(frozen=True)
-class AuthResult:
-    profile: Profile | None
-    error: JsonResponse | None
-
-
-@dataclass(frozen=True)
-class CreditPackageInfo:
-    package_id: str
-    credits: int
-    price: Decimal
 
 
 async def ensure_container_ready() -> None:
@@ -170,6 +158,38 @@ def resolve_credit_package(package_id: str) -> CreditPackageInfo | None:
     if not normalized:
         return None
     return credit_packages().get(normalized)
+
+
+@lru_cache(maxsize=1)
+def workout_plan_pricing() -> WorkoutPlanPricing:
+    subscriptions = (
+        SubscriptionPlanOption(
+            period=SubscriptionPeriod.one_month,
+            months=1,
+            price=int(settings.SMALL_SUBSCRIPTION_PRICE),
+        ),
+        SubscriptionPlanOption(
+            period=SubscriptionPeriod.six_months,
+            months=6,
+            price=int(settings.MEDIUM_SUBSCRIPTION_PRICE),
+        ),
+        SubscriptionPlanOption(
+            period=SubscriptionPeriod.twelve_months,
+            months=12,
+            price=int(settings.LARGE_SUBSCRIPTION_PRICE),
+        ),
+    )
+    return WorkoutPlanPricing(program_price=int(settings.AI_PROGRAM_PRICE), subscriptions=subscriptions)
+
+
+def resolve_workout_location(profile: Profile) -> WorkoutLocation | None:
+    raw_location = str(getattr(profile, "workout_location", "") or "").strip().lower()
+    if not raw_location:
+        return None
+    try:
+        return WorkoutLocation(raw_location)
+    except ValueError:
+        return None
 
 
 def _hash_webapp(token: str, check_string: str) -> str:

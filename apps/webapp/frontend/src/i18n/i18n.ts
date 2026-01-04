@@ -1,6 +1,7 @@
 export type LangCode = 'en' | 'ru' | 'uk';
 export const LANG_MAP: Record<string, LangCode> = { eng: 'en', en: 'en', ru: 'ru', ua: 'uk', uk: 'uk' };
 export const LANG_CHANGED_EVENT = 'app:lang-changed';
+const LANG_STORAGE_KEY = 'app:lang';
 
 function resolveLangCode(raw?: string): LangCode {
   if (!raw) return 'en';
@@ -120,6 +121,7 @@ export const fallbackEn = {
   'profile.field.health_notes': 'Health notes 🩺',
   'profile.field.diet_allergies': 'Food allergies ❌',
   'profile.field.diet_products': 'Diet preferences 🥗',
+  'profile.field.language': 'Language 🌐',
   'profile.gender.male': 'Male',
   'profile.gender.female': 'Female',
   'profile.workout_experience.beginner': 'Beginner',
@@ -133,6 +135,9 @@ export const fallbackEn = {
   'profile.diet_products.fish_seafood': 'Fish & seafood',
   'profile.diet_products.eggs': 'Eggs',
   'profile.diet_products.dairy': 'Dairy',
+  'profile.language.ua': 'Ukrainian',
+  'profile.language.ru': 'Russian',
+  'profile.language.eng': 'English',
   'profile.unit.kg': 'kg',
   'profile.unit.cm': 'cm',
   'faq.title': 'FAQ ❓',
@@ -161,6 +166,27 @@ export const fallbackEn = {
   'faq.q6.question': 'How is your product different from competitors?',
   'faq.q6.answer':
     'This is not just an exercise library or a generic AI chat. The product is a structured system of knowledge and rules designed to support and adapt to the user throughout their entire training journey.',
+  'workout_flow.loading': 'Preparing the flow...',
+  'workout_flow.next': 'Next',
+  'workout_flow.generate': 'Generate',
+  'workout_flow.generating': 'Generating...',
+  'workout_flow.days.title': 'How many training days per week?',
+  'workout_flow.days.decrease': 'Decrease training days',
+  'workout_flow.days.increase': 'Increase training days',
+  'workout_flow.subscription.title': 'Select subscription period',
+  'workout_flow.subscription.option.one_month': '1 month',
+  'workout_flow.subscription.option.six_months': '6 months',
+  'workout_flow.subscription.option.twelve_months': '12 months',
+  'workout_flow.wishes.title': 'You can share any helpful info for the AI coach',
+  'workout_flow.wishes.tooltip_label': 'More info',
+  'workout_flow.wishes.tooltip':
+    'Any extra details, for example body fat percentage, last workout date, current activity level, or general preferences.',
+  'workout_flow.topup.title': 'Not enough GYMCOINS',
+  'workout_flow.topup.body': 'Top up your balance to continue.',
+  'workout_flow.topup.cta': 'Choose a package',
+  'workout_flow.processing':
+    'Processing your request will take a few minutes, we will notify you when everything is ready ⏳',
+  'workout_flow.processing_ok': 'OK',
   'weekly_survey.title': 'Weekly Survey',
   'weekly_survey.loading': 'Preparing your weekly survey...',
   'weekly_survey.no_data': 'We need a structured workout plan to show this survey.',
@@ -213,6 +239,12 @@ export async function applyLang(): Promise<LangCode>;
 export async function applyLang(raw: string | undefined): Promise<LangCode>;
 export async function applyLang(raw?: string): Promise<LangCode> {
   let incoming = raw;
+  if (!incoming) {
+    try {
+      incoming = window.sessionStorage.getItem(LANG_STORAGE_KEY) ?? undefined;
+    } catch {
+    }
+  }
   try {
     const tg = (window as any).Telegram?.WebApp;
     if (!incoming && tg?.initDataUnsafe?.user?.language_code) {
@@ -224,6 +256,10 @@ export async function applyLang(raw?: string): Promise<LangCode> {
   const code = resolveLangCode(incoming);
   await loadMessages(code);
   document.documentElement.lang = code;
+  try {
+    window.sessionStorage.setItem(LANG_STORAGE_KEY, code);
+  } catch {
+  }
   try {
     window.dispatchEvent(new CustomEvent(LANG_CHANGED_EVENT, { detail: { code } }));
   } catch {

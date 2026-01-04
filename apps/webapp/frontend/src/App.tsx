@@ -8,6 +8,7 @@ import FaqPage from './pages/FaqPage';
 import WeeklySurveyPage from './pages/WeeklySurveyPage';
 import ProfilePage from './pages/ProfilePage';
 import RegistrationRequiredPage from './pages/RegistrationRequiredPage';
+import WorkoutFlowPage from './pages/WorkoutFlowPage';
 import { useTelegramInit } from './hooks/useTelegramInit';
 import { getProfile, HttpError } from './api/http';
 import { readInitData } from './telegram';
@@ -88,7 +89,11 @@ const App: React.FC = () => {
     }
 
     if (profileGate === 'loading') {
-        return <div className="registration-gate__loading">Завантаження...</div>;
+        return (
+            <div className="registration-gate__loading" aria-live="polite" aria-busy="true">
+                <span className="button-spinner" aria-hidden="true" />
+            </div>
+        );
     }
     return (
         <BrowserRouter>
@@ -101,6 +106,7 @@ const App: React.FC = () => {
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/faq" element={<FaqPage />} />
                 <Route path="/weekly-survey" element={<WeeklySurveyPage />} />
+                <Route path="/workout-flow" element={<WorkoutFlowPage />} />
             </Routes>
         </BrowserRouter>
     );

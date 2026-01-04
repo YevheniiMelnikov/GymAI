@@ -77,7 +77,6 @@ class MessageText(AutoName):
     diet_service_intro = auto()
 
     finish_registration = auto()
-    subscription_type_prompt = auto()
     confirm_service = auto()
     weekly_survey_submitted = auto()
 
@@ -86,8 +85,6 @@ class MessageText(AutoName):
     your_data_updated = auto()
     select_language = auto()
 
-    enter_wishes = auto()
-    split_number_selection = auto()
     weekly_survey_prompt = auto()
 
     payment_success = auto()

@@ -217,16 +217,6 @@ async def _handle_pending_flow(
     if message is None:
         return False
     flow_name = str(pending_flow.get("name") or "")
-    if flow_name == "start_program_flow":
-        from bot.utils.menus import start_program_flow
-
-        await start_program_flow(message, profile, state)
-        return True
-    if flow_name == "start_subscription_flow":
-        from bot.utils.menus import start_subscription_flow
-
-        await start_subscription_flow(message, profile, state)
-        return True
     if flow_name == "start_diet_flow":
         from bot.utils.menus import start_diet_flow
 

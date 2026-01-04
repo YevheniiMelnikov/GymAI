@@ -10,19 +10,35 @@ export const useTelegramInit = (): void => {
             tmeExpand();
         }, 120);
 
-        const handleFirstInteraction = (): void => {
+        const refreshTheme = (): void => {
             tmeForceDarkTheme();
+        };
+
+        const handleVisibilityChange = (): void => {
+            if (document.visibilityState === 'visible') {
+                refreshTheme();
+            }
+        };
+
+        const handleFirstInteraction = (): void => {
+            refreshTheme();
             tmeEnterFullscreen();
             tmeDisableVerticalSwipes();
         };
 
         document.addEventListener('click', handleFirstInteraction, { once: true, passive: true });
         document.addEventListener('touchstart', handleFirstInteraction, { once: true, passive: true });
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('pageshow', refreshTheme);
+        window.addEventListener('focus', refreshTheme);
 
         return () => {
             window.clearTimeout(timer);
             document.removeEventListener('click', handleFirstInteraction);
             document.removeEventListener('touchstart', handleFirstInteraction);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('pageshow', refreshTheme);
+            window.removeEventListener('focus', refreshTheme);
         };
     }, []);
 

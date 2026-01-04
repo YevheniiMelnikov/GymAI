@@ -23,10 +23,8 @@ from bot.utils.menus import (
     show_main_menu,
     show_my_profile_menu,
     send_policy_confirmation,
-    show_balance_menu,
 )
-from bot.utils.profiles import resolve_workout_location, should_grant_gift_credits, update_profile_data
-from bot.utils.split_number import service_period_value, start_split_number_selection
+from bot.utils.profiles import should_grant_gift_credits, update_profile_data
 from bot.utils.bot import del_msg, answer_msg, delete_messages, set_bot_commands
 from bot.utils.other import parse_int_with_decimal
 from bot.texts import MessageText, translate
@@ -265,74 +263,6 @@ async def health_notes(message: Message, state: FSMContext) -> None:
     await state.update_data(health_notes=message.text, status=ProfileStatus.completed)
     await send_policy_confirmation(cast(Message, message), state)
     await state.set_state(States.accept_policy)
-    return
-
-
-@questionnaire_router.message(States.enter_wishes)
-async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
-    if not message.text:
-        return
-
-    await delete_messages(state)
-    data = await state.get_data()
-    profile = Profile.model_validate(data["profile"])
-    try:
-        if data.get("subscription_flow"):
-            wishes = message.text
-            await state.update_data(wishes=wishes)
-            lang = profile.language or settings.DEFAULT_LANG
-            await start_split_number_selection(
-                message,
-                state,
-                lang=lang,
-                service="subscription",
-                show_wishes_prompt=False,
-            )
-            return
-
-        # AI coach flow
-        if data.get("ai_service"):
-            selected_profile = Profile.model_validate(data.get("profile"))
-            required = int(data.get("required", 0))
-            wishes = message.text
-            await state.update_data(wishes=wishes)
-
-            if selected_profile.credits < required:
-                await answer_msg(message, translate(MessageText.not_enough_credits, profile.language))
-                await show_balance_menu(message, profile, state)
-                return
-
-            service = str(data.get("ai_service") or "program")
-            lang = profile.language or settings.DEFAULT_LANG
-
-            if service == "program":
-                workout_location = resolve_workout_location(selected_profile)
-                if workout_location is None:
-                    logger.error(f"Workout location missing for completed profile_id={selected_profile.id}")
-                    await answer_msg(message, translate(MessageText.unexpected_error, lang))
-                    return
-                await start_split_number_selection(
-                    message,
-                    state,
-                    lang=lang,
-                    service=service,
-                    workout_location=workout_location.value,
-                    show_wishes_prompt=False,
-                )
-                return
-
-            period_value = service_period_value(service)
-            await start_split_number_selection(
-                message,
-                state,
-                lang=lang,
-                service=service,
-                period_value=period_value,
-                show_wishes_prompt=False,
-            )
-            return
-    finally:
-        await del_msg(message)
     return
 
 

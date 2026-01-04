@@ -104,26 +104,6 @@ def ask_ai_again_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def enter_wishes_kb(lang: str, webapp_url: str | None) -> KbMarkup | None:
-    if not webapp_url:
-        return None
-    builder = KeyboardBuilder(lang)
-    buttons = [[builder.add(ButtonText.prev_menu, webapp_url=webapp_url)]]
-    return KbMarkup(inline_keyboard=buttons, row_width=1)
-
-
-def split_number_selection_kb(lang: str) -> KbMarkup:
-    builder = KeyboardBuilder(lang)
-    buttons = [
-        [
-            KbBtn(text="➖", callback_data="split_number_minus"),
-            KbBtn(text="➕", callback_data="split_number_plus"),
-        ],
-        [builder.add(ButtonText.prev_menu, "split_number_back"), builder.add(ButtonText.done, "split_number_continue")],
-    ]
-    return KbMarkup(inline_keyboard=buttons, row_width=2)
-
-
 def choose_payment_options_kb(lang: str, option: str) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [

@@ -36,58 +36,21 @@
 }
 
 :root{
-  --bg: var(--tg-theme-bg-color, #ffffff);
-  --surface: var(--tg-theme-secondary-bg-color, #f4f6f8);
-  --text: var(--tg-theme-text-color, #1f2328);
-  --muted: var(--tg-theme-hint-color, #7a869a);
-  --link: var(--tg-theme-link-color, #2481cc);
-  --accent: var(--tg-theme-button-color, #2a9af0);
-  --accent-contrast: var(--tg-theme-button-text-color, #ffffff);
-
-  --border: color-mix(in oklab, var(--text) 12%, transparent);
-  --radius: 12px;
-  --radius-sm: 10px;
-  --shadow: 0 6px 24px rgba(0,0,0,.08);
-  --shadow-strong: 0 12px 38px rgba(0,0,0,.16);
-  --spacing: 16px;
-  --spacing-lg: 22px;
-}
-
-:root[data-theme="dark"]{
-  --bg: var(--tg-theme-bg-color, #0f141a);
-  --surface: var(--tg-theme-secondary-bg-color, #151b22);
-  --text: var(--tg-theme-text-color, #e6edf3);
-  --muted: var(--tg-theme-hint-color, #8b98a5);
-  --link: var(--tg-theme-link-color, #6bb6ff);
-  --accent: var(--tg-theme-button-color, #408ce6);
-  --accent-contrast: var(--tg-theme-button-text-color, #0b0f14);
+  --bg: #0f141a;
+  --surface: #151b22;
+  --text: #e6edf3;
+  --muted: #8b98a5;
+  --link: #6bb6ff;
+  --accent: #408ce6;
+  --accent-contrast: #0b0f14;
   --border: color-mix(in oklab, var(--text) 14%, transparent);
   --shadow: 0 8px 28px rgba(0,0,0,.35);
   --shadow-strong: 0 14px 46px rgba(0,0,0,.45);
-}
-
-@media (prefers-color-scheme: dark){
-  :root{
-    --bg: var(--tg-theme-bg-color, #0f141a);
-    --surface: var(--tg-theme-secondary-bg-color, #151b22);
-    --text: var(--tg-theme-text-color, #e6edf3);
-    --muted: var(--tg-theme-hint-color, #8b98a5);
-    --link: var(--tg-theme-link-color, #6bb6ff);
-    --accent: var(--tg-theme-button-color, #408ce6);
-    --accent-contrast: var(--tg-theme-button-text-color, #0b0f14);
-    --border: color-mix(in oklab, var(--text) 14%, transparent);
-    --shadow: 0 8px 28px rgba(0,0,0,.35);
-    --shadow-strong: 0 14px 46px rgba(0,0,0,.45);
-  }
-}
-
-@media (prefers-color-scheme: light){
-  :root{
-    --bg: var(--tg-theme-bg-color, #f7f8f9);
-    --surface: var(--tg-theme-secondary-bg-color, #eef1f4);
-    --border: color-mix(in oklab, var(--text) 16%, transparent);
-    --shadow: 0 8px 24px rgba(15, 23, 42, .08);
-  }
+  --radius: 12px;
+  --radius-sm: 10px;
+  --spacing: 16px;
+  --spacing-lg: 22px;
+  color-scheme: dark;
 }
 
 *,
@@ -114,7 +77,7 @@ body{
     Arial,system-ui,sans-serif;
   font-size: 15px;
   line-height: 1.5;
-  color-scheme: light dark;
+  color-scheme: dark;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   touch-action: manipulation;
@@ -144,7 +107,7 @@ main#app{
   min-height: 100dvh;
   background: transparent;
   flex: 1 0 auto;
-  --app-header-offset: 10px;
+  --app-header-offset: 25px;
   --app-safe-top: max(12px, env(safe-area-inset-top), var(--tg-viewport-safe-area-inset-top, 0px));
   --app-padding-top: calc(clamp(18px, 2.4vw, 28px) + var(--app-safe-top));
   --app-padding-right: calc(clamp(18px, 2.4vw, 28px) + max(12px, env(safe-area-inset-right)));
@@ -224,9 +187,9 @@ main#app{
 
 .registration-gate__loading{
   margin: auto;
-  text-align: center;
-  font-size: 14px;
-  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 
@@ -255,13 +218,11 @@ main#app{
   margin-left: calc(-1 * var(--app-padding-left));
   margin-right: calc(-1 * var(--app-padding-right));
   border-radius: 0;
-  background: color-mix(in oklab, var(--surface) 92%, var(--bg));
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: transparent;
+  border: none;
   box-shadow: none;
 }
 .topbar__leading{
-  flex: 0 0 auto;
   width: 42px;
   height: 42px;
   display: inline-flex;
@@ -287,19 +248,25 @@ main#app{
 }
 .topbar__back:hover{
   transform: translateY(-1px);
-  background: color-mix(in oklab, var(--surface) 80%, var(--bg));
+  background: color-mix(in oklab, var(--surface) 70%, transparent);
 }
 .topbar__back:active{ transform: translateY(0); }
 .topbar__title{
   margin: 0;
-  flex: 1;
   text-align: center;
   font-size: clamp(22px, 4vw, 26px);
   font-weight: 700;
   line-height: 1.2;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 120px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .topbar__actions{
-  min-width: 42px;
+  width: 42px;
   min-height: 42px;
   display: inline-flex;
   align-items: center;
@@ -327,66 +294,6 @@ main#app{
   display: inline-flex;
 }
 
-@media (prefers-color-scheme: light){
-  .topbar{
-    background: color-mix(in oklab, var(--bg) 92%, #ffffff);
-    border-bottom: 1px solid var(--border);
-    box-shadow: 0 10px 24px rgba(15, 23, 42, .08);
-  }
-  .topbar__back{
-    background: transparent;
-    border: none;
-    color: color-mix(in oklab, var(--text) 72%, var(--muted));
-    box-shadow: none;
-  }
-  .topbar__back:hover{
-    background: color-mix(in oklab, var(--surface) 70%, transparent);
-  }
-  .topbar__back:focus-visible{
-    outline: 2px solid color-mix(in oklab, var(--accent) 55%, transparent);
-    outline-offset: 2px;
-  }
-  .topbar__actions,
-  .topbar__icon{
-    color: color-mix(in oklab, var(--text) 70%, var(--muted));
-  }
-}
-
-@media (prefers-color-scheme: light){
-  .payment-card{
-    background: color-mix(in oklab, #ffffff 92%, var(--surface));
-    border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
-    box-shadow: 0 14px 32px rgba(15, 23, 42, .08);
-  }
-  .payment-frame{
-    background: color-mix(in oklab, #ffffff 88%, var(--surface));
-    border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
-    box-shadow: 0 8px 20px rgba(15, 23, 42, .07);
-  }
-  .program-day,
-  .program-day-card{
-    background: color-mix(in oklab, #ffffff 90%, var(--surface));
-    border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
-    box-shadow: 0 10px 22px rgba(15, 23, 42, .08);
-  }
-  .program-day-summary:hover,
-  .program-day button:hover,
-  .program-day a:hover,
-  .program-day-card > *:hover{
-    background: color-mix(in oklab, var(--surface) 78%, #ffffff);
-  }
-  .program-day:is(:hover, :focus-within),
-  .program-day-card:is(:hover, :focus-within){
-    border-color: color-mix(in oklab, var(--link) 38%, transparent);
-    box-shadow: 0 14px 28px rgba(15, 23, 42, .1);
-  }
-  .exercise-dialog__panel,
-  .exercise-edit-dialog__panel{
-    background: color-mix(in oklab, #ffffff 92%, var(--surface));
-    border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
-    box-shadow: 0 18px 36px rgba(15, 23, 42, .12);
-  }
-}
 
 .page-shell{
   width: 100%;
@@ -1945,6 +1852,184 @@ a:hover{ opacity: .9; }
 .weekly-survey__next{
   width: 100%;
 }
+.workout-flow{
+  overflow: hidden;
+}
+.workout-flow__track{
+  display: flex;
+  transition: transform .28s ease;
+}
+.workout-flow__pane{
+  flex: 0 0 auto;
+}
+.workout-flow__pane-inner{
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: clamp(64px, 20vh, 160px) 4px 24px;
+}
+.workout-flow__title{
+  margin: 0;
+  font-size: clamp(20px, 4vw, 28px);
+  font-weight: 700;
+  text-align: center;
+}
+.workout-flow__balance{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--surface) 65%, transparent);
+  border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
+  align-self: center;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--bg) 70%, transparent);
+}
+.workout-flow__balance-label{
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.workout-flow__balance-value{
+  font-size: 14px;
+  font-weight: 700;
+}
+.subscription-options{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.subscription-option{
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
+  background: color-mix(in oklab, var(--bg) 96%, var(--surface));
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  transition: transform .12s ease, border-color .2s ease, box-shadow .2s ease, background .2s ease;
+  text-align: left;
+}
+.subscription-option:hover{
+  transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--border));
+}
+.subscription-option.is-active{
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border));
+  background: color-mix(in oklab, var(--accent) 14%, var(--bg));
+  box-shadow: 0 12px 24px color-mix(in oklab, var(--accent) 18%, transparent);
+}
+.subscription-option__title{
+  font-size: 16px;
+  font-weight: 600;
+}
+.subscription-option__price{
+  font-size: 14px;
+  font-weight: 700;
+  color: color-mix(in oklab, var(--text) 80%, var(--muted));
+}
+.day-selector{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 18px 0 10px;
+}
+.day-selector__btn{
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
+  background: color-mix(in oklab, var(--surface) 82%, var(--bg));
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform .12s ease, border-color .2s ease, background .2s ease;
+}
+.day-selector__btn:hover{
+  transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--accent) 35%, var(--border));
+}
+.day-selector__value{
+  min-width: 72px;
+  text-align: center;
+  font-size: clamp(42px, 10vw, 68px);
+  font-weight: 800;
+  color: var(--text);
+}
+.workout-flow__wishes-head{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.workout-flow__title-inline{
+  display: inline;
+}
+.workout-flow__textarea{
+  width: 100%;
+  min-height: 140px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  padding: 12px 14px;
+  font: inherit;
+  background: color-mix(in oklab, var(--bg) 92%, var(--surface));
+  color: var(--text);
+  outline: none;
+}
+.workout-flow__textarea:focus-visible{
+  border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 24%, transparent);
+}
+.workout-flow__next,
+.workout-flow__generate{
+  width: 100%;
+}
+.workout-flow__generate{
+  margin-top: auto;
+}
+.tooltip{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+.tooltip__button{
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
+  background: color-mix(in oklab, var(--surface) 85%, var(--bg));
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tooltip__bubble{
+  position: absolute;
+  top: 32px;
+  right: 0;
+  z-index: 10;
+  width: clamp(220px, 70vw, 280px);
+  min-height: 120px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #eef2f8;
+  color: #1c2430;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 12px 30px color-mix(in oklab, #1c2430 18%, transparent);
+  border: 1px solid color-mix(in oklab, #1c2430 10%, transparent);
+}
 
 .profile-balance{
   padding: clamp(14px, 2vw, 18px);
@@ -2107,6 +2192,7 @@ a:hover{ opacity: .9; }
   flex-direction: column;
   gap: 6px;
   padding: 4px 0 0;
+  overflow: hidden;
 }
 .topup-page-shell{
   gap: 8px;
@@ -2117,6 +2203,7 @@ a:hover{ opacity: .9; }
   margin-right: calc(50% - 50vw);
   padding-inline: 0;
   max-width: none;
+  overflow: hidden;
 }
 .topup-carousel{
   width: 100%;
@@ -2132,7 +2219,7 @@ a:hover{ opacity: .9; }
   align-items: center;
   -webkit-overflow-scrolling: touch;
   scroll-padding-inline: 0;
-  touch-action: pan-y;
+  touch-action: pan-x;
 }
 .topup-carousel::-webkit-scrollbar{
   width: 0;
@@ -2224,6 +2311,14 @@ a:hover{ opacity: .9; }
 .with-bottom-nav{
   --bottom-nav-offset: 58px;
   padding-bottom: calc(var(--bottom-nav-offset) + env(safe-area-inset-bottom, 0px));
+}
+.topup-page{
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+.topup-page .topbar__title{
+  left: calc(50% - 13px);
 }
 
 body[data-keyboard="open"] .with-bottom-nav{

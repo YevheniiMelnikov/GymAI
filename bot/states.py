@@ -15,7 +15,6 @@ class States(StatesGroup):
     workout_experience = State()
     health_notes_choice = State()
     health_notes = State()
-    enter_wishes = State()
     accept_policy = State()
 
     diet_allergies_choice = State()
@@ -27,6 +26,3 @@ class States(StatesGroup):
 
     handle_payment = State()
     ask_ai_question = State()
-    choose_subscription = State()
-    split_number_selection = State()
-    confirm_service = State()

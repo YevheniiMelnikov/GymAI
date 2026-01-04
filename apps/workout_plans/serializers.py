@@ -20,6 +20,7 @@ class ExerciseSerializer(serializers.Serializer):
     reps = serializers.CharField()
     weight = serializers.CharField(required=False, allow_null=True)
     set_id = serializers.IntegerField(required=False, allow_null=True)
+    gif_key = serializers.CharField(required=False, allow_null=True)
     drop_set = serializers.BooleanField(required=False)
     superset_id = serializers.IntegerField(required=False, allow_null=True)
     superset_order = serializers.IntegerField(required=False, allow_null=True)

@@ -10,12 +10,7 @@ from bot.handlers.internal.auth import require_internal_auth
 from bot.types.messaging import BotMessageProxy
 from bot.texts import MessageText, translate
 from bot.keyboards import main_menu_kb
-from bot.utils.menus import (
-    prompt_profile_completion_questionnaire,
-    start_program_flow,
-    start_subscription_flow,
-    show_balance_menu,
-)
+from bot.utils.menus import prompt_profile_completion_questionnaire, show_balance_menu
 from bot.utils.bot import answer_msg, get_webapp_url
 from bot.states import States
 from config.app_settings import settings
@@ -93,24 +88,18 @@ async def internal_webapp_workout_action(request: web.Request) -> web.Response:
     target = BotMessageProxy(bot=bot, chat_id=chat_id)
     language = cast(str, profile.language or settings.DEFAULT_LANG)
     if profile.status != ProfileStatus.completed:
-        pending_name = "start_program_flow" if action == "create_program" else "start_subscription_flow"
         await prompt_profile_completion_questionnaire(
             target,
             profile,
             state,
             chat_id=chat_id,
             language=language,
-            pending_flow={"name": pending_name},
         )
         alert_text = translate(MessageText.finish_registration, language)
         return web.json_response({"status": "ok", "profile_incomplete": True, "message": alert_text})
 
-    if action == "create_program":
-        await start_program_flow(target, profile, state)
-    else:
-        await start_subscription_flow(target, profile, state)
-
-    return web.json_response({"status": "ok"})
+    logger.info(f"webapp_workout_action_deprecated profile_id={profile.id} action={action}")
+    return web.json_response({"detail": "deprecated"}, status=410)
 
 
 @require_internal_auth

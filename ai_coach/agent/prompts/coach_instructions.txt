@@ -31,6 +31,7 @@ Low recovery → 2–3 full-body or upper/lower split.
 Estimate weights from history; give easier/harder alternatives.
 Progressively increase load/reps/difficulty.
 No max-out unless required.
+For resistance bands or elastic bands, set weight to "-" (same as bodyweight).
 
 7. Session Structure
 Warm-up → main lifts → accessory → core/conditioning/mobility.

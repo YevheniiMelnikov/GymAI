@@ -140,6 +140,19 @@ export type ProfileResp = {
   credits: number | null;
 };
 
+export type WorkoutPlanKind = 'program' | 'subscription';
+
+export type SubscriptionPlanOption = {
+  period: '1m' | '6m' | '12m';
+  months: number;
+  price: number;
+};
+
+export type WorkoutPlanOptionsResp = {
+  program_price: number;
+  subscriptions: SubscriptionPlanOption[];
+};
+
 export type ProfileUpdatePayload = {
   gender?: Gender | null;
   born_in?: number | null;
@@ -151,6 +164,7 @@ export type ProfileUpdatePayload = {
   diet_allergies?: string | null;
   diet_products?: DietProduct[] | null;
   workout_location?: WorkoutLocation | null;
+  language?: string | null;
 };
 
 export type SupportContactResp = {

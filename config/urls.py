@@ -58,6 +58,16 @@ urlpatterns = [
     ),
     path("api/workouts/action/", webapp_views.workouts_action, name="webapp-workouts-action-direct"),  # type: ignore[arg-type]
     path(
+        "api/workouts/options/",
+        cast(WebappView, webapp_views.workout_plan_options),
+        name="webapp-workouts-options-direct",
+    ),
+    path(
+        "api/workouts/create/",
+        cast(WebappView, webapp_views.workout_plan_create),
+        name="webapp-workouts-create-direct",
+    ),
+    path(
         "api/weekly-survey/",
         cast(WebappView, webapp_views.weekly_survey_submit),
         name="webapp-weekly-survey-submit-direct",
