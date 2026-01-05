@@ -28,14 +28,13 @@ const WorkoutFlowPage: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const paramLang = searchParams.get('lang') || undefined;
-    const planParam = searchParams.get('plan') || 'program';
-    const plan: WorkoutPlanKind = planParam === 'subscription' ? 'subscription' : 'program';
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [profile, setProfile] = useState<ProfileResp | null>(null);
     const [options, setOptions] = useState<WorkoutPlanOptionsResp | null>(null);
     const [stepIndex, setStepIndex] = useState(0);
     const [splitNumber, setSplitNumber] = useState(DEFAULT_SPLIT_NUMBER);
+    const [plan, setPlan] = useState<WorkoutPlanKind | null>(null);
     const [selectedPeriod, setSelectedPeriod] = useState<SubscriptionPlanOption | null>(null);
     const [wishes, setWishes] = useState('');
     const [showTopupModal, setShowTopupModal] = useState(false);
@@ -123,20 +122,7 @@ const WorkoutFlowPage: React.FC = () => {
         };
     }, [navigate, stepIndex]);
 
-    useEffect(() => {
-        if (!options || !profile) {
-            return;
-        }
-        if (plan !== 'program') {
-            return;
-        }
-        const balance = profile.credits ?? 0;
-        if (balance < options.program_price) {
-            setShowTopupModal(true);
-        }
-    }, [options, plan, profile]);
-
-    const steps = useMemo(() => (plan === 'subscription' ? ['subscription', 'days', 'wishes'] : ['days', 'wishes']), [plan]);
+    const steps = useMemo(() => ['plan', 'days', 'wishes'], []);
     const stepsCount = steps.length;
     const translatePercent = (100 / stepsCount) * stepIndex;
     const trackStyle: React.CSSProperties = {
@@ -167,10 +153,23 @@ const WorkoutFlowPage: React.FC = () => {
                 setShowTopupModal(true);
                 return;
             }
+            setPlan('subscription');
             setSelectedPeriod(option);
         },
         [profile]
     );
+
+    const handleProgramSelect = useCallback(() => {
+        if (!options) {
+            return;
+        }
+        const balance = profile?.credits ?? 0;
+        if (balance < options.program_price) {
+            setShowTopupModal(true);
+            return;
+        }
+        setPlan('program');
+    }, [options, profile]);
 
     const handleGenerate = useCallback(async () => {
         if (submitting) {
@@ -179,6 +178,9 @@ const WorkoutFlowPage: React.FC = () => {
         const initData = readInitData();
         if (!initData) {
             window.alert(t('open_from_telegram'));
+            return;
+        }
+        if (!plan) {
             return;
         }
         if (plan === 'subscription' && !selectedPeriod) {
@@ -244,10 +246,10 @@ const WorkoutFlowPage: React.FC = () => {
             <div className="page-shell">
                 <section className="workout-flow" aria-live="polite">
                     <div className="workout-flow__track" style={trackStyle}>
-                        {plan === 'subscription' && options && (
+                        {options && (
                             <div className="workout-flow__pane" style={paneStyle}>
                                 <div className="workout-flow__pane-inner">
-                                    <h2 className="workout-flow__title">{t('workout_flow.subscription.title')}</h2>
+                                    <h2 className="workout-flow__title">{t('workout_flow.plan.title')}</h2>
                                     <div className="workout-flow__balance">
                                         <span className="workout-flow__balance-label">
                                             {t('profile.balance.title')}
@@ -256,30 +258,55 @@ const WorkoutFlowPage: React.FC = () => {
                                             {t('profile.balance.label', { count: profile?.credits ?? 0 })}
                                         </span>
                                     </div>
-                                    <div className="subscription-options">
-                                        {options.subscriptions.map((option) => {
-                                            const active = selectedPeriod?.period === option.period;
-                                            return (
-                                                <button
-                                                    key={option.period}
-                                                    type="button"
-                                                    className={`subscription-option ${active ? 'is-active' : ''}`}
-                                                    onClick={() => handleSubscriptionSelect(option)}
-                                                >
-                                                    <span className="subscription-option__title">
-                                                        {subscriptionTitleForPeriod(option.period)}
-                                                    </span>
-                                                    <span className="subscription-option__price">
-                                                        {t('profile.balance.label', { count: option.price })}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
+                                    <div className="workout-flow__plan-blocks">
+                                        <div className="plan-section">
+                                            <div className="plan-section__title">
+                                                {t('workout_flow.plan.subscription_label')}
+                                            </div>
+                                            <div className="subscription-options">
+                                                {options.subscriptions.map((option) => {
+                                                    const active =
+                                                        plan === 'subscription' && selectedPeriod?.period === option.period;
+                                                    return (
+                                                        <button
+                                                            key={option.period}
+                                                            type="button"
+                                                            className={`subscription-option ${active ? 'is-active' : ''}`}
+                                                            onClick={() => handleSubscriptionSelect(option)}
+                                                        >
+                                                            <span className="subscription-option__title">
+                                                                {subscriptionTitleForPeriod(option.period)}
+                                                            </span>
+                                                            <span className="subscription-option__price">
+                                                                {t('profile.balance.label', { count: option.price })}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                        <div className="plan-section">
+                                            <div className="plan-section__title">
+                                                {t('workout_flow.plan.program_label')}
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className={`subscription-option ${plan === 'program' ? 'is-active' : ''}`}
+                                                onClick={handleProgramSelect}
+                                            >
+                                                <span className="subscription-option__title">
+                                                    {t('workout_flow.plan.program_option')}
+                                                </span>
+                                                <span className="subscription-option__price">
+                                                    {t('profile.balance.label', { count: options.program_price })}
+                                                </span>
+                                            </button>
+                                        </div>
                                     </div>
                                     <button
                                         type="button"
                                         className="primary-button workout-flow__next"
-                                        disabled={!selectedPeriod}
+                                        disabled={!plan || (plan === 'subscription' && !selectedPeriod)}
                                         onClick={() => setStepIndex(1)}
                                     >
                                         {t('workout_flow.next')}
@@ -312,7 +339,7 @@ const WorkoutFlowPage: React.FC = () => {
                                 <button
                                     type="button"
                                     className="primary-button workout-flow__next"
-                                    onClick={() => setStepIndex(plan === 'subscription' ? 2 : 1)}
+                                    onClick={() => setStepIndex(2)}
                                 >
                                     {t('workout_flow.next')}
                                 </button>
