@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     createWorkoutPlan,
     getProfile,
+    getSubscriptionStatus,
     getWorkoutPlanOptions,
     HttpError,
     type WorkoutPlanCreatePayload,
@@ -39,6 +40,12 @@ const WorkoutFlowPage: React.FC = () => {
     const [wishes, setWishes] = useState('');
     const [showTopupModal, setShowTopupModal] = useState(false);
     const [showProcessingModal, setShowProcessingModal] = useState(false);
+    const [showSubscriptionConfirm, setShowSubscriptionConfirm] = useState(false);
+    const [checkingSubscriptionStatus, setCheckingSubscriptionStatus] = useState(false);
+    const [subscriptionStatus, setSubscriptionStatus] = useState<{ checked: boolean; active: boolean }>({
+        checked: false,
+        active: false,
+    });
     const [submitting, setSubmitting] = useState(false);
     const [tooltipOpen, setTooltipOpen] = useState(false);
     const tooltipRef = useRef<HTMLDivElement | null>(null);
@@ -211,6 +218,56 @@ const WorkoutFlowPage: React.FC = () => {
         }
     }, [plan, selectedPeriod, splitNumber, submitting, wishes]);
 
+    const handlePlanNext = useCallback(async () => {
+        if (checkingSubscriptionStatus || !plan) {
+            return;
+        }
+        if (plan === 'subscription' && !selectedPeriod) {
+            return;
+        }
+        if (plan !== 'subscription') {
+            setStepIndex(1);
+            return;
+        }
+        if (subscriptionStatus.checked) {
+            if (subscriptionStatus.active) {
+                setShowSubscriptionConfirm(true);
+                return;
+            }
+            setStepIndex(1);
+            return;
+        }
+        const initData = readInitData();
+        if (!initData) {
+            window.alert(t('open_from_telegram'));
+            return;
+        }
+        setCheckingSubscriptionStatus(true);
+        try {
+            const status = await getSubscriptionStatus(initData);
+            setSubscriptionStatus({ checked: true, active: status.active });
+            if (status.active) {
+                setShowSubscriptionConfirm(true);
+                return;
+            }
+            setStepIndex(1);
+        } catch (err) {
+            console.error('subscription_status_failed', err);
+            window.alert(t('program.action_error'));
+        } finally {
+            setCheckingSubscriptionStatus(false);
+        }
+    }, [checkingSubscriptionStatus, plan, selectedPeriod, subscriptionStatus]);
+
+    const handleSubscriptionConfirm = useCallback(() => {
+        setShowSubscriptionConfirm(false);
+        setStepIndex(1);
+    }, []);
+
+    const handleSubscriptionCancel = useCallback(() => {
+        setShowSubscriptionConfirm(false);
+    }, []);
+
     const subscriptionTitleForPeriod = useCallback((period: SubscriptionPlanOption['period']) => {
         if (period === '1m') {
             return t('workout_flow.subscription.option.one_month');
@@ -306,8 +363,8 @@ const WorkoutFlowPage: React.FC = () => {
                                     <button
                                         type="button"
                                         className="primary-button workout-flow__next"
-                                        disabled={!plan || (plan === 'subscription' && !selectedPeriod)}
-                                        onClick={() => setStepIndex(1)}
+                                        disabled={!plan || checkingSubscriptionStatus || (plan === 'subscription' && !selectedPeriod)}
+                                        onClick={handlePlanNext}
                                     >
                                         {t('workout_flow.next')}
                                     </button>
@@ -390,7 +447,9 @@ const WorkoutFlowPage: React.FC = () => {
                         </div>
                     </div>
                 </section>
-                {!showTopupModal && !showProcessingModal && <BottomNav activeKey="workouts" />}
+                {!showTopupModal && !showProcessingModal && !showSubscriptionConfirm && (
+                    <BottomNav activeKey="workouts" />
+                )}
             </div>
             {showTopupModal && (
                 <div role="dialog" aria-modal="true" className="subscription-confirm">
@@ -404,6 +463,30 @@ const WorkoutFlowPage: React.FC = () => {
                                 onClick={goToTopup}
                             >
                                 {t('workout_flow.topup.cta')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showSubscriptionConfirm && (
+                <div role="dialog" aria-modal="true" className="subscription-confirm">
+                    <div className="subscription-confirm__dialog">
+                        <h3 className="subscription-confirm__title">{t('subscriptions.replace_confirm.title')}</h3>
+                        <p className="subscription-confirm__body">{t('subscriptions.replace_confirm.body')}</p>
+                        <div className="subscription-confirm__actions">
+                            <button
+                                type="button"
+                                onClick={handleSubscriptionCancel}
+                                className="subscription-confirm__btn subscription-confirm__btn--cancel"
+                            >
+                                {t('subscriptions.replace_confirm.cancel')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSubscriptionConfirm}
+                                className="subscription-confirm__btn subscription-confirm__btn--confirm"
+                            >
+                                {t('subscriptions.replace_confirm.confirm')}
                             </button>
                         </div>
                     </div>
