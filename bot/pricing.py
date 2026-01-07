@@ -25,6 +25,7 @@ class ServiceCatalog:
             AIService("subscription_6_months", int(settings.MEDIUM_SUBSCRIPTION_PRICE)),
             AIService("subscription_12_months", int(settings.LARGE_SUBSCRIPTION_PRICE)),
             AIService("ask_ai", int(settings.ASK_AI_PRICE)),
+            AIService("diet_plan", int(settings.DIET_PLAN_PRICE)),
         ]
 
     @classmethod
