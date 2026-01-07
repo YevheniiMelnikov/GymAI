@@ -8,16 +8,11 @@ from pydantic import ValidationError
 
 from bot.handlers.internal.auth import require_internal_auth
 from bot.handlers.internal.schemas import AiAnswerNotify
-from bot.keyboards import ask_ai_again_kb
-from bot.states import States
 from bot.texts import MessageText, translate
-from bot.utils.text import support_contact_url
-from bot.utils.ask_ai_messages import (
-    chunk_formatted_message,
-    format_answer_blocks,
-    format_plain_answer,
-    send_chunk_with_reply_fallback,
-)
+from bot.utils.urls import support_contact_url
+from bot.utils.text import format_plain_answer, format_answer_blocks, chunk_formatted_message
+from bot.utils.menus import send_main_menu_to_chat
+from bot.utils.ai_coach.ask_ai import send_chunk_with_reply_fallback
 from config.app_settings import settings
 from core.ai_coach.state.ask_ai import AiQuestionState
 from core.exceptions import ProfileNotFoundError
@@ -92,10 +87,6 @@ async def _internal_ai_answer_ready_impl(request: web.Request) -> web.Response:
         for temporary_key in ("ask_ai_prompt_id", "ask_ai_prompt_chat_id", "ask_ai_cost", "ask_ai_question_message_id"):
             state_data.pop(temporary_key, None)
         await fsm.set_data(state_data)
-
-        current_state = await fsm.get_state()
-        if current_state == States.ask_ai_question.state:
-            await fsm.set_state(States.main_menu)
 
     language = profile.language
     request_id = payload.request_id
@@ -176,11 +167,10 @@ async def _internal_ai_answer_ready_impl(request: web.Request) -> web.Response:
     )
 
     try:
-        ask_again_keyboard = ask_ai_again_kb(language)
         current_reply_id = reply_to_message_id
         for index, chunk in enumerate(chunks):
             message_text = incoming_template.format(name=settings.BOT_NAME, message=chunk)
-            reply_markup = ask_again_keyboard if index == len(chunks) - 1 else None
+            reply_markup = None
             current_reply_id = await send_chunk_with_reply_fallback(
                 bot=bot,
                 chat_id=profile.tg_id,
@@ -201,4 +191,8 @@ async def _internal_ai_answer_ready_impl(request: web.Request) -> web.Response:
 
     await state_tracker.mark_delivered(request_id)
     logger.info(f"event=ask_ai_answer_delivered request_id={request_id} profile_id={payload.profile_id}")
+
+    if dispatcher is not None:
+        await send_main_menu_to_chat(bot, profile.tg_id, profile, fsm)
+
     return web.json_response({"result": "ok"})

@@ -1,6 +1,4 @@
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlsplit, urlunsplit
-
 
 from config.app_settings import settings
 
@@ -15,14 +13,6 @@ async def ping_handler(_: "web.Request") -> "web.Response":
     from aiohttp import web
 
     return web.json_response({"ok": True})
-
-
-def build_ping_url(webhook_url: str | None) -> str:
-    if webhook_url is None:
-        raise ValueError("webhook_url must be set")
-    s = urlsplit(webhook_url)
-    path = settings.WEBHOOK_PATH.rstrip("/") + "/__ping"
-    return urlunsplit((s.scheme, s.netloc, path, "", ""))
 
 
 async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> None:

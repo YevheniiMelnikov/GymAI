@@ -5,7 +5,7 @@ import asyncio  # noqa: F401
 import httpx  # needed for tests
 from typing import Any
 
-from . import plans as plans_module
+from . import workout_plans as plans_module
 from core.ai_coach.state.plan import AiPlanState
 from .maintenance import (  # noqa: F401
     ai_coach_echo,
@@ -16,7 +16,7 @@ from .maintenance import (  # noqa: F401
     refresh_external_knowledge,
     sync_profile_knowledge,
 )
-from .plans import (  # noqa: F401
+from .workout_plans import (  # noqa: F401
     _generate_ai_workout_plan_impl,
     _update_ai_workout_plan_impl,
     generate_ai_workout_plan,
@@ -30,7 +30,7 @@ from .replace_exercise import (  # noqa: F401
     replace_exercise_task,
     replace_subscription_exercise_task,
 )
-from .qa import (  # noqa: F401
+from .ask_ai import (  # noqa: F401
     ask_ai_question,
     _claim_answer_request,
     _handle_ai_answer_failure_impl,

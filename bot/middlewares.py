@@ -1,6 +1,5 @@
-from aiogram import BaseMiddleware, Bot
+from aiogram import BaseMiddleware
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, MenuButtonDefault, Message
 from loguru import logger
 
 from core.cache import Cache
@@ -11,11 +10,6 @@ class ProfileMiddleware(BaseMiddleware):
     async def __call__(self, handler, event, data):
         state: FSMContext | None = data.get("state")
         tg_user = getattr(event, "from_user", None)
-
-        if isinstance(event, (Message, CallbackQuery)):
-            bot = getattr(event, "bot", None)
-            if bot is not None:
-                await _ensure_default_menu_button(bot)
 
         if tg_user and state:
             try:
@@ -29,10 +23,3 @@ class ProfileMiddleware(BaseMiddleware):
             await state.update_data(profile=profile.model_dump(mode="json") if profile else None)
 
         return await handler(event, data)
-
-
-async def _ensure_default_menu_button(bot: Bot) -> None:
-    try:
-        await bot.set_chat_menu_button(menu_button=MenuButtonDefault())
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("set_chat_menu_button failed: {}", exc)

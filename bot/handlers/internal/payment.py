@@ -6,7 +6,7 @@ from loguru import logger
 from core.containers import get_container
 from core.cache import Cache
 from aiogram import Bot
-from bot.utils.chat import send_message
+from ...utils.bot import send_message
 from .auth import require_internal_auth
 
 

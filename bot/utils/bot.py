@@ -1,11 +1,12 @@
+import html
 from contextlib import suppress
-from typing import NamedTuple, Optional
-from urllib.parse import ParseResult, parse_qsl, urlencode, urlparse, urlunparse
+from typing import NamedTuple, Optional, cast
 
 from aiogram import Bot
+from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery, BotCommand
+from aiogram.types import Message, CallbackQuery, BotCommand, InputFile, FSInputFile
 from aiohttp import ClientTimeout, ClientSession
 from loguru import logger
 from pydantic import ValidationError
@@ -15,6 +16,8 @@ from config.app_settings import settings
 from bot.keyboards import select_language_kb
 from bot.states import States
 from bot.types.messaging import BotMessageProxy
+from core.schemas import Profile
+from core.services import APIService
 
 
 class _WebAppTarget(NamedTuple):
@@ -95,6 +98,11 @@ async def notify_request_in_progress(
     *,
     show_alert: bool = True,
 ) -> None:
+    """
+    Shows an "in progress" notification.
+    NOTE: show_alert=True only works for CallbackQuery targets.
+    For Message targets, a new message is sent as alerts are not supported.
+    """
     text = translate(MessageText.request_in_progress, lang)
     if isinstance(target, CallbackQuery):
         await target.answer(text, show_alert=show_alert)
@@ -124,51 +132,6 @@ async def set_bot_commands(bot: Bot, lang: Optional[str] = None) -> None:
     command_texts = TextManager.commands
     commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
     await bot.set_my_commands(commands)
-
-
-def get_webapp_url(
-    page_type: str,
-    lang: str | None = None,
-    extra_params: dict[str, str] | None = None,
-) -> str | None:
-    source = settings.WEBAPP_PUBLIC_URL
-    if not source:
-        logger.error("WEBAPP_PUBLIC_URL is not configured; webapp button hidden")
-        return None
-
-    target = _WEBAPP_TARGETS.get(page_type, _WEBAPP_TARGETS["program"])
-    parsed: ParseResult = urlparse(source)
-    query_params = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    query_params["type"] = target.type_param
-
-    if target.source:
-        query_params["source"] = target.source
-    else:
-        query_params.pop("source", None)
-
-    if target.segment:
-        query_params["segment"] = target.segment
-    else:
-        query_params.pop("segment", None)
-
-    if lang:
-        query_params["lang"] = lang
-    else:
-        query_params.pop("lang", None)
-
-    merged_params = dict(query_params)
-    if extra_params:
-        for key, value in extra_params.items():
-            if value is None:
-                merged_params.pop(key, None)
-                continue
-            merged_params[str(key)] = str(value)
-
-    fragment = (target.fragment or "").lstrip("#")
-    new_query = urlencode(merged_params)
-    path = parsed.path or "/webapp/"
-    updated = parsed._replace(path=path, query=new_query, fragment=fragment)
-    return str(urlunparse(updated))
 
 
 async def check_webhook_alive(ping_url: str, timeout_seconds: float = 5.0) -> bool:
@@ -203,3 +166,79 @@ async def prompt_language_selection(message: Message, state: FSMContext) -> None
         message_ids.append(language_msg.message_id)
     await state.update_data(message_ids=message_ids, chat_id=message.chat.id)
     await state.set_state(States.select_language)
+
+
+async def send_message(
+    recipient: Profile,
+    text: str,
+    bot: Bot,
+    state: FSMContext | None = None,
+    reply_markup=None,
+    include_incoming_message: bool = True,
+    photo: str | InputFile | FSInputFile | None = None,
+    video: str | InputFile | FSInputFile | None = None,
+) -> None:
+    def _resolve_media(
+        media: str | InputFile | FSInputFile | None,
+    ) -> str | InputFile | FSInputFile | None:
+        if media is None:
+            return None
+        return getattr(media, "file_id", media)
+
+    def _escape_html(value: str) -> str:
+        return html.escape(value, quote=False)
+
+    if state:
+        data = await state.get_data()
+        language = cast(str, data.get("recipient_language", ""))
+        sender_name = cast(str, data.get("sender_name", ""))
+    else:
+        language = ""
+        sender_name = ""
+
+    recipient_profile = await APIService.profile.get_profile(recipient.id)
+    if recipient_profile is None:
+        from loguru import logger
+
+        logger.error(f"Profile not found for recipient id {recipient.id} in send_message")
+        return
+
+    if include_incoming_message:
+        try:
+            template = translate(MessageText.ask_ai_response_template, language or recipient_profile.language or "ua")
+        except Exception:
+            template = "<b>{name}</b>:\n{message}"
+        formatted_text = template.format(
+            name=_escape_html(sender_name),
+            message=_escape_html(text),
+        )
+    else:
+        formatted_text = _escape_html(text)
+
+    media_video = _resolve_media(video)
+    media_photo = _resolve_media(photo)
+
+    if media_video is not None:
+        await bot.send_video(
+            chat_id=recipient_profile.tg_id,
+            video=media_video,
+            caption=formatted_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML,
+        )
+    elif media_photo is not None:
+        await bot.send_photo(
+            chat_id=recipient_profile.tg_id,
+            photo=media_photo,
+            caption=formatted_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML,
+        )
+    else:
+        await bot.send_message(
+            chat_id=recipient_profile.tg_id,
+            text=formatted_text,
+            reply_markup=reply_markup,
+            disable_web_page_preview=True,
+            parse_mode=ParseMode.HTML,
+        )

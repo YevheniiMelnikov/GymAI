@@ -17,21 +17,15 @@ from config.app_settings import settings
 from core.cache import Cache
 from core.enums import ProfileStatus, Language
 from core.exceptions import ProfileNotFoundError
-from core.schemas import Profile
 from core.services import APIService
-from bot.utils.menus import (
-    show_main_menu,
-    show_my_profile_menu,
-    send_policy_confirmation,
-)
+from bot.utils.menus import show_main_menu, send_policy_confirmation
 from bot.utils.profiles import should_grant_gift_credits, update_profile_data
 from bot.utils.bot import del_msg, answer_msg, delete_messages, set_bot_commands
-from bot.utils.other import parse_int_with_decimal
+from bot.utils.text import parse_int_with_decimal
 from bot.texts import MessageText, translate
 from core.utils.validators import extract_birth_year
 
 questionnaire_router = Router()
-HEALTH_NOTES_PLACEHOLDER = "-"
 
 
 @questionnaire_router.callback_query(States.select_language)
@@ -247,7 +241,7 @@ async def health_notes_choice(callback_query: CallbackQuery, state: FSMContext) 
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
         return
 
-    await state.update_data(health_notes=HEALTH_NOTES_PLACEHOLDER, status=ProfileStatus.completed)
+    await state.update_data(health_notes="", status=ProfileStatus.completed)
     if callback_query.message is not None:
         await send_policy_confirmation(cast(Message, callback_query.message), state)
     await state.set_state(States.accept_policy)
@@ -264,30 +258,6 @@ async def health_notes(message: Message, state: FSMContext) -> None:
     await send_policy_confirmation(cast(Message, message), state)
     await state.set_state(States.accept_policy)
     return
-
-
-@questionnaire_router.callback_query(States.profile_delete)
-async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile = Profile.model_validate(data["profile"])
-
-    if callback_query.data == "yes":
-        if profile and await APIService.profile.delete_profile(profile.id):
-            await Cache.profile.delete_record(profile.id)
-            await answer_msg(
-                cast(Message | CallbackQuery, callback_query),
-                translate(MessageText.profile_deleted, profile.language or settings.DEFAULT_LANG),
-            )
-            await del_msg(cast(Message | CallbackQuery | None, callback_query))
-            await state.clear()
-        else:
-            await answer_msg(
-                cast(Message | CallbackQuery, callback_query),
-                translate(MessageText.unexpected_error, profile.language or settings.DEFAULT_LANG),
-            )
-    else:
-        if callback_query.message is not None:
-            await show_my_profile_menu(cast(CallbackQuery, callback_query), profile, state)
 
 
 @questionnaire_router.callback_query(States.accept_policy)

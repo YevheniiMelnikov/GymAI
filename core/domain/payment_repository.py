@@ -1,12 +1,9 @@
-from decimal import Decimal
 from typing import Any, Protocol
 
 from core.schemas import Payment, Subscription
 
 
 class PaymentRepository(Protocol):
-    async def create_payment(self, profile_id: int, service_type: str, order_id: str, amount: Decimal) -> bool: ...
-
     async def update_payment(self, payment_id: int, data: dict[str, Any]) -> bool: ...
 
     async def get_expired_subscriptions(self, expired_before: str) -> list[Subscription]: ...

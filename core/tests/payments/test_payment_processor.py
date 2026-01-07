@@ -6,7 +6,7 @@ from typing import Any, Awaitable, Callable
 from core.enums import PaymentStatus
 from core.payment import PaymentProcessor
 from core.payment.types import PaymentNotifier
-from bot.services.pricing import ServiceCatalog
+from bot.pricing import ServiceCatalog
 from config.app_settings import settings
 
 

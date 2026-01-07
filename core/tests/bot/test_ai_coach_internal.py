@@ -9,7 +9,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot.handlers.internal.tasks import internal_ai_coach_plan_ready, _resolve_profile
 from core.ai_coach.state.plan import AiPlanState
-from bot.utils.ai_coach import enqueue_workout_plan_generation, enqueue_workout_plan_update
+from bot.utils.ai_coach.workout_plans import enqueue_workout_plan_generation, enqueue_workout_plan_update
 from config.app_settings import settings
 from core.enums import WorkoutPlanType, WorkoutLocation, SubscriptionPeriod
 from core.exceptions import ProfileNotFoundError
@@ -167,7 +167,7 @@ async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.Monk
             captured.update(payload)
             return DummyResult(payload)
 
-    monkeypatch.setattr("bot.utils.ai_coach.generate_ai_workout_plan", DummyTask)
+    monkeypatch.setattr("bot.utils.ai_coach.workout_plans.generate_ai_workout_plan", DummyTask)
 
     profile_record = _make_profile(7)
 
@@ -212,7 +212,7 @@ async def test_enqueue_workout_plan_update_dispatch(monkeypatch: pytest.MonkeyPa
             captured.update(payload)
             return DummyResult(payload)
 
-    monkeypatch.setattr("bot.utils.ai_coach.update_ai_workout_plan", DummyTask)
+    monkeypatch.setattr("bot.utils.ai_coach.workout_plans.update_ai_workout_plan", DummyTask)
 
     queued = await enqueue_workout_plan_update(
         profile_id=9,

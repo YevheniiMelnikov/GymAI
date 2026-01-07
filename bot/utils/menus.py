@@ -1,21 +1,24 @@
-from typing import Any, TypedDict, cast
+from typing import Any, cast
 
+from aiogram import Bot
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, InlineKeyboardButton as KbBtn, WebAppInfo
+from aiogram.types import CallbackQuery, Message
 
 from bot import keyboards as kb
-from bot.keyboard_builder import SafeInlineKeyboardMarkup as KbMarkup
 from bot.utils.profiles import fetch_user
 from bot.states import States
-from bot.texts import ButtonText, MessageText, translate
-from core.enums import ProfileStatus
+from bot.texts import MessageText, translate
 from core.schemas import Profile
 from config.app_settings import settings
 from bot.types.messaging import BotMessageProxy
-from bot.utils.bot import del_msg, answer_msg, get_webapp_url
+from bot.utils.bot import del_msg, answer_msg
+from bot.utils.urls import get_webapp_url
 
 
-async def show_main_menu(message: Message, profile: Profile, state: FSMContext, *, delete_source: bool = True) -> None:
+InteractionTarget = CallbackQuery | Message | BotMessageProxy
+
+
+async def send_main_menu_to_chat(bot: Bot, chat_id: int, profile: Profile, state: FSMContext) -> None:
     language = cast(str, profile.language or settings.DEFAULT_LANG)
     webapp_url = get_webapp_url("program", language)
     diet_webapp_url = get_webapp_url("diets", language)
@@ -30,24 +33,14 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext, 
     )
     await state.clear()
     await state.update_data(profile=profile.model_dump(mode="json"))
-    await state.set_state(States.main_menu)
-    await answer_msg(message, translate(MessageText.main_menu, profile.language), reply_markup=menu)
+    await bot.send_message(chat_id, translate(MessageText.main_menu, language), reply_markup=menu)
+
+
+async def show_main_menu(message: Message, profile: Profile, state: FSMContext, *, delete_source: bool = True) -> None:
+    if message.bot:
+        await send_main_menu_to_chat(message.bot, message.chat.id, profile, state)
     if delete_source:
         await del_msg(cast(Message | CallbackQuery | None, message))
-
-
-async def reset_main_menu_state(state: FSMContext, profile: Profile) -> None:
-    await state.clear()
-    await state.update_data(profile=profile.model_dump(mode="json"))
-    await state.set_state(States.main_menu)
-
-
-InteractionTarget = CallbackQuery | Message | BotMessageProxy
-
-
-class PendingFlow(TypedDict, total=False):
-    name: str
-    context: dict[str, Any]
 
 
 async def show_balance_menu(
@@ -65,7 +58,6 @@ async def show_balance_menu(
     topup_webapp_url = get_webapp_url("topup", lang)
     if isinstance(callback_obj, CallbackQuery) and not already_answered:
         await callback_obj.answer()
-    await state.set_state(States.main_menu)
     await answer_msg(
         callback_obj,
         translate(MessageText.credit_balance_menu, lang).format(credits=cached_profile.credits),
@@ -73,31 +65,6 @@ async def show_balance_menu(
     )
     callback_target = callback_obj if not isinstance(callback_obj, BotMessageProxy) else None
     await del_msg(callback_target)
-
-
-async def ensure_credits(
-    interaction: InteractionTarget,
-    profile: Profile,
-    state: FSMContext,
-    *,
-    required: int,
-    credits: int | None = None,
-) -> bool:
-    language = cast(str, profile.language or settings.DEFAULT_LANG)
-    available = credits
-    if available is None:
-        cached_profile = await fetch_user(profile, refresh_if_incomplete=True)
-        available = cached_profile.credits
-    if available < required:
-        message = translate(MessageText.not_enough_credits, language)
-        if isinstance(interaction, CallbackQuery):
-            await interaction.answer(message, show_alert=True)
-            await show_balance_menu(interaction, profile, state, already_answered=True)
-        else:
-            await answer_msg(interaction, message)
-            await show_balance_menu(interaction, profile, state, already_answered=True)
-        return False
-    return True
 
 
 async def send_policy_confirmation(message: Message, state: FSMContext) -> None:
@@ -124,42 +91,6 @@ async def send_policy_confirmation(message: Message, state: FSMContext) -> None:
         message_ids.append(confirm_msg.message_id)
     await state.update_data(chat_id=message.chat.id, message_ids=message_ids)
     await del_msg(message)
-
-
-async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    user = await fetch_user(profile, refresh_if_incomplete=True)
-    lang = cast(str, profile.language)
-
-    webapp_url = get_webapp_url("profile", lang)
-    if webapp_url:
-        message = cast(Message, callback_query.message)
-        assert message
-        await callback_query.answer()
-        await answer_msg(
-            message,
-            translate(ButtonText.my_profile, lang),
-            reply_markup=KbMarkup(
-                inline_keyboard=[
-                    [KbBtn(text=translate(ButtonText.my_profile, lang), web_app=WebAppInfo(url=webapp_url))]
-                ]
-            ),
-        )
-        await del_msg(cast(Message | CallbackQuery | None, callback_query))
-        return
-
-    if isinstance(user, Profile) and user.status != ProfileStatus.completed:
-        await prompt_profile_completion_questionnaire(
-            callback_query,
-            profile,
-            state,
-            chat_id=callback_query.from_user.id,
-            language=lang,
-            pending_flow={"name": "show_profile"},
-        )
-        await del_msg(cast(Message | CallbackQuery | None, callback_query))
-        return
-
-    await callback_query.answer(translate(MessageText.unexpected_error, lang), show_alert=True)
 
 
 def _extract_chat_id(target: InteractionTarget) -> int | None:

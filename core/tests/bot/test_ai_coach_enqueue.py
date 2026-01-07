@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bot.utils.ai_coach import enqueue_workout_plan_generation, enqueue_workout_plan_update
+from bot.utils.ai_coach.workout_plans import enqueue_workout_plan_generation, enqueue_workout_plan_update
 from core.enums import WorkoutPlanType, WorkoutLocation
 from core.schemas import Profile
 
@@ -42,10 +42,10 @@ class DummyChain:
 @pytest.mark.asyncio
 async def test_enqueue_generation_uses_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     record: dict[str, list[dict]] = {}
-    monkeypatch.setattr("bot.utils.ai_coach.generate_ai_workout_plan", DummyTask("generate"))
-    monkeypatch.setattr("bot.utils.ai_coach.notify_ai_plan_ready_task", DummyTask("notify"))
-    monkeypatch.setattr("bot.utils.ai_coach.handle_ai_plan_failure", DummyTask("failure"))
-    monkeypatch.setattr("bot.utils.ai_coach.chain", lambda *sigs: DummyChain(sigs, record))
+    monkeypatch.setattr("bot.utils.ai_coach.workout_plans.generate_ai_workout_plan", DummyTask("generate"))
+    monkeypatch.setattr("bot.utils.ai_coach.workout_plans.notify_ai_plan_ready_task", DummyTask("notify"))
+    monkeypatch.setattr("bot.utils.ai_coach.workout_plans.handle_ai_plan_failure", DummyTask("failure"))
+    monkeypatch.setattr("bot.utils.ai_coach.workout_plans.chain", lambda *sigs: DummyChain(sigs, record))
 
     profile = _make_profile(5)
     ok = await enqueue_workout_plan_generation(
@@ -64,10 +64,10 @@ async def test_enqueue_generation_uses_chain(monkeypatch: pytest.MonkeyPatch) ->
 @pytest.mark.asyncio
 async def test_enqueue_update_uses_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     record: dict[str, list[dict]] = {}
-    monkeypatch.setattr("bot.utils.ai_coach.update_ai_workout_plan", DummyTask("update"))
-    monkeypatch.setattr("bot.utils.ai_coach.notify_ai_plan_ready_task", DummyTask("notify"))
-    monkeypatch.setattr("bot.utils.ai_coach.handle_ai_plan_failure", DummyTask("failure"))
-    monkeypatch.setattr("bot.utils.ai_coach.chain", lambda *sigs: DummyChain(sigs, record))
+    monkeypatch.setattr("bot.utils.ai_coach.workout_plans.update_ai_workout_plan", DummyTask("update"))
+    monkeypatch.setattr("bot.utils.ai_coach.workout_plans.notify_ai_plan_ready_task", DummyTask("notify"))
+    monkeypatch.setattr("bot.utils.ai_coach.workout_plans.handle_ai_plan_failure", DummyTask("failure"))
+    monkeypatch.setattr("bot.utils.ai_coach.workout_plans.chain", lambda *sigs: DummyChain(sigs, record))
 
     ok = await enqueue_workout_plan_update(
         profile_id=11,

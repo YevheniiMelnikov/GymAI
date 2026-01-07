@@ -1,46 +1,69 @@
-from functools import lru_cache
+import html
+import re
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 
-from bot.texts import ButtonText, translate
-from config.app_settings import settings
-
-
-@lru_cache(maxsize=None)
-def get_workout_locations(lang: str) -> dict[str, str]:
-    return {
-        "home": translate(ButtonText.home_workout, lang),
-        "gym": translate(ButtonText.gym_workout, lang),
-    }
+from core.schemas import QAResponseBlock
 
 
-@lru_cache(maxsize=None)
-def get_workout_experience_levels(lang: str) -> dict[str, str]:
-    return {
-        "beginner": translate(ButtonText.beginner, lang),
-        "amateur": translate(ButtonText.intermediate, lang),
-        "advanced": translate(ButtonText.advanced, lang),
-        "pro": translate(ButtonText.experienced, lang),
-        "0-1": translate(ButtonText.beginner, lang),
-        "1-3": translate(ButtonText.intermediate, lang),
-        "3-5": translate(ButtonText.advanced, lang),
-        "5+": translate(ButtonText.experienced, lang),
-    }
+def parse_int_with_decimal(raw: str) -> int:
+    value = (raw or "").strip().replace(",", ".")
+    weight_re = re.compile(r"^\d+(?:\.\d+)?$")
+    if not weight_re.fullmatch(value):
+        raise ValueError("Invalid numeric value")
+    try:
+        return int(Decimal(value).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    except InvalidOperation as exc:
+        raise ValueError("Invalid decimal value") from exc
 
 
-def normalize_support_contact(raw: str | None) -> str | None:
-    if not raw:
-        return None
-    value = raw.strip()
-    if not value:
-        return None
-    lowered = value.lower()
-    if lowered.startswith("http://") or lowered.startswith("https://"):
-        return value
-    if value.startswith("@"):
-        value = value[1:]
-    if value.startswith("t.me/") or value.startswith("telegram.me/"):
-        return f"https://{value}"
-    return f"https://t.me/{value}"
+def format_plain_answer(text: str) -> str:
+    return html.escape(text, quote=False).replace("\r\n", "\n")
 
 
-def support_contact_url() -> str:
-    return normalize_support_contact(settings.TG_SUPPORT_CONTACT) or settings.TG_SUPPORT_CONTACT or ""
+def format_answer_blocks(blocks: list[QAResponseBlock]) -> str:
+    lines: list[str] = []
+    for block in blocks:
+        title = (block.title or "").strip()
+        body = (block.body or "").strip()
+        if not body:
+            continue
+        if title:
+            lines.append(f"<b>{html.escape(title, quote=False)}</b>")
+        lines.append(html.escape(body, quote=False).replace("\r\n", "\n"))
+        lines.append("")
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines)
+
+
+def chunk_formatted_message(
+    text: str,
+    *,
+    template: str,
+    sender_name: str,
+) -> list[str]:
+    base_render = template.format(name=sender_name, message="")
+    overhead = len(base_render)
+    allowance = 3900 - overhead
+    if allowance <= 0:
+        allowance = max(3900 // 2, 512)
+    if len(text) <= allowance:
+        return [text]
+    chunks: list[str] = []
+    current = ""
+    for line in text.split("\n"):
+        candidate = f"{current}\n{line}" if current else line
+        if len(candidate) <= allowance:
+            current = candidate
+            continue
+        if current:
+            chunks.append(current)
+        if len(line) > allowance:
+            for start in range(0, len(line), allowance):
+                chunks.append(line[start : start + allowance])
+            current = ""
+        else:
+            current = line
+    if current:
+        chunks.append(current)
+    return chunks

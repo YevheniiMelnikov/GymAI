@@ -43,16 +43,6 @@ beat_schedule = {
         "schedule": crontab(hour=1, minute=0),
         "options": {"queue": "critical"},
     },
-    "warn_low_credits": {
-        "task": "core.tasks.billing.warn_low_credits",
-        "schedule": crontab(hour=0, minute=0),
-        "options": {"queue": "critical"},
-    },
-    "charge_due_subscriptions": {
-        "task": "core.tasks.billing.charge_due_subscriptions",
-        "schedule": crontab(hour=0, minute=30),
-        "options": {"queue": "critical"},
-    },
     "refresh_external_knowledge": {
         "task": "core.tasks.ai_coach.refresh_external_knowledge",
         "schedule": schedule(

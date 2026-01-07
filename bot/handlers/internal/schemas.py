@@ -1,11 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 
-from core.schemas import DietPlan
-
-
-class AiAnswerBlock(BaseModel):
-    title: str | None = None
-    body: str
+from core.schemas import DietPlan, QAResponseBlock
 
 
 class AiAnswerNotify(BaseModel):
@@ -14,7 +9,7 @@ class AiAnswerNotify(BaseModel):
     profile_id: int
     answer: str | None = None
     sources: list[str] = Field(default_factory=list)
-    blocks: list[AiAnswerBlock] = Field(default_factory=list)
+    blocks: list[QAResponseBlock] = Field(default_factory=list)
     error: str | None = None
     force: bool = False
 

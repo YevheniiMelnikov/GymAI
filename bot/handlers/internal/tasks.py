@@ -10,14 +10,13 @@ from pydantic import ValidationError
 
 from bot.keyboards import program_view_kb as _program_view_kb, weekly_survey_kb
 from bot.texts import MessageText, translate
-from bot.utils.text import support_contact_url
+from bot.utils.urls import support_contact_url, get_webapp_url
 from bot.handlers.internal.schemas import WeeklySurveyNotify
-from bot.handlers.internal.plan_finalizers import FINALIZERS, PlanFinalizeContext
+from bot.handlers.internal.workout_plans import FINALIZERS, PlanFinalizeContext
 from config.app_settings import settings
 from core.exceptions import ProfileNotFoundError
 from core.cache import Cache
 from core.enums import WorkoutPlanType
-from bot.utils.bot import get_webapp_url
 from core.services import APIService
 from core.schemas import Profile
 from core.ai_coach.state.plan import AiPlanState

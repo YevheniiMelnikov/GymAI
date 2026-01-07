@@ -2307,7 +2307,6 @@ a:hover{ opacity: .9; }
   flex-direction: column;
   gap: 6px;
   padding: 4px 0 0;
-  overflow: hidden;
 }
 .topup-page-shell{
   gap: 8px;
@@ -2318,22 +2317,22 @@ a:hover{ opacity: .9; }
   margin-right: calc(50% - 50vw);
   padding-inline: 0;
   max-width: none;
-  overflow: hidden;
 }
 .topup-carousel{
+  position: absolute;
+  top: 48%;
+  left: 0;
+  transform: translateY(-50%);
   width: 100%;
-  overflow-x: hidden;
-  overflow-y: hidden;
-  scroll-snap-type: none;
-  scroll-behavior: auto;
-  scrollbar-width: none;
-  user-select: none;
-  padding: 0;
   display: flex;
-  gap: 5vw;
   align-items: center;
+  gap: clamp(8px, 1.4vw, 16px);
+  padding: 0;
+  scroll-snap-type: x mandatory;
+  overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  scroll-padding-inline: 0;
+  scroll-padding-inline: 16px;
   touch-action: pan-x;
 }
 .topup-carousel::-webkit-scrollbar{
@@ -2341,28 +2340,25 @@ a:hover{ opacity: .9; }
   height: 0;
 }
 .topup-carousel__card{
-  flex: 0 0 auto;
-  width: 96vw;
-  border-radius: 24px;
-  overflow: hidden;
-  margin-right: -44vw;
+  flex: 0 0 70%;
   scroll-snap-align: center;
-  transform: scale(0.90);
-  transition: transform 320ms cubic-bezier(.2,.7,.2,1);
-  z-index: 1;
-  background: transparent;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transform: scale(.92);
+  transition: transform .28s cubic-bezier(.2,.7,.2,1);
+  will-change: transform;
   cursor: pointer;
+  background: #10161d;
 }
 .topup-carousel__card.is-active{
   transform: scale(1);
-  z-index: 2;
 }
 .topup-carousel__image{
-  width: 170%;
-  height: auto;
   display: block;
-  margin-left: -35%;
-  transform-origin: center;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
   pointer-events: none;
 }
 .topup-carousel__card[data-id="start"] .topup-carousel__image{
@@ -2418,10 +2414,11 @@ a:hover{ opacity: .9; }
     margin-top: -66px;
   }
   .topup-carousel__dots{
-    transform: translate(-50%, -16px);
+    transform: translate(-50%, 8px);
   }
   .topup-page .topbar__title{
     left: calc(50% - 53px);
+    display: none;
   }
 }
 .faq-support{

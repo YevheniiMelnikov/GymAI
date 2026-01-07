@@ -52,12 +52,10 @@ CELERY_QUEUES: tuple[Queue, ...] = (
 )
 
 CRITICAL_TASK_ROUTES: dict[str, dict[str, str]] = {
-    "core.tasks.billing.charge_due_subscriptions": {"queue": "critical", "routing_key": "critical"},
     "core.tasks.billing.deactivate_expired_subscriptions": {
         "queue": "critical",
         "routing_key": "critical",
     },
-    "core.tasks.billing.warn_low_credits": {"queue": "critical", "routing_key": "critical"},
     "apps.payments.tasks.process_payment_webhook": {
         "queue": "critical",
         "routing_key": "critical",
@@ -69,31 +67,31 @@ CRITICAL_TASK_ROUTES: dict[str, dict[str, str]] = {
 }
 
 AI_COACH_TASK_ROUTES: dict[str, dict[str, str]] = {
-    "core.tasks.ai_coach.plans.generate_ai_workout_plan": {
+    "core.tasks.ai_coach.workout_plans.generate_ai_workout_plan": {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
-    "core.tasks.ai_coach.plans.update_ai_workout_plan": {
+    "core.tasks.ai_coach.workout_plans.update_ai_workout_plan": {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
-    "core.tasks.ai_coach.plans.notify_ai_plan_ready_task": {
+    "core.tasks.ai_coach.workout_plans.notify_ai_plan_ready_task": {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
-    "core.tasks.ai_coach.plans.handle_ai_plan_failure": {
+    "core.tasks.ai_coach.workout_plans.handle_ai_plan_failure": {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
-    "core.tasks.ai_coach.qa.ask_ai_question": {
+    "core.tasks.ai_coach.ask_ai.ask_ai_question": {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
-    "core.tasks.ai_coach.qa.notify_ai_answer_ready_task": {
+    "core.tasks.ai_coach.ask_ai.notify_ai_answer_ready_task": {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
-    "core.tasks.ai_coach.qa.handle_ai_question_failure": {
+    "core.tasks.ai_coach.ask_ai.handle_ai_question_failure": {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
@@ -145,8 +143,8 @@ CELERY_INCLUDE: tuple[str, ...] = (
     "core.tasks.billing",
     "core.tasks.bot_calls",
     "core.tasks.ai_coach",
-    "core.tasks.ai_coach.qa",
-    "core.tasks.ai_coach.plans",
+    "core.tasks.ai_coach.ask_ai",
+    "core.tasks.ai_coach.workout_plans",
     "core.tasks.ai_coach.diet",
     "core.tasks.ai_coach.maintenance",
     "core.tasks.ai_coach.replace_exercise",

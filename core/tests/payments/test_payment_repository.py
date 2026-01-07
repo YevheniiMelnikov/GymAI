@@ -1,6 +1,5 @@
 import types
 import asyncio
-from decimal import Decimal
 
 import pytest  # pyrefly: ignore[import-error]
 
@@ -22,34 +21,6 @@ def _settings() -> types.SimpleNamespace:
 
 class _Client:
     pass
-
-
-def test_create_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def runner() -> None:
-        repo = HTTPPaymentRepository(_Client(), _settings())  # pyrefly: ignore[bad-argument-type]
-
-        async def fake_handle(method, endpoint, data=None):
-            return 201, {}
-
-        monkeypatch.setattr(repo, "_handle_payment_api_request", fake_handle)
-        ok = await repo.create_payment(1, "type", "order", Decimal("10"))
-        assert ok is True
-
-    asyncio.run(runner())
-
-
-def test_create_payment_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def runner() -> None:
-        repo = HTTPPaymentRepository(_Client(), _settings())  # pyrefly: ignore[bad-argument-type]
-
-        async def fake_handle(method, endpoint, data=None):
-            return 400, {}
-
-        monkeypatch.setattr(repo, "_handle_payment_api_request", fake_handle)
-        ok = await repo.create_payment(1, "type", "order", Decimal("10"))
-        assert ok is False
-
-    asyncio.run(runner())
 
 
 def test_update_payment_status_maps_success(monkeypatch: pytest.MonkeyPatch) -> None:

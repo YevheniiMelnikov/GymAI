@@ -18,7 +18,7 @@ from .strategies import (
     SuccessPayment,
 )
 from .types import CacheProtocol, PaymentNotifier
-from bot.services.pricing import ServiceCatalog
+from bot.pricing import ServiceCatalog
 
 
 class PaymentProcessor:

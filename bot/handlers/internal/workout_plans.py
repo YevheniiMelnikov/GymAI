@@ -9,9 +9,8 @@ from aiogram.fsm.context import FSMContext
 from loguru import logger
 
 from bot.keyboards import plan_updated_kb, program_view_kb
-from bot.states import States
 from bot.texts import MessageText, translate
-from bot.utils.bot import get_webapp_url
+from bot.utils.urls import get_webapp_url
 from config.app_settings import settings
 from core.ai_coach.state.plan import AiPlanState
 from core.cache import Cache
@@ -47,7 +46,6 @@ class PlanFinalizer(ABC):
 
     async def _apply_fsm_payload(self, context: PlanFinalizeContext, payload: dict[str, object]) -> None:
         await context.state.update_data(**payload)
-        await context.state.set_state(States.main_menu)
 
 
 def _sanitize_exercises_payload(exercises: list[dict[str, Any]]) -> list[dict[str, Any]]:

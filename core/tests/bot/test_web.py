@@ -1,6 +1,6 @@
 import pytest
 
-from bot.utils.web import build_ping_url
+from bot.utils.urls import build_ping_url
 
 
 def test_build_ping_url_appends_ping() -> None:

@@ -1,4 +1,3 @@
-from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 from urllib.parse import urljoin
 
@@ -43,21 +42,6 @@ class HTTPPaymentRepository(APIClient):
         except APIClientTransportError as exc:
             logger.error(f"API {method.upper()} transport failure to {endpoint}: {exc}")
             return 503, {}
-
-    async def create_payment(self, profile_id: int, service_type: str, order_id: str, amount: Decimal) -> bool:
-        status_code, _ = await self._handle_payment_api_request(
-            method="post",
-            endpoint=urljoin(self.API_BASE_PATH, "create/"),
-            data={
-                "profile": profile_id,
-                "order_id": order_id,
-                "payment_type": service_type,
-                "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
-                "status": PaymentStatus.PENDING.value,
-                "processed": False,
-            },
-        )
-        return status_code == 201
 
     async def update_payment(self, payment_id: int, data: dict) -> bool:
         status_code, _ = await self._handle_payment_api_request(

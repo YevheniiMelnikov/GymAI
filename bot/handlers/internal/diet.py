@@ -8,9 +8,8 @@ from bot.handlers.internal.auth import require_internal_auth
 from bot.handlers.internal.schemas import AiDietNotify
 from bot.keyboards import diet_view_kb
 from bot.texts import MessageText, translate
-from bot.utils.ask_ai_messages import send_chunk_with_reply_fallback
-from bot.utils.bot import get_webapp_url
-from bot.utils.text import support_contact_url
+from bot.utils.ai_coach.ask_ai import send_chunk_with_reply_fallback
+from bot.utils.urls import get_webapp_url, support_contact_url
 from core.ai_coach.state.diet import AiDietState
 from core.exceptions import ProfileNotFoundError, UserServiceError
 from core.services import APIService

@@ -10,22 +10,14 @@ from core.enums import WorkoutPlanType, WorkoutLocation
 from core.schemas import DayExercises, Program, Profile, Subscription
 from core.services.internal import APIService
 from core.ai_coach import (
-    AiAttachmentPayload,
-    AiDietPlanPayload,
     AiPlanGenerationPayload,
     AiPlanUpdatePayload,
-    AiQuestionPayload,
 )
 from core.tasks.ai_coach import (
     generate_ai_workout_plan,
     update_ai_workout_plan,
     handle_ai_plan_failure,
     notify_ai_plan_ready_task,
-)
-from core.tasks.ai_coach import (
-    generate_ai_diet_plan,
-    handle_ai_diet_failure,
-    notify_ai_diet_ready_task,
 )
 
 
@@ -208,115 +200,6 @@ async def enqueue_workout_plan_generation(
     return True
 
 
-def _build_ai_question_payload(
-    *,
-    profile_id: int,
-    language: str,
-    prompt: str,
-    request_id: str,
-    cost: int,
-    image_base64: str | None,
-    image_mime: str | None,
-) -> AiQuestionPayload | None:
-    attachments: list[AiAttachmentPayload] = []
-    if image_base64 and image_mime:
-        attachments.append(AiAttachmentPayload(mime=image_mime, data_base64=image_base64))
-
-    try:
-        return AiQuestionPayload(
-            profile_id=profile_id,
-            language=language,
-            prompt=prompt,
-            attachments=attachments,
-            request_id=request_id,
-            cost=cost,
-        )
-    except ValidationError as exc:
-        logger.error(f"event=ask_ai_invalid_payload request_id={request_id} profile_id={profile_id} error={exc!s}")
-        return None
-
-
-def _dispatch_ai_question_task(
-    *,
-    payload_model: AiQuestionPayload,
-    request_id: str,
-    profile_id: int,
-) -> str | None:
-    try:
-        from core.tasks.ai_coach import (  # Local import to avoid circular dependency
-            ask_ai_question,
-            handle_ai_question_failure,
-            notify_ai_answer_ready_task,
-        )
-    except Exception as exc:  # pragma: no cover - import failure
-        logger.error(f"event=ask_ai_task_import_failed request_id={request_id} error={exc!s}")
-        return None
-
-    payload = payload_model.model_dump(mode="json")
-    headers = {
-        "request_id": request_id,
-        "profile_id": profile_id,
-        "action": "ask_ai",
-    }
-    options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
-
-    ask_sig = ask_ai_question.s(payload).set(**options)  # pyrefly: ignore[not-callable]
-    notify_sig = notify_ai_answer_ready_task.s().set(  # pyrefly: ignore[not-callable]
-        queue="ai_coach", routing_key="ai_coach", headers=headers
-    )
-    failure_sig = handle_ai_question_failure.s(payload).set(  # pyrefly: ignore[not-callable]
-        queue="ai_coach", routing_key="ai_coach"
-    )
-
-    try:
-        async_result = cast(AsyncResult, chain(ask_sig, notify_sig).apply_async(link_error=[failure_sig]))
-    except Exception as exc:  # noqa: BLE001
-        logger.error(f"event=ask_ai_dispatch_failed request_id={request_id} profile_id={profile_id} error={exc!s}")
-        return None
-
-    task_id = cast(str | None, getattr(async_result, "id", None))
-    if task_id is None:
-        logger.error(f"event=ask_ai_missing_task_id request_id={request_id} profile_id={profile_id}")
-        return None
-    logger.info(f"event=ask_ai_enqueued request_id={request_id} task_id={task_id} profile_id={profile_id}")
-    return task_id
-
-
-async def enqueue_ai_question(
-    *,
-    profile: Profile,
-    prompt: str,
-    language: str,
-    request_id: str,
-    cost: int,
-    image_base64: str | None = None,
-    image_mime: str | None = None,
-) -> bool:
-    profile_id = profile.id
-    if profile_id <= 0:
-        logger.error(f"event=ask_ai_invalid_profile request_id={request_id} profile_id={profile_id}")
-        return False
-
-    payload_model = _build_ai_question_payload(
-        profile_id=profile_id,
-        language=language,
-        prompt=prompt,
-        request_id=request_id,
-        cost=cost,
-        image_base64=image_base64,
-        image_mime=image_mime,
-    )
-    if payload_model is None:
-        return False
-
-    task_id = _dispatch_ai_question_task(
-        payload_model=payload_model,
-        request_id=request_id,
-        profile_id=profile_id,
-    )
-    return task_id is not None
-
-
 async def enqueue_workout_plan_update(
     *,
     profile_id: int,
@@ -394,101 +277,3 @@ async def enqueue_workout_plan_update(
         f"profile_id={profile_id} plan_type={plan_type.value}"
     )
     return True
-
-
-def _build_ai_diet_payload(
-    *,
-    profile_id: int,
-    language: str,
-    prompt: str,
-    request_id: str,
-    cost: int,
-    diet_allergies: str | None,
-    diet_products: list[str],
-) -> AiDietPlanPayload | None:
-    try:
-        return AiDietPlanPayload(
-            profile_id=profile_id,
-            language=language,
-            request_id=request_id,
-            cost=cost,
-            prompt=prompt,
-            diet_allergies=diet_allergies,
-            diet_products=diet_products,
-        )
-    except ValidationError as exc:
-        logger.error(f"event=ai_diet_invalid_payload request_id={request_id} profile_id={profile_id} error={exc!s}")
-        return None
-
-
-def _dispatch_ai_diet_task(
-    *,
-    payload_model: AiDietPlanPayload,
-    request_id: str,
-    profile_id: int,
-) -> str | None:
-    payload = payload_model.model_dump(mode="json")
-    headers = {
-        "request_id": request_id,
-        "profile_id": profile_id,
-        "action": "diet",
-    }
-    options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
-
-    diet_sig = generate_ai_diet_plan.s(payload).set(**options)  # pyrefly: ignore[not-callable]
-    notify_sig = notify_ai_diet_ready_task.s().set(  # pyrefly: ignore[not-callable]
-        queue="ai_coach", routing_key="ai_coach", headers=headers
-    )
-    failure_sig = handle_ai_diet_failure.s(payload).set(  # pyrefly: ignore[not-callable]
-        queue="ai_coach", routing_key="ai_coach"
-    )
-
-    try:
-        async_result = cast(AsyncResult, chain(diet_sig, notify_sig).apply_async(link_error=[failure_sig]))
-    except Exception as exc:  # noqa: BLE001
-        logger.error(f"event=ai_diet_dispatch_failed request_id={request_id} profile_id={profile_id} error={exc!s}")
-        return None
-
-    task_id = cast(str | None, getattr(async_result, "id", None))
-    if task_id is None:
-        logger.error(f"event=ai_diet_missing_task_id request_id={request_id} profile_id={profile_id}")
-        return None
-    logger.info(f"event=ai_diet_enqueued request_id={request_id} task_id={task_id} profile_id={profile_id}")
-    return task_id
-
-
-async def enqueue_diet_plan_generation(
-    *,
-    profile: Profile,
-    diet_allergies: str | None,
-    diet_products: list[str],
-    request_id: str,
-    cost: int,
-) -> bool:
-    profile_id = profile.id
-    if profile_id <= 0:
-        logger.error(f"event=ai_diet_invalid_profile request_id={request_id} profile_id={profile_id}")
-        return False
-
-    language = str(profile.language or settings.DEFAULT_LANG)
-    allergy_note = diet_allergies or "none"
-    products_note = ", ".join(diet_products) if diet_products else "not specified"
-    prompt = f"Create a 1-day diet plan. Allergies: {allergy_note}. Allowed products: {products_note}."
-    payload_model = _build_ai_diet_payload(
-        profile_id=profile_id,
-        language=language,
-        prompt=prompt,
-        request_id=request_id,
-        cost=cost,
-        diet_allergies=diet_allergies,
-        diet_products=diet_products,
-    )
-    if payload_model is None:
-        return False
-
-    task_id = _dispatch_ai_diet_task(
-        payload_model=payload_model,
-        request_id=request_id,
-        profile_id=profile_id,
-    )
-    return task_id is not None

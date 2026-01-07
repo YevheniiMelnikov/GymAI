@@ -11,8 +11,8 @@ from bot.types.messaging import BotMessageProxy
 from bot.texts import MessageText, translate
 from bot.keyboards import main_menu_kb
 from bot.utils.menus import prompt_profile_completion_questionnaire, show_balance_menu
-from bot.utils.bot import answer_msg, get_webapp_url
-from bot.states import States
+from bot.utils.bot import answer_msg
+from bot.utils.urls import get_webapp_url
 from config.app_settings import settings
 from core.cache import Cache
 from core.enums import ProfileStatus
@@ -141,7 +141,6 @@ async def internal_webapp_weekly_survey_submitted(request: web.Request) -> web.R
     state = FSMContext(storage=dispatcher.storage, key=state_key)
     await state.clear()
     await state.update_data(profile=profile.model_dump(mode="json"))
-    await state.set_state(States.main_menu)
     target = BotMessageProxy(bot=bot, chat_id=chat_id)
     webapp_url = get_webapp_url("program", language)
     profile_webapp_url = get_webapp_url("profile", language)
@@ -236,14 +235,14 @@ async def internal_webapp_profile_deleted(request: web.Request) -> web.Response:
         )
         chat_id = profile.tg_id
 
-    dispatcher = request.app.get("dp")
-    if dispatcher is None:
+    dp = request.app.get("dp")
+    if dp is None:
         logger.error("Dispatcher missing for webapp profile delete action")
         return web.json_response({"detail": "unavailable"}, status=503)
 
     bot: Bot = request.app["bot"]
     state_key = StorageKey(bot_id=bot.id, chat_id=chat_id, user_id=chat_id)
-    state = FSMContext(storage=dispatcher.storage, key=state_key)
+    state = FSMContext(storage=dp.storage, key=state_key)
     await state.clear()
     await state.update_data(profile=None)
     language = cast(str, profile.language or settings.DEFAULT_LANG)

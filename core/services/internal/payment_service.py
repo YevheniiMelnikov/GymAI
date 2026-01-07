@@ -40,9 +40,6 @@ class PaymentService:
             profile_id=profile_id,
         )
 
-    async def create_payment(self, profile_id: int, service_type: str, order_id: str, amount: Decimal) -> bool:
-        return await self._repository.create_payment(profile_id, service_type, order_id, amount)
-
     async def update_payment(self, payment_id: int, data: dict[str, Any]) -> bool:
         return await self._repository.update_payment(payment_id, data)
 
