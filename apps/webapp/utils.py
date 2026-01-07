@@ -50,6 +50,37 @@ async def call_repo(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
     return cast(T, result)
 
 
+def validate_internal_hmac(request: HttpRequest, body: bytes) -> tuple[bool, JsonResponse | None]:
+    internal_key_id = request.headers.get("X-Key-Id")
+    ts_header = request.headers.get("X-TS")
+    sig_header = request.headers.get("X-Sig")
+    if not all((internal_key_id, ts_header, sig_header)):
+        return False, JsonResponse({"detail": "Missing signature headers"}, status=403)
+
+    if internal_key_id != settings.INTERNAL_KEY_ID:
+        return False, JsonResponse({"detail": "Unknown key ID"}, status=403)
+
+    try:
+        ts = int(str(ts_header))
+    except (TypeError, ValueError):
+        return False, JsonResponse({"detail": "Invalid timestamp format"}, status=403)
+
+    if abs(time.time() - ts) > 300:
+        return False, JsonResponse({"detail": "Stale timestamp"}, status=403)
+
+    secret_key = settings.INTERNAL_API_KEY
+    if not secret_key:
+        logger.error("internal_hmac_denied reason=missing_internal_key")
+        return False, JsonResponse({"detail": "Internal auth is not configured"}, status=503)
+
+    message = str(ts).encode() + b"." + body
+    expected = hmac.new(secret_key.encode(), message, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(str(sig_header or ""), expected):
+        return False, JsonResponse({"detail": "Signature mismatch"}, status=403)
+
+    return True, None
+
+
 def read_init_data(request: HttpRequest) -> str:
     init_data_raw = request.GET.get("init_data", "")
     init_data: str = str(init_data_raw or "")

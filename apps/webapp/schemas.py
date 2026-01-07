@@ -2,6 +2,9 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from pydantic import BaseModel
+
+from core.schemas import DietPlan as DietPlanSchema
 from core.enums import SubscriptionPeriod
 
 if TYPE_CHECKING:
@@ -33,3 +36,9 @@ class SubscriptionPlanOption:
 class WorkoutPlanPricing:
     program_price: int
     subscriptions: tuple[SubscriptionPlanOption, ...]
+
+
+class DietPlanSavePayload(BaseModel):
+    profile_id: int
+    request_id: str
+    plan: DietPlanSchema

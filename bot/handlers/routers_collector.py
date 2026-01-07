@@ -7,7 +7,6 @@ else:  # pragma: no cover - runtime imports
 
 from bot.handlers.chat_handler import chat_router
 from bot.handlers.command_handler import cmd_router
-from bot.handlers.diet_handler import diet_router
 from bot.handlers.invalid_content_handler import invalid_content_router
 from bot.handlers.menu_handler import menu_router
 from bot.handlers.payment_handler import payment_router
@@ -21,7 +20,6 @@ def configure_routers(dp: "Dispatcher") -> None:
         chat_router,
         questionnaire_router,
         menu_router,
-        diet_router,
         payment_router,
         workout_router,
         invalid_content_router,

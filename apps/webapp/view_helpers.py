@@ -187,7 +187,7 @@ def build_webapp_profile_payload(profile: Profile) -> dict[str, Any]:
         "workout_experience": profile.workout_experience,
         "workout_goals": normalize_optional_text(profile.workout_goals),
         "diet_allergies": normalize_optional_text(profile.diet_allergies),
-        "diet_products": profile.diet_products or [],
+        "diet_products": profile.diet_products if profile.diet_products is not None else None,
         "workout_location": profile.workout_location,
         "credits": profile.credits,
     }

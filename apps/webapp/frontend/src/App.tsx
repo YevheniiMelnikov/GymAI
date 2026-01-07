@@ -9,6 +9,8 @@ import WeeklySurveyPage from './pages/WeeklySurveyPage';
 import ProfilePage from './pages/ProfilePage';
 import RegistrationRequiredPage from './pages/RegistrationRequiredPage';
 import WorkoutFlowPage from './pages/WorkoutFlowPage';
+import DietPage from './pages/DietPage';
+import DietFlowPage from './pages/DietFlowPage';
 import { useTelegramInit } from './hooks/useTelegramInit';
 import { getProfile, HttpError } from './api/http';
 import { readInitData } from './telegram';
@@ -37,6 +39,8 @@ const LegacyRedirect = () => {
             navigate(withSearch('/faq'), { replace: true });
         } else if (type === 'weekly_survey') {
             navigate(withSearch('/weekly-survey'), { replace: true });
+        } else if (type === 'diet') {
+            navigate(withSearch('/diets'), { replace: true });
         } else if (type === 'program') {
             navigate(withSearch('/'), { replace: true });
         }
@@ -107,6 +111,8 @@ const App: React.FC = () => {
                 <Route path="/faq" element={<FaqPage />} />
                 <Route path="/weekly-survey" element={<WeeklySurveyPage />} />
                 <Route path="/workout-flow" element={<WorkoutFlowPage />} />
+                <Route path="/diets" element={<DietPage />} />
+                <Route path="/diet-flow" element={<DietFlowPage />} />
             </Routes>
         </BrowserRouter>
     );

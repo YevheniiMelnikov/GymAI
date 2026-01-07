@@ -50,10 +50,27 @@ services:
         INSTALL_DEV: "true"
         EXTRAS: ""
     container_name: bot
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
     environment:
+      SKIP_COLLECTSTATIC: "true"
+      API_URL: ${API_URL:-http://api:8000}
       GOOGLE_APPLICATION_CREDENTIALS: "/app/google_creds.json"
-      DOCKER_BOT_START: ${DOCKER_BOT_START:-false}
-      COGNEE_STORAGE_PATH: /app/cognee_storage
+      DOCKER_BOT_START: ${DOCKER_BOT_START:-true}
+      COGNEE_STORAGE_PATH: "/app/cognee_storage"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/telegram/webhook/__ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     <<: *common_env
     entrypoint: /bin/sh
     command: -lc 'if [ "${DOCKER_BOT_START}" = "true" ]; then exec /app/docker/entrypoint.sh python -m bot.main; else echo "bot disabled (DOCKER_BOT_START!=true)"; exec sleep infinity; fi'
@@ -340,6 +357,13 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      bot:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks: [internal]
 
   neo4j:
@@ -381,7 +405,8 @@ services:
     volumes:
       - ./cloudflare-config.yml:/etc/cloudflare/config.yml:ro
     depends_on:
-      - nginx
+      nginx:
+        condition: service_healthy
     networks: [internal]
 
 networks:

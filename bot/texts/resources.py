@@ -15,13 +15,9 @@ class ButtonText(AutoName):
     done = auto()
     select = auto()
     prev_menu = auto()
-    pay = auto()
     ask_ai = auto()
     ask_ai_again = auto()
-    create_diet = auto()
-    diet_again = auto()
-    confirm_generate = auto()
-    main_menu = auto()
+    diets = auto()
 
     my_profile = auto()
     my_program = auto()
@@ -44,11 +40,6 @@ class ButtonText(AutoName):
 
     answer_yes = auto()
     answer_no = auto()
-    plant_food = auto()
-    meat = auto()
-    fish_seafood = auto()
-    eggs = auto()
-    dairy = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"
@@ -71,13 +62,8 @@ class MessageText(AutoName):
     workout_experience = auto()
     health_notes = auto()
     health_notes_question = auto()
-    diet_allergies_question = auto()
-    diet_allergies = auto()
-    diet_products = auto()
-    diet_service_intro = auto()
 
     finish_registration = auto()
-    confirm_service = auto()
     weekly_survey_submitted = auto()
 
     profile_deleted = auto()
@@ -96,7 +82,7 @@ class MessageText(AutoName):
     start = auto()
     saved = auto()
     ask_ai_response_template = auto()
-    diet_response_template = auto()
+    diet_ready = auto()
 
     ask_ai_prompt = auto()
     out_of_range = auto()

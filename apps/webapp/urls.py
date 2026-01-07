@@ -1,4 +1,6 @@
+from typing import Any, Callable, Coroutine, cast
 from django.urls import path, re_path
+from django.http import HttpResponseBase
 
 from . import views
 
@@ -21,6 +23,18 @@ urlpatterns = [
         views.profile_update,
         name="webapp-profile-update",
     ),
+    path("api/diets/", views.diet_plans_list, name="webapp-diet-plans"),  # pyrefly: ignore[no-matching-overload]
+    path("api/diet/", views.diet_plan_data, name="webapp-diet-plan"),  # pyrefly: ignore[no-matching-overload]
+    path(
+        "api/diets/options/",
+        cast(Callable[..., Coroutine[Any, Any, HttpResponseBase]], views.diet_plan_options),
+        name="webapp-diet-options",
+    ),
+    path(
+        "api/diets/create/",
+        cast(Callable[..., Coroutine[Any, Any, HttpResponseBase]], views.diet_plan_create),
+        name="webapp-diet-create",
+    ),  # pyrefly: ignore[no-matching-overload]
     path(  # pyrefly: ignore[no-matching-overload]
         "api/profile/delete/",
         views.profile_delete,

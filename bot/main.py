@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
 from loguru import logger
 
-from bot.utils.web import setup_app, start_web_app, build_ping_url
+from bot.utils.web import setup_app, start_web_app
 from config.logger import configure_loguru
 from core.utils.idempotency import close_redis as close_idempotency
 from config.app_settings import settings
@@ -81,8 +81,18 @@ async def main() -> None:
     try:
         runner = await start_web_app(app)
 
-        ping_url = build_ping_url(settings.WEBHOOK_URL)
-        if not await check_webhook_alive(ping_url):
+        ping_url = settings.WEBHOOK_HEALTHCHECK_URL
+        max_retries = 30
+        retry_delay_seconds = 5
+        for attempt in range(max_retries):
+            if await check_webhook_alive(ping_url):
+                break  # Healthcheck passed
+            logger.warning(
+                f"Webhook healthcheck failed (attempt {attempt + 1}/{max_retries}). "
+                f"Retrying in {retry_delay_seconds} seconds..."
+            )
+            await asyncio.sleep(retry_delay_seconds)
+        else:  # This block runs if the loop completes without a 'break'
             if runner is not None:
                 await runner.cleanup()
             await dp.emit_shutdown(bot=bot)
@@ -91,7 +101,7 @@ async def main() -> None:
             if shutdown_result is not None:
                 await shutdown_result
             cleaned = True
-            raise SystemExit("Webhook healthcheck failed — exiting")
+            raise SystemExit("Webhook healthcheck failed after multiple retries — exiting")
 
         logger.success("Bot started")
         stop_event = asyncio.Event()

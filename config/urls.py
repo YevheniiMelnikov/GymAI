@@ -67,6 +67,18 @@ urlpatterns = [
         cast(WebappView, webapp_views.workout_plan_create),
         name="webapp-workouts-create-direct",
     ),
+    path("api/diets/", webapp_views.diet_plans_list, name="webapp-diets-direct"),  # type: ignore[arg-type]
+    path("api/diet/", webapp_views.diet_plan_data, name="webapp-diet-direct"),  # type: ignore[arg-type]
+    path(
+        "api/diets/options/",
+        cast(WebappView, webapp_views.diet_plan_options),
+        name="webapp-diets-options-direct",
+    ),
+    path(
+        "api/diets/create/",
+        cast(WebappView, webapp_views.diet_plan_create),
+        name="webapp-diets-create-direct",
+    ),
     path(
         "api/weekly-survey/",
         cast(WebappView, webapp_views.weekly_survey_submit),
@@ -76,6 +88,11 @@ urlpatterns = [
         "internal/metrics/event/",
         cast(WebappView, metrics_views.record_metrics_event),
         name="internal-metrics-event",
+    ),
+    path(
+        "internal/diets/",
+        cast(WebappView, webapp_views.diet_plan_save_internal),
+        name="internal-diet-plan-save",
     ),
     path(
         "api/program/exercise/",

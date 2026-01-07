@@ -184,6 +184,7 @@ async def _notify_ai_diet_ready(payload: dict[str, Any]) -> None:
             logger.debug(f"event=ai_diet_notify_skip request_id={request_id} status=failed")
             return
     logger.info(f"event=ai_diet_notify_start request_id={request_id} status={status}")
+    logger.info(f"event=ai_diet_notify_target request_id={request_id} base_url={base_url} url={url}")  # Diagnostic log
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response: httpx.Response = await client.post(url, content=body, headers=headers)

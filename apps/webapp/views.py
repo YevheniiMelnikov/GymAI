@@ -14,6 +14,7 @@ from rest_framework.exceptions import NotFound
 
 from apps.payments.models import Payment
 from apps.payments.repos import PaymentRepository
+from apps.diet_plans.repos import DietPlanRepository
 from apps.workout_plans.models import Program as ProgramModel
 from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
 from apps.webapp.weekly_survey import (
@@ -58,6 +59,7 @@ from .utils import (
     parse_subscription_id,
     resolve_credit_package,
     resolve_workout_location,
+    validate_internal_hmac,
     workout_plan_pricing,
 )
 from .view_helpers import (
@@ -75,7 +77,20 @@ from .view_helpers import (
     resolve_profile,
     resolve_workout_plan_required,
 )
+from .schemas import DietPlanSavePayload
 from .workout_flow import WorkoutPlanRequest, enqueue_workout_plan_generation
+from .diet_flow import enqueue_diet_plan_generation
+
+
+def _parse_diet_id(request: HttpRequest) -> tuple[int | None, JsonResponse | None]:
+    raw = request.GET.get("diet_id")
+    if not isinstance(raw, str) or not raw:
+        return None, None
+    try:
+        return int(raw), None
+    except ValueError:
+        logger.warning(f"Invalid diet_id={raw}")
+        return None, JsonResponse({"error": "bad_request"}, status=400)
 
 
 # type checking of async views with require_GET is not supported by stubs
@@ -737,6 +752,151 @@ async def workout_plan_options(request: HttpRequest) -> JsonResponse:
 
     pricing = workout_plan_pricing()
     return JsonResponse(build_workout_plan_options_payload(pricing))
+
+
+@require_GET  # type: ignore[misc]
+async def diet_plan_options(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+
+    return JsonResponse({"price": int(settings.DIET_PLAN_PRICE)})
+
+
+@require_GET  # type: ignore[misc]
+async def diet_plans_list(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
+
+    try:
+        plans = await call_repo(DietPlanRepository.get_all, int(profile.id))
+    except Exception:
+        logger.exception(f"Failed to fetch diet plans profile_id={profile.id}")
+        return JsonResponse({"error": "server_error"}, status=500)
+
+    items = [{"id": int(plan.id), "created_at": parse_timestamp(getattr(plan, "created_at", None))} for plan in plans]
+    return JsonResponse({"diets": items, "language": profile.language})
+
+
+@require_GET  # type: ignore[misc]
+async def diet_plan_data(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
+
+    diet_id, id_error = _parse_diet_id(request)
+    if id_error:
+        return id_error
+
+    try:
+        if diet_id is not None:
+            plan = await call_repo(DietPlanRepository.get_by_id, int(profile.id), diet_id)
+        else:
+            plans = await call_repo(DietPlanRepository.get_all, int(profile.id))
+            plan = plans[0] if plans else None
+    except Exception:
+        logger.exception(f"Failed to fetch diet plan profile_id={profile.id} diet_id={diet_id}")
+        return JsonResponse({"error": "server_error"}, status=500)
+
+    if plan is None:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    return JsonResponse(
+        {
+            "id": int(plan.id),
+            "created_at": parse_timestamp(getattr(plan, "created_at", None)),
+            "plan": plan.plan,
+            "language": profile.language,
+        }
+    )
+
+
+@csrf_exempt  # type: ignore[bad-specialization]
+@require_POST  # type: ignore[misc]
+async def diet_plan_create(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    profile_or_error = await resolve_profile(request)
+    if isinstance(profile_or_error, JsonResponse):
+        return profile_or_error
+    profile = profile_or_error
+
+    required = int(settings.DIET_PLAN_PRICE)
+    credits = int(getattr(profile, "credits", 0) or 0)
+    if credits < required:
+        return JsonResponse({"error": "not_enough_credits"}, status=400)
+
+    if profile.diet_products is None:
+        return JsonResponse({"error": "diet_preferences_required"}, status=400)
+
+    diet_allergies = str(profile.diet_allergies or "").strip() or None
+    diet_products = list(profile.diet_products or [])
+    language = str(getattr(profile, "language", settings.DEFAULT_LANG) or settings.DEFAULT_LANG)
+
+    new_credits = max(0, credits - required)
+    await call_repo(Profile.objects.filter(id=profile.id).update, credits=new_credits)
+    await call_repo(ProfileRepository.invalidate_cache, profile.id, getattr(profile, "tg_id", None))
+    await Cache.profile.update_record(profile.id, {"credits": new_credits})
+
+    queued = enqueue_diet_plan_generation(
+        profile_id=profile.id,
+        language=language,
+        diet_allergies=diet_allergies,
+        diet_products=diet_products,
+        cost=required,
+    )
+    if not queued:
+        return JsonResponse({"error": "server_error"}, status=500)
+
+    return JsonResponse({"status": "ok"})
+
+
+@csrf_exempt  # type: ignore[bad-specialization]
+@require_POST  # type: ignore[misc]
+async def diet_plan_save_internal(request: HttpRequest) -> JsonResponse:
+    body = request.body or b""
+    ok, error_response = validate_internal_hmac(request, body)
+    if not ok:
+        return error_response or JsonResponse({"detail": "Unauthorized"}, status=403)
+
+    try:
+        payload_raw = json.loads(body.decode("utf-8") or "{}")
+    except Exception:
+        return JsonResponse({"detail": "Invalid JSON"}, status=400)
+
+    try:
+        payload = DietPlanSavePayload.model_validate(payload_raw)
+    except ValidationError as exc:
+        return JsonResponse({"detail": exc.errors()}, status=400)
+
+    profile_id = int(payload.profile_id)
+    request_id = str(payload.request_id)
+
+    profile_exists = await call_repo(Profile.objects.filter(id=profile_id).exists)
+    if not profile_exists:
+        return JsonResponse({"detail": "profile_not_found"}, status=404)
+
+    existing = await call_repo(DietPlanRepository.get_by_request_id, request_id)
+    if existing is not None:
+        return JsonResponse({"status": "ok", "diet_id": int(existing.id), "created": False})
+
+    plan_payload = payload.plan.model_dump(mode="json")
+    created = await call_repo(
+        DietPlanRepository.create,
+        profile_id=profile_id,
+        request_id=request_id,
+        plan=plan_payload,
+    )
+    return JsonResponse({"status": "ok", "diet_id": int(created.id), "created": True})
 
 
 @csrf_exempt  # type: ignore[bad-specialization]

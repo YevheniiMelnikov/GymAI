@@ -121,7 +121,7 @@ class Subscription(BaseModel):
     period: str
     split_number: int = Field(ge=1, le=7)
     exercises: list[DayExercises] = Field(default_factory=list)
-    payment_date: str
+    payment_date: str | None = None
     model_config = ConfigDict(extra="ignore")
 
     @model_validator(mode="before")
@@ -155,7 +155,9 @@ class Subscription(BaseModel):
 
     @field_validator("payment_date", mode="before")
     @classmethod
-    def normalize_payment_date(cls, value: Any) -> str:
+    def normalize_payment_date(cls, value: Any) -> str | None:
+        if value is None:
+            return None
         try:
             return datetime.fromisoformat(str(value)).strftime("%Y-%m-%d")
         except Exception:  # noqa: BLE001

@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     "apps.profiles.apps.ProfilesConfig",
     "apps.payments.apps.PaymentsConfig",
     "apps.metrics.apps.MetricsConfig",
+    "apps.diet_plans.apps.DietPlansConfig",
     "apps.webapp.apps.WebappConfig",
     "apps.workout_plans.apps.WorkoutPlansConfig",
     "rest_framework",

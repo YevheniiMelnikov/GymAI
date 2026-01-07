@@ -76,6 +76,10 @@ class _APIServiceProxy:
         return self._proxy("workout")
 
     @property
+    def diet(self) -> _ServiceProxy:
+        return self._proxy("diet")
+
+    @property
     def ai_coach(self) -> _ServiceProxy:
         return self._proxy("ai_coach", cache_instance=False)
 

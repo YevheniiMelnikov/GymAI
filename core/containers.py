@@ -14,6 +14,7 @@ from core.payment.types import PaymentNotifier
 from core.services.internal.ai_coach_service import AiCoachService
 from core.services.internal.profile_service import ProfileService
 from core.services.internal.workout_service import WorkoutService
+from core.services.internal.diet_service import DietService
 
 
 def build_http_client(**_: Any) -> httpx.AsyncClient:
@@ -40,6 +41,7 @@ class App(containers.DeclarativeContainer):
     profile_service = providers.Factory(ProfileService, repository=profile_repository)
     payment_service = providers.Factory(PaymentService, repository=payment_repository, settings=settings)
     workout_service = providers.Factory(WorkoutService, client=http_client, settings=settings)
+    diet_service = providers.Factory(DietService, client=http_client, settings=settings)
     ai_coach_service = providers.Factory(AiCoachService, client=http_client, settings=settings)
 
     notifier = providers.Dependency(instance_of=PaymentNotifier)

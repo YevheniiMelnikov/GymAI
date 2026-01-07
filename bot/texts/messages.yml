@@ -78,21 +78,6 @@ health_notes_question:
   ru: "Есть ли заболевания, травмы или противопоказания, которые стоит учесть? 🤒"
   ua: "Чи є захворювання, травми або протипоказання, які варто врахувати? 🤒"
 
-diet_allergies_question:
-  eng: "Do you have any food allergies we should consider?"
-  ru: "Есть ли у вас какие-либо пищевые аллергии?"
-  ua: "Чи є у вас харчові алергії, які потрібно врахувати?"
-
-diet_allergies:
-  eng: "Please list your food allergies ✍️"
-  ru: "Пожалуйста, перечислите ваши пищевые аллергии ✍️"
-  ua: "Будь ласка, перерахуйте ваші харчові алергії ✍️"
-
-diet_products:
-  eng: "Choose the foods you consume from the list 👇"
-  ru: "Выберите из списка продукты, которые вы употребляете 👇"
-  ua: "Оберіть зі списку продукти, які ви вживаєте 👇"
-
 your_data_updated:
   eng: "Your data has been updated ✅"
   ru: "Ваши данные были обновлены ✅"
@@ -107,6 +92,11 @@ new_workout_plan:
   eng: "<b>Your training plan is ready</b> ✅"
   ru: "<b>Ваш план тренировок готов</b> ✅"
   ua: "<b>Ваш план тренувань готовий</b> ✅"
+
+diet_ready:
+  eng: "Your diet plan is ready ✅"
+  ru: "Ваш рацион готов ✅"
+  ua: "Ваш раціон готовий ✅"
 
 program_updated:
   eng: "<b>Your training plan has been updated</b> ✅"
@@ -147,16 +137,6 @@ ask_ai_response_template:
   eng: "<b>Here is {name}'s answer to your question 👇</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n{message}"
   ru: "<b>На ваш вопрос {name} подготовил такой ответ 👇</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n{message}"
   ua: "<b>На ваше питання {name} підготував таку відповідь 👇</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n{message}"
-
-diet_response_template:
-  eng: "<b>{name} prepared your daily meal plan 👇</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n{message}"
-  ru: "<b>{name} подготовил ваш рацион на день 👇</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n{message}"
-  ua: "<b>{name} підготував ваш раціон на день 👇</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n{message}"
-
-diet_service_intro:
-  eng: "{bot_name} will create a 1-day meal plan based on your food preferences and training goals. You can edit it in the «My Profile» section.\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nYour balance: <b>{balance}</b> GYMCOINS\nPrice: <b>{price}</b> GYMCOINS"
-  ru: "{bot_name} составит для вас рацион питания на день исходя из ваших пищевых предпочтений и тренировочных целей. Их вы можете редактировать в разделе «Мой профиль»\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nВаш баланс: <b>{balance}</b> GYMCOINS\nСтоимость: <b>{price}</b> GYMCOINS"
-  ua: "{bot_name} складе для вас раціон харчування на день з урахуванням ваших харчових вподобань та тренувальних цілей. Ви можете редагувати їх у розділі «Мій профіль».\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nВаш баланс: <b>{balance}</b> GYMCOINS\nВартість: <b>{price}</b> GYMCOINS"
 
 
 weekly_survey_prompt:
@@ -206,11 +186,6 @@ initial_credits_granted:
   ru: "На ваш баланс начислено {credits} бонусных GYMCOINS 🎉"
   ua: "На ваш рахунок зараховано {credits} бонусних GYMCOINS 🎉"
 
-
-confirm_service:
-  eng: "Your balance: {balance} GYMCOINS \nPrice: {price} GYMCOINS"
-  ru: "Ваш баланс: {balance} GYMCOINS \nСтоимость: {price} GYMCOINS"
-  ua: "Ваш баланс: {balance} GYMCOINS \nВартість: {price} GYMCOINS"
 
 payment_failure:
   eng: "An error occurred during your payments, please try again later\nYou can contact <a href='mailto:{mail}'>support</a> by mail or in telegram: <a href='{tg}'>support</a> ✍️"

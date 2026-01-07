@@ -1,6 +1,9 @@
 import { readLocale } from '../telegram';
 import {
   Locale,
+  DietPlanDetailResp,
+  DietPlanListResp,
+  DietPlanOptionsResp,
   PaymentInitResp,
   PaymentPayloadResp,
   Program,
@@ -69,6 +72,13 @@ export type PaymentData = {
 };
 
 export type PaymentInitData = PaymentData & { orderId: string };
+export type DietPlanListData = { diets: Array<{ id: number; created_at: number }>; locale: Locale };
+export type DietPlanDetailData = {
+  id: number;
+  createdAt: string | null;
+  plan: DietPlanDetailResp['plan'] | null;
+  locale: Locale;
+};
 
 export async function getJSON<T>(url: string, options: RequestInit = {}): Promise<T> {
   const resp = await fetch(url, options);
@@ -361,6 +371,78 @@ export async function getProfile(initData: string, signal?: AbortSignal): Promis
   const headers: Record<string, string> = {};
   if (initData) headers['X-Telegram-InitData'] = initData;
   return await getJSON<ProfileResp>(url.toString(), { headers, signal });
+}
+
+export async function getDietPlans(
+  initData: string,
+  signal?: AbortSignal
+): Promise<DietPlanListData> {
+  const locale = readLocale();
+  const url = new URL('api/diets/', window.location.href);
+  const headers: Record<string, string> = {};
+  if (initData) headers['X-Telegram-InitData'] = initData;
+
+  const raw = await getJSON<DietPlanListResp>(url.toString(), { headers, signal });
+  const resolvedLocale = normalizeLocale(raw.language, locale);
+  return {
+    diets: raw.diets ?? [],
+    locale: resolvedLocale,
+  };
+}
+
+export async function getDietPlan(
+  initData: string,
+  dietId?: string,
+  signal?: AbortSignal
+): Promise<DietPlanDetailData> {
+  const locale = readLocale();
+  const url = new URL('api/diet/', window.location.href);
+  if (dietId) {
+    url.searchParams.set('diet_id', dietId);
+  }
+  const headers: Record<string, string> = {};
+  if (initData) headers['X-Telegram-InitData'] = initData;
+
+  const raw = await getJSON<DietPlanDetailResp>(url.toString(), { headers, signal });
+  const resolvedLocale = normalizeLocale(raw.language, locale);
+  let createdAt: string | null = null;
+  if (typeof raw.created_at === 'number') {
+    createdAt = new Date(raw.created_at * 1000).toISOString();
+  }
+  return {
+    id: raw.id ?? 0,
+    createdAt,
+    plan: raw.plan ?? null,
+    locale: resolvedLocale,
+  };
+}
+
+export async function getDietPlanOptions(
+  initData: string,
+  signal?: AbortSignal
+): Promise<DietPlanOptionsResp> {
+  const url = new URL('api/diets/options/', window.location.href);
+  const headers: Record<string, string> = {};
+  if (initData) headers['X-Telegram-InitData'] = initData;
+  return await getJSON<DietPlanOptionsResp>(url.toString(), { headers, signal });
+}
+
+export async function createDietPlan(initData: string): Promise<void> {
+  const url = new URL('api/diets/create/', window.location.href);
+  const headers: Record<string, string> = {};
+  if (initData) headers['X-Telegram-InitData'] = initData;
+  const resp = await fetch(url.toString(), { method: 'POST', headers });
+  if (!resp.ok) {
+    let errorKey: string | null = null;
+    try {
+      const data = (await resp.json()) as { error?: string | null };
+      if (data && typeof data.error === 'string') {
+        errorKey = data.error;
+      }
+    } catch {
+    }
+    throw new HttpError(resp.status, errorKey ?? statusToMessage(resp.status));
+  }
 }
 
 export async function updateProfile(payload: ProfileUpdatePayload, initData: string): Promise<ProfileResp> {

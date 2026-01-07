@@ -4,14 +4,6 @@ from aiogram.types import WebAppInfo
 from bot.keyboard_builder import KeyboardBuilder, SafeInlineKeyboardMarkup as KbMarkup
 from bot.texts import ButtonText, translate
 from config.app_settings import settings
-from bot.utils.diet_plans import (
-    DIET_PRODUCT_CALLBACK_PREFIX,
-    DIET_PRODUCT_OPTIONS,
-    DIET_PRODUCTS_BACK,
-    DIET_PRODUCTS_DONE,
-    DIET_RESULT_MENU,
-    DIET_RESULT_REPEAT,
-)
 
 
 def select_language_kb() -> KbMarkup:
@@ -27,6 +19,7 @@ def main_menu_kb(
     lang: str,
     *,
     webapp_url: str | None = None,
+    diet_webapp_url: str | None = None,
     profile_webapp_url: str | None = None,
     faq_webapp_url: str | None = None,
 ) -> KbMarkup:
@@ -36,8 +29,9 @@ def main_menu_kb(
         buttons.append([builder.add(ButtonText.my_profile, webapp_url=profile_webapp_url)])
     if webapp_url:
         buttons.append([builder.add(ButtonText.my_program, webapp_url=webapp_url)])
+    if diet_webapp_url:
+        buttons.append([builder.add(ButtonText.diets, webapp_url=diet_webapp_url)])
     buttons.append([builder.add(ButtonText.ask_ai, "ask_ai", bot_name=settings.BOT_NAME)])
-    buttons.append([builder.add(ButtonText.create_diet, "create_diet")])
     if faq_webapp_url:
         buttons.append([builder.add(ButtonText.faq, webapp_url=faq_webapp_url)])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
@@ -87,19 +81,11 @@ def ask_ai_prompt_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def diet_result_kb(lang: str) -> KbMarkup:
-    builder = KeyboardBuilder(lang)
-    buttons = [
-        [builder.add(ButtonText.diet_again, DIET_RESULT_REPEAT), builder.add(ButtonText.main_menu, DIET_RESULT_MENU)]
-    ]
-    return KbMarkup(inline_keyboard=buttons, row_width=2)
-
-
 def ask_ai_again_kb(lang: str) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [
         [builder.add(ButtonText.ask_ai_again, "ask_ai_again")],
-        [builder.add(ButtonText.main_menu, "ask_ai_main_menu")],
+        [builder.add(ButtonText.quit, "quit")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
@@ -135,7 +121,7 @@ def plan_updated_kb(lang: str, webapp_url: str) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [
         [KbBtn(text=translate(ButtonText.view, lang), web_app=WebAppInfo(url=webapp_url))],
-        [builder.add(ButtonText.main_menu, "main_menu")],
+        [builder.add(ButtonText.quit, "quit")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
@@ -173,49 +159,10 @@ def yes_no_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def confirm_service_kb(lang: str) -> KbMarkup:
+def diet_view_kb(lang: str, webapp_url: str) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [
-        [builder.add(ButtonText.prev_menu, "back"), builder.add(ButtonText.confirm_generate, "confirm_generate")],
+        [KbBtn(text=translate(ButtonText.view, lang), web_app=WebAppInfo(url=webapp_url))],
+        [builder.add(ButtonText.quit, "quit")],
     ]
-    return KbMarkup(inline_keyboard=buttons, row_width=2)
-
-
-def payment_kb(lang: str, service_type: str, *, webapp_url: str | None = None, link: str | None = None) -> KbMarkup:
-    builder = KeyboardBuilder(lang)
-    if webapp_url:
-        pay_button = KbBtn(text=translate(ButtonText.pay, lang), web_app=WebAppInfo(url=webapp_url))
-    elif link:
-        pay_button = KbBtn(text=translate(ButtonText.pay, lang), url=link)
-    else:
-        raise ValueError("payment_kb requires either webapp_url or link")
-    done_button = builder.add(ButtonText.done, "done")
-    buttons = [
-        [pay_button, done_button],
-        [builder.add(ButtonText.prev_menu, "back")],
-    ]
-    return KbMarkup(inline_keyboard=buttons)
-
-
-def diet_products_kb(lang: str, selected: set[str]) -> KbMarkup:
-    builder = KeyboardBuilder(lang)
-    buttons = []
-    for option in DIET_PRODUCT_OPTIONS:
-        buttons.append(
-            [
-                builder.create_toggle(
-                    ButtonText[option],
-                    f"{DIET_PRODUCT_CALLBACK_PREFIX}{option}",
-                    option in selected,
-                    " ✅",
-                    "",
-                )
-            ]
-        )
-    buttons.append(
-        [
-            builder.add(ButtonText.prev_menu, DIET_PRODUCTS_BACK),
-            builder.add(ButtonText.done, DIET_PRODUCTS_DONE),
-        ]
-    )
     return KbMarkup(inline_keyboard=buttons, row_width=1)

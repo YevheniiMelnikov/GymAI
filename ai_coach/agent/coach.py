@@ -179,6 +179,10 @@ class CoachAgent(metaclass=CoachAgentMeta):
         instructions: str | None = None,
     ) -> DietPlan:
         deps.mode = CoachMode.diet
+        deps.disabled_tools.add("tool_search_exercises")
+        logger.debug(
+            f"agent.stage stage=disable_tool profile_id={deps.profile_id} mode=diet tool=tool_search_exercises"
+        )
         deps.max_tool_calls = 6
         agent = cls._get_agent()
         today = datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat()

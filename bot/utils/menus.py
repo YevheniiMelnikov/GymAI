@@ -1,17 +1,14 @@
 from typing import Any, TypedDict, cast
 
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, FSInputFile, InlineKeyboardButton as KbBtn, WebAppInfo
-from pathlib import Path
+from aiogram.types import CallbackQuery, Message, InlineKeyboardButton as KbBtn, WebAppInfo
 
 from bot import keyboards as kb
 from bot.keyboard_builder import SafeInlineKeyboardMarkup as KbMarkup
-from bot.keyboards import yes_no_kb, confirm_service_kb
 from bot.utils.profiles import fetch_user
 from bot.states import States
 from bot.texts import ButtonText, MessageText, translate
 from core.enums import ProfileStatus
-from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
 from config.app_settings import settings
 from bot.types.messaging import BotMessageProxy
@@ -21,11 +18,13 @@ from bot.utils.bot import del_msg, answer_msg, get_webapp_url
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext, *, delete_source: bool = True) -> None:
     language = cast(str, profile.language or settings.DEFAULT_LANG)
     webapp_url = get_webapp_url("program", language)
+    diet_webapp_url = get_webapp_url("diets", language)
     profile_webapp_url = get_webapp_url("profile", language)
     faq_webapp_url = get_webapp_url("faq", language)
     menu = kb.main_menu_kb(
         language,
         webapp_url=webapp_url,
+        diet_webapp_url=diet_webapp_url,
         profile_webapp_url=profile_webapp_url,
         faq_webapp_url=faq_webapp_url,
     )
@@ -220,70 +219,3 @@ async def prompt_profile_completion_questionnaire(
         chat_id=chat_id,
         pending_flow=pending_flow,
     )
-
-
-async def start_diet_flow(
-    target: InteractionTarget, profile: Profile, state: FSMContext, *, delete_origin: bool
-) -> None:
-    language = cast(str, profile.language or settings.DEFAULT_LANG)
-    if isinstance(target, CallbackQuery):
-        await target.answer()
-    try:
-        user_profile = await fetch_user(profile, refresh_if_incomplete=True)
-    except (ProfileNotFoundError, ValueError):
-        await answer_msg(target, translate(MessageText.unexpected_error, language))
-        return
-    if user_profile.status != ProfileStatus.completed:
-        await prompt_profile_completion_questionnaire(
-            target,
-            profile,
-            state,
-            pending_flow={"name": "start_diet_flow"},
-        )
-        if delete_origin:
-            await del_msg(target if isinstance(target, (CallbackQuery, Message)) else None)
-        return
-    if user_profile.diet_products is None:
-        await state.update_data(diet_allergies=None, diet_products=[])
-        await answer_msg(
-            target,
-            translate(MessageText.diet_allergies_question, language),
-            reply_markup=yes_no_kb(language),
-        )
-        await state.set_state(States.diet_allergies_choice)
-        if delete_origin:
-            await del_msg(target if isinstance(target, (CallbackQuery, Message)) else None)
-        return
-    await state.update_data(
-        diet_allergies=user_profile.diet_allergies,
-        diet_products=user_profile.diet_products or [],
-    )
-    required = int(settings.DIET_PLAN_PRICE)
-    if user_profile.credits < required:
-        if isinstance(target, CallbackQuery):
-            await target.answer(translate(MessageText.not_enough_credits, language), show_alert=True)
-        await show_balance_menu(target, profile, state, already_answered=True)
-        return
-    await state.update_data(required=required)
-    await state.set_state(States.diet_confirm_service)
-    file_path = Path(__file__).resolve().parent.parent / "images" / "ai_diet.png"
-    description = translate(MessageText.diet_service_intro, language).format(
-        bot_name=settings.BOT_NAME,
-        balance=user_profile.credits,
-        price=required,
-    )
-    if file_path.exists():
-        await answer_msg(
-            target,
-            caption=description,
-            photo=FSInputFile(file_path),
-            reply_markup=confirm_service_kb(language),
-        )
-    else:
-        await answer_msg(
-            target,
-            description,
-            reply_markup=confirm_service_kb(language),
-        )
-    if delete_origin:
-        await del_msg(target if isinstance(target, (CallbackQuery, Message)) else None)

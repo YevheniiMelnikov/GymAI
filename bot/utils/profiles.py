@@ -217,11 +217,6 @@ async def _handle_pending_flow(
     if message is None:
         return False
     flow_name = str(pending_flow.get("name") or "")
-    if flow_name == "start_diet_flow":
-        from bot.utils.menus import start_diet_flow
-
-        await start_diet_flow(message, profile, state, delete_origin=False)
-        return True
     if flow_name == "ask_ai_prompt":
         from bot.utils.ask_ai import start_ask_ai_prompt
 

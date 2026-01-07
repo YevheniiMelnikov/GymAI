@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { t } from '../i18n/i18n';
 
 type NavItem = {
-    key: 'faq' | 'archive' | 'workouts' | 'profile';
+    key: 'faq' | 'archive' | 'workouts' | 'diets' | 'profile';
     label: string;
     path: string;
     icon: string;
@@ -32,6 +32,12 @@ const NAV_ITEMS: Array<Omit<NavItem, 'label'>> = [
         isActive: (pathName) => pathName === '/',
     },
     {
+        key: 'diets',
+        path: '/diets',
+        icon: `${STATIC_PREFIX}images/diet.svg`,
+        isActive: (pathName) => pathName.startsWith('/diets'),
+    },
+    {
         key: 'profile',
         path: '/profile',
         icon: `${STATIC_PREFIX}images/profile.svg`,
@@ -58,6 +64,8 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeKey }) => {
                         ? t('nav.faq')
                         : item.key === 'archive'
                         ? t('nav.archive')
+                        : item.key === 'diets'
+                        ? t('nav.diets')
                         : item.key === 'profile'
                         ? t('nav.profile')
                         : t('nav.workouts');

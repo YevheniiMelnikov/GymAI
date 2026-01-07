@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     HOST_NGINX_PORT: Annotated[str, Field(default="8000", description="Port NGINX listens on from the host's perspective.")]
     WEBHOOK_PATH: Annotated[str, Field(default="/telegram/webhook", description="Path for the Telegram bot webhook.")]
     WEBHOOK_URL: str | None = Field(default=None, description="Full URL for the Telegram bot webhook. Auto-derived if not set.")
+    WEBHOOK_HEALTHCHECK_URL: Annotated[str, Field(default="http://nginx/telegram/webhook/__ping", description="Internal URL for the webhook health check to bypass external network dependencies.")]
     WEBAPP_PUBLIC_URL: Annotated[str | None, Field(default=None, description="Public URL for the web application. Auto-derived if not set.")]
     PAYMENT_CALLBACK_URL: str | None = Field(default=None, description="URL for receiving payment status callbacks. Auto-derived if not set.")
     WEBAPP_INIT_DATA_MAX_AGE_SEC: Annotated[
@@ -105,8 +106,8 @@ class Settings(BaseSettings):
     BOT_NAME: str = Field(default="Lifty", description="Display name for the bot.")
     BOT_PORT: Annotated[int, Field(default=8088, description="Port the bot webhook server listens on.")]
     BOT_INTERNAL_HOST: Annotated[str, Field(default="bot", description="Internal hostname for the bot service (in Docker).")]
-    BOT_INTERNAL_PORT: Annotated[int, Field(default=8000, description="Internal port for the bot service (in Docker).")]
-    BOT_INTERNAL_URL: Annotated[str, Field(default="http://bot:8000/", description="Internal URL for the API to communicate with the bot.")]
+    BOT_INTERNAL_PORT: Annotated[int, Field(default=8088, description="Internal port for the bot service (in Docker).")]
+    BOT_INTERNAL_URL: Annotated[str, Field(default="http://bot:8088/", description="Internal URL for the API to communicate with the bot.")]
     DOCKER_BOT_START: Annotated[bool, Field(default=False, description="Flag indicating if the bot is running in a Docker container.")]
 
     # --- AI Coach Service ---
@@ -121,7 +122,7 @@ class Settings(BaseSettings):
     AI_COACH_MAX_RUN_SECONDS: Annotated[float, Field(default=200.0, description="Time budget in seconds for a single AI coach agent run before aborting.")]
     AI_COACH_GLOBAL_PROJECTION_TIMEOUT: Annotated[float, Field(default=15.0, description="Timeout for global projection operations in seconds.")]
     AI_COACH_GRAPH_ATTACH_TIMEOUT: Annotated[float, Field(default=45.0, description="Maximum time to wait for the graph engine to become reachable during startup.")]
-    AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=3.0, description="Default timeout for AI agent tool calls in seconds.")]
+    AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=10.0, description="Default timeout for AI agent tool calls in seconds.")]
     AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=180.0, description="Timeout for search tool calls in seconds.")]
     AI_COACH_GENERATION_SEARCH_TIMEOUT: Annotated[
         float,
@@ -491,19 +492,8 @@ class Settings(BaseSettings):
         # Rebuild from host/port if specified via env vars or URL is missing
         if os.getenv("BOT_INTERNAL_HOST") or os.getenv("BOT_INTERNAL_PORT") or not self.BOT_INTERNAL_URL:
             bot_host = os.getenv("BOT_INTERNAL_HOST", self.BOT_INTERNAL_HOST or "bot")
-            bot_port = os.getenv("BOT_INTERNAL_PORT", str(self.BOT_INTERNAL_PORT or 8000))
+            bot_port = os.getenv("BOT_INTERNAL_PORT", str(self.BOT_INTERNAL_PORT or 8088))
             self.BOT_INTERNAL_URL = f"http://{bot_host}:{bot_port}"
-
-        # In Docker, handle service host override (e.g., host.docker.internal)
-        if in_docker and self.BOT_INTERNAL_URL:
-            # When the API (not in Docker) calls the bot (in Docker), it needs the host override.
-            force_override = not self.DOCKER_BOT_START
-            bot_service_host = os.getenv("BOT_SERVICE_HOST", "host.docker.internal")
-            self.BOT_INTERNAL_URL = self.normalize_service_host(
-                self.BOT_INTERNAL_URL,
-                bot_service_host,
-                force=force_override,
-            )
 
     def _validate_production_secrets(self) -> None:
         """Ensure that critical secrets are not using default or empty values in production."""
@@ -552,7 +542,7 @@ class Settings(BaseSettings):
             hostname, existing_port = netloc_source, None
 
         normalized_hostname = hostname or "api"
-        if in_docker and normalized_hostname in {"127.0.0.1", "localhost"}:
+        if (in_docker or self.DOCKER_BOT_START) and normalized_hostname in {"127.0.0.1", "localhost"}:
             normalized_hostname = os.getenv("API_SERVICE_HOST", "api")
 
         port_env_raw = os.getenv("API_PORT")

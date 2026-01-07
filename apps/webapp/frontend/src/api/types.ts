@@ -90,6 +90,61 @@ export type SubscriptionResp = {
   created_at?: number | string | null;
 };
 
+export type DietPlanItem = {
+  name: string;
+  grams: number;
+  calories: number;
+  protein_g: number;
+  fat_g: number;
+  carbs_g: number;
+};
+
+export type DietMeal = {
+  name: string;
+  items: DietPlanItem[];
+  totals: {
+    calories: number;
+    protein_g: number;
+    fat_g: number;
+    carbs_g: number;
+  };
+};
+
+export type DietPlan = {
+  meals: DietMeal[];
+  totals: {
+    calories: number;
+    protein_g: number;
+    fat_g: number;
+    carbs_g: number;
+  };
+  notes?: string[];
+  schema_version?: string | null;
+};
+
+export type DietPlanSummary = {
+  id: number;
+  created_at: number;
+};
+
+export type DietPlanListResp = {
+  diets?: DietPlanSummary[];
+  language?: string;
+  error?: string;
+};
+
+export type DietPlanDetailResp = {
+  id?: number;
+  created_at?: number;
+  plan?: DietPlan;
+  language?: string;
+  error?: string;
+};
+
+export type DietPlanOptionsResp = {
+  price: number;
+};
+
 export type SubscriptionStatusResp = {
   active: boolean;
   id?: string;
@@ -135,7 +190,7 @@ export type ProfileResp = {
   workout_experience: WorkoutExperience | null;
   workout_goals: string | null;
   diet_allergies: string | null;
-  diet_products: DietProduct[];
+  diet_products: DietProduct[] | null;
   workout_location: WorkoutLocation | null;
   credits: number | null;
 };

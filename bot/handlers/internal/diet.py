@@ -1,23 +1,19 @@
 from aiohttp import web
 from aiogram import Bot
 from aiogram.enums import ParseMode
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.storage.base import StorageKey
 from loguru import logger
 from pydantic import ValidationError
 
 from bot.handlers.internal.auth import require_internal_auth
 from bot.handlers.internal.schemas import AiDietNotify
-from bot.states import States
+from bot.keyboards import diet_view_kb
 from bot.texts import MessageText, translate
+from bot.utils.ask_ai_messages import send_chunk_with_reply_fallback
+from bot.utils.bot import get_webapp_url
 from bot.utils.text import support_contact_url
-from bot.utils.ask_ai_messages import chunk_formatted_message, send_chunk_with_reply_fallback
-from bot.utils.diet_plans import format_diet_plan
-from bot.keyboards import diet_result_kb
-from config.app_settings import settings
 from core.ai_coach.state.diet import AiDietState
-from core.exceptions import ProfileNotFoundError
-
+from core.exceptions import ProfileNotFoundError, UserServiceError
+from core.services import APIService
 from .tasks import _resolve_profile
 
 
@@ -30,7 +26,7 @@ async def internal_ai_diet_ready(request: web.Request) -> web.Response:
         return web.json_response({"detail": "internal_error"}, status=500)
 
 
-async def _internal_ai_diet_ready_impl(request: web.Request) -> web.Response:
+async def _internal_ai_diet_ready_impl(request: web.Request) -> web.Response:  # noqa: C901
     try:
         payload_raw = await request.json()
     except Exception:
@@ -64,25 +60,10 @@ async def _internal_ai_diet_ready_impl(request: web.Request) -> web.Response:
         profile = await _resolve_profile(payload.profile_id, None)
     except ProfileNotFoundError:
         await state_tracker.mark_failed(payload.request_id, "profile_not_found")
-        logger.error(f"event=ai_diet_profile_missing request_id={payload.request_id} profile_id={payload.profile_id}")
+        logger.error(f"event=ai_diet_profile_missing request_id={request_id} profile_id={payload.profile_id}")
         return web.json_response({"detail": "profile_not_found"}, status=404)
 
     bot: Bot = request.app["bot"]
-    dispatcher = request.app.get("dp")
-    if dispatcher is not None:
-        storage = dispatcher.storage
-        state_key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
-        fsm = FSMContext(storage=storage, key=state_key)
-        state_data = await fsm.get_data()
-        state_data.update(
-            {
-                "profile": profile.model_dump(mode="json"),
-                "last_request_id": payload.request_id,
-            }
-        )
-        await fsm.set_data(state_data)
-        if await fsm.get_state() == States.diet_confirm_service.state:
-            await fsm.set_state(States.main_menu)
 
     language = profile.language
 
@@ -113,23 +94,43 @@ async def _internal_ai_diet_ready_impl(request: web.Request) -> web.Response:
         logger.error("event=ai_diet_empty_plan request_id={} profile_id={}", request_id, payload.profile_id)
         return web.json_response({"detail": "empty_plan"}, status=400)
 
-    incoming_template = translate(MessageText.diet_response_template, language)
-    rendered_body = format_diet_plan(payload.plan, language)
-    chunks = chunk_formatted_message(rendered_body, template=incoming_template, sender_name=settings.BOT_NAME)
-    menu = diet_result_kb(language)
-
+    diet_id = None
     try:
-        for idx, chunk in enumerate(chunks):
-            message_text = incoming_template.format(name=settings.BOT_NAME, message=chunk)
-            reply_markup = menu if idx == len(chunks) - 1 else None
+        diet_id = await APIService.diet.save_plan(
+            profile_id=payload.profile_id,
+            request_id=request_id,
+            plan=payload.plan.model_dump(mode="json"),
+        )
+        if diet_id is None:
+            raise UserServiceError("save_plan returned None")
+    except UserServiceError as e:
+        await state_tracker.mark_failed(request_id, f"save_failed:{e!s}")
+        logger.error(f"event=ai_diet_save_failed request_id={request_id} error={e}")
+        try:
             await send_chunk_with_reply_fallback(
                 bot=bot,
                 chat_id=profile.tg_id,
-                text=message_text,
+                text=translate(MessageText.coach_agent_error, language).format(tg=support_contact_url()),
                 parse_mode=ParseMode.HTML,
-                reply_markup=reply_markup,
+                reply_markup=None,
                 reply_to_message_id=None,
             )
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"event=ai_diet_save_failed_notify_failed request_id={request_id} error={exc}")
+        return web.json_response({"detail": "save_failed"}, status=202)
+
+    logger.info(f"event=ai_diet_save_success request_id={request_id} diet_id={diet_id}")
+
+    webapp_url = get_webapp_url("diets", language, extra_params={"diet_id": str(diet_id)})
+    menu = diet_view_kb(language, webapp_url) if webapp_url else None
+
+    try:
+        await bot.send_message(
+            chat_id=profile.tg_id,
+            text=translate(MessageText.diet_ready, language),
+            reply_markup=menu,
+            disable_notification=True,
+        )
     except Exception as exc:  # noqa: BLE001
         await state_tracker.mark_failed(request_id, f"send_failed:{exc!s}")
         logger.exception(
