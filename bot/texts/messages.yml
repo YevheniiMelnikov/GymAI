@@ -109,9 +109,9 @@ subscription_created:
   ua: "<b>Ваш план тренувань готовий</b> ✅"
 
 payment_success:
-  eng: "Payment successful! {credits} GYMCOINS have been added ✅"
-  ru: "Оплата прошла успешно! Начислено {credits} GYMCOINS ✅"
-  ua: "Платіж успішний! Нараховано {credits} GYMCOINS ✅"
+  eng: "Payment successful! {credits} credits have been added ✅"
+  ru: "Оплата прошла успешно! Начислено {credits} кредитов ✅"
+  ua: "Платіж успішний! Нараховано {credits} кредитів ✅"
 
 payment_in_progress:
   eng: "Your payments is being processed, pending ⏳"
@@ -172,19 +172,19 @@ follow_link:
 
 
 credit_balance_menu:
-  eng: "<b>GYMCOINS balance: </b>{credits}\n\nOpen the top-up page to choose a package 👇"
-  ru: "<b>Баланс GYMCOINS: </b>{credits}\n\nОткройте пополнение, чтобы выбрать пакет 👇"
-  ua: "<b>Баланс GYMCOINS: </b>{credits}\n\nВідкрийте поповнення, щоб вибрати пакет 👇"
+  eng: "<b>Credits balance: </b>{credits}\n\nOpen the top-up page to choose a package 👇"
+  ru: "<b>Баланс кредитов: </b>{credits}\n\nОткройте пополнение, чтобы выбрать пакет 👇"
+  ua: "<b>Баланс кредитів: </b>{credits}\n\nВідкрийте поповнення, щоб вибрати пакет 👇"
 
 not_enough_credits:
-  eng: "Not enough GYMCOINS. Please top up your balance."
-  ru: "Недостаточно GYMCOINS. Пополните баланс."
-  ua: "Недостатньо GYMCOINS. Поповніть баланс."
+  eng: "Not enough credits. Please top up your balance."
+  ru: "Недостаточно кредитов. Пополните баланс."
+  ua: "Недостатньо кредитів. Поповніть баланс."
 
 initial_credits_granted:
-  eng: "{credits} bonus GYMCOINS have been added to your account 🎉"
-  ru: "На ваш баланс начислено {credits} бонусных GYMCOINS 🎉"
-  ua: "На ваш рахунок зараховано {credits} бонусних GYMCOINS 🎉"
+  eng: "{credits} bonus credits have been added to your account 🎉"
+  ru: "На ваш баланс начислено {credits} бонусных кредитов 🎉"
+  ua: "На ваш рахунок зараховано {credits} бонусних кредитів 🎉"
 
 
 payment_failure:

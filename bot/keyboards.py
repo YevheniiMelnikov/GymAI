@@ -126,25 +126,6 @@ def plan_updated_kb(lang: str, webapp_url: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def subscription_type_kb(lang: str, services: list[tuple[str, int]]) -> KbMarkup:
-    builder = KeyboardBuilder(lang)
-    labels = {
-        "subscription_1_month": ButtonText.subscription_1_month,
-        "subscription_6_months": ButtonText.subscription_6_months,
-        "subscription_12_months": ButtonText.subscription_12_months,
-    }
-    buttons: list[list[KbBtn]] = []
-    for service_name, price in services:
-        label_key = labels.get(service_name)
-        if label_key is None:
-            continue
-        label = translate(label_key, lang)
-        text = f"{label} - {price} GYMCOINS"
-        buttons.append([KbBtn(text=text, callback_data=f"subscription_type_{service_name}")])
-    buttons.append([builder.add(ButtonText.prev_menu, "back")])
-    return KbMarkup(inline_keyboard=buttons, row_width=1)
-
-
 def weekly_survey_kb(lang: str, webapp_url: str) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [[builder.add(ButtonText.weekly_survey_answer, webapp_url=webapp_url)]]

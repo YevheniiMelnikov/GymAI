@@ -98,7 +98,7 @@ export const fallbackEn = {
   'topup.pay': 'Pay',
   'profile.title': 'My Profile 👤',
   'profile.balance.title': 'Balance',
-  'profile.balance.label': '{count} GYMCOINS',
+  'profile.balance.label': '{count} credits',
   'profile.balance.topup': 'Top up',
   'profile.balance.loading': '...',
   'profile.edit': 'Edit',
@@ -208,7 +208,7 @@ export const fallbackEn = {
   'workout_flow.wishes.tooltip_label': 'More info',
   'workout_flow.wishes.tooltip':
     'Any extra details, for example body fat percentage, last workout date, current activity level, or general preferences.',
-  'workout_flow.topup.title': 'Not enough GYMCOINS',
+  'workout_flow.topup.title': 'Not enough credits',
   'workout_flow.topup.body': 'Top up your balance to continue.',
   'workout_flow.topup.cta': 'Choose a package',
   'workout_flow.processing':

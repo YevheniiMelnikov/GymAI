@@ -44,20 +44,14 @@ class Settings(BaseSettings):
     WEBHOOK_HEALTHCHECK_URL: Annotated[str, Field(default="http://nginx/telegram/webhook/__ping", description="Internal URL for the webhook health check to bypass external network dependencies.")]
     WEBAPP_PUBLIC_URL: Annotated[str | None, Field(default=None, description="Public URL for the web application. Auto-derived if not set.")]
     PAYMENT_CALLBACK_URL: str | None = Field(default=None, description="URL for receiving payment status callbacks. Auto-derived if not set.")
-    WEBAPP_INIT_DATA_MAX_AGE_SEC: Annotated[
-        int,
-        Field(default=86_400, description="Maximum age in seconds for Telegram WebApp init_data."),
-    ]
+    WEBAPP_INIT_DATA_MAX_AGE_SEC: Annotated[int, Field(default=86_400, description="Maximum age in seconds for Telegram WebApp init_data.")]
 
     # --- Security & API Keys ---
     API_KEY: Annotated[str, Field(default="", description="External API key for client access. Must be set in production.")]
     INTERNAL_KEY_ID: Annotated[str, Field(default="gymbot-internal-v1", description="Identifier for the internal HMAC key.")]
     INTERNAL_API_KEY: Annotated[str, Field(default="", description="Shared secret for internal service-to-service HMAC authentication.")]
     INTERNAL_IP_ALLOWLIST: Annotated[list[str], Field(default_factory=list, description="List of IP addresses allowed to bypass certain checks.")]
-    INTERNAL_TRUSTED_PROXIES: Annotated[
-        list[str],
-        Field(default_factory=list, description="List of trusted proxy IPs allowed to supply X-Forwarded-For."),
-    ]
+    INTERNAL_TRUSTED_PROXIES: Annotated[list[str], Field(default_factory=list, description="List of trusted proxy IPs allowed to supply X-Forwarded-For.")]
     AI_COACH_INTERNAL_KEY_ID: Annotated[str, Field(default="", description="Key ID for authenticating with the AI Coach service.")]
     AI_COACH_INTERNAL_API_KEY: Annotated[str, Field(default="", description="Secret key for authenticating with the AI Coach service.")]
 
@@ -124,10 +118,7 @@ class Settings(BaseSettings):
     AI_COACH_GRAPH_ATTACH_TIMEOUT: Annotated[float, Field(default=45.0, description="Maximum time to wait for the graph engine to become reachable during startup.")]
     AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=10.0, description="Default timeout for AI agent tool calls in seconds.")]
     AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=180.0, description="Timeout for search tool calls in seconds.")]
-    AI_COACH_GENERATION_SEARCH_TIMEOUT: Annotated[
-        float,
-        Field(default=45.0, description="Search timeout cap in seconds for workout/diet generation modes."),
-    ]
+    AI_COACH_GENERATION_SEARCH_TIMEOUT: Annotated[float, Field(default=45.0, description="Search timeout cap in seconds for workout/diet generation modes.")]
     AI_COACH_MEMIFY_DELAY_SECONDS: Annotated[float, Field(default=3600.0, description="Delay in seconds before scheduling Cognee memify for profile datasets.")]
     AI_COACH_CHAT_SUMMARY_PAIR_LIMIT: Annotated[int, Field(default=10, description="Number of client/coach message pairs required before summarizing chat history.")]
     AI_COACH_CHAT_SUMMARY_MAX_TOKENS: Annotated[int, Field(default=400, description="Max tokens for the chat summary LLM request.")]
@@ -172,9 +163,7 @@ class Settings(BaseSettings):
     SECURE_HSTS_INCLUDE_SUBDOMAINS: Annotated[bool, Field(default=True, description="Apply HSTS to all subdomains.")]
     SECURE_HSTS_PRELOAD: Annotated[bool, Field(default=True, description="Allow domain to be preloaded for HSTS.")]
     SECURE_CONTENT_TYPE_NOSNIFF: Annotated[bool, Field(default=True, description="Disable content type sniffing.")]
-    SECURE_REFERRER_POLICY: Annotated[
-        str, Field(default="strict-origin-when-cross-origin", description="Referrer-Policy header value.")
-    ]
+    SECURE_REFERRER_POLICY: Annotated[str, Field(default="strict-origin-when-cross-origin", description="Referrer-Policy header value.")]
     SESSION_COOKIE_SAMESITE: Annotated[str, Field(default="Lax", description="SameSite policy for session cookies.")]
     CSRF_COOKIE_SAMESITE: Annotated[str, Field(default="Lax", description="SameSite policy for CSRF cookies.")]
 
@@ -207,18 +196,9 @@ class Settings(BaseSettings):
     AI_PLAN_NOTIFY_FAILURE_TTL: Annotated[int, Field(default=86400, description="TTL in seconds for storing workout plan notification failures.")]
 
     # --- Exercise Replacement Limits ---
-    EXERCISE_REPLACE_PROGRAM_LIMIT: Annotated[
-        int,
-        Field(default=3, description="Maximum number of exercise replacements per program."),
-    ]
-    EXERCISE_REPLACE_SUBSCRIPTION_LIMIT: Annotated[
-        int,
-        Field(default=3, description="Maximum number of exercise replacements per 1-month subscription."),
-    ]
-    EXERCISE_REPLACE_SUBSCRIPTION_MONTHLY_LIMIT: Annotated[
-        int,
-        Field(default=3, description="Monthly exercise replacement limit for long subscriptions."),
-    ]
+    EXERCISE_REPLACE_PROGRAM_LIMIT: Annotated[int, Field(default=3, description="Maximum number of exercise replacements per program.")]
+    EXERCISE_REPLACE_SUBSCRIPTION_LIMIT: Annotated[int, Field(default=3, description="Maximum number of exercise replacements per 1-month subscription.")]
+    EXERCISE_REPLACE_SUBSCRIPTION_MONTHLY_LIMIT: Annotated[int, Field(default=3, description="Monthly exercise replacement limit for long subscriptions.")]
 
     # --- AI Q&A Feature ---
     AI_QA_IMAGE_MAX_BYTES: Annotated[int, Field(default=512_000, description="Maximum size in bytes for images uploaded for AI Q&A.")]
@@ -243,11 +223,11 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE_MB: int = Field(default=10, description="Maximum size in megabytes for uploaded files.")
     DEFAULT_CREDITS: int = Field(default=500, description="Number of credits new users receive upon registration.")
     PACKAGE_START_CREDITS: int = Field(default=500, description="Number of credits in the 'Start' package.")
-    PACKAGE_START_PRICE: Decimal = Field(default=Decimal("250"), description="Price of the 'Start' credit package.")
+    PACKAGE_START_PRICE: Decimal = Field(default=Decimal("150"), description="Price of the 'Start' credit package.")
     PACKAGE_OPTIMUM_CREDITS: int = Field(default=1200, description="Number of credits in the 'Optimum' package.")
-    PACKAGE_OPTIMUM_PRICE: Decimal = Field(default=Decimal("500"), description="Price of the 'Optimum' credit package.")
+    PACKAGE_OPTIMUM_PRICE: Decimal = Field(default=Decimal("300"), description="Price of the 'Optimum' credit package.")
     PACKAGE_MAX_CREDITS: int = Field(default=5000, description="Number of credits in the 'Max' package.")
-    PACKAGE_MAX_PRICE: Decimal = Field(default=Decimal("1500"), description="Price of the 'Max' credit package.")
+    PACKAGE_MAX_PRICE: Decimal = Field(default=Decimal("900"), description="Price of the 'Max' credit package.")
     AI_PROGRAM_PRICE: Decimal = Field(default=Decimal("400"), description="Price in credits for generating an AI workout program.")
     SMALL_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("500"), description="Price in credits for a 1 month AI coach subscription.")
     MEDIUM_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("2400"), description="Price in credits for a 6 months AI coach subscription.")

@@ -88,7 +88,7 @@
 
   "profile.title": "Профіль",
   "profile.balance.title": "Баланс",
-  "profile.balance.label": "{count} GYMCOINS",
+  "profile.balance.label": "{count} кредитів",
   "profile.balance.topup": "Поповнити",
   "profile.balance.loading": "...",
   "profile.edit": "Редагувати",
@@ -189,7 +189,7 @@
   "workout_flow.wishes.title": "Можете описати тут будь-яку корисну для ШІ тренера інформацію",
   "workout_flow.wishes.tooltip_label": "Детальніше",
   "workout_flow.wishes.tooltip": "Будь-яка додаткова інформація, наприклад відсоток жиру, дата минулого тренування, поточний рівень активності або загальні побажання.",
-  "workout_flow.topup.title": "Недостатньо GYMCOINS",
+  "workout_flow.topup.title": "Недостатньо кредитів",
   "workout_flow.topup.body": "Поповніть баланс, щоб продовжити.",
   "workout_flow.topup.cta": "Обрати пакет",
   "workout_flow.processing": "Обробка вашого запиту займе кілька хвилин, ми повідомимо вас коли все буде готово ⏳",
