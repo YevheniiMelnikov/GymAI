@@ -5,7 +5,15 @@ import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { applyLang, t } from '../i18n/i18n';
-import { readInitData, readPreferredLocale, showBackButton, hideBackButton, onBackButtonClick, offBackButtonClick } from '../telegram';
+import {
+    readInitData,
+    readPreferredLocale,
+    showBackButton,
+    hideBackButton,
+    onBackButtonClick,
+    offBackButtonClick,
+    tmeHapticImpact,
+} from '../telegram';
 import type { HistoryItem, HistoryResp, Locale } from '../api/types';
 import { getProgram, getSubscription, HttpError } from '../api/http';
 import { fmtDate, renderLegacyProgram, renderProgramDays, setProgramContext } from '../ui/render_program';
@@ -194,6 +202,7 @@ const HistoryPage: React.FC = () => {
 
     const handleToggleFavorite = useCallback(
         (id: number) => {
+            tmeHapticImpact('light');
             if (activeSegment === 'subscriptions') {
                 setSubscriptionFavorites((prev) => toggleFavoriteId(SUBSCRIPTION_FAVORITES_KEY, prev, id));
                 return;

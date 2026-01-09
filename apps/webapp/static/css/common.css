@@ -1034,7 +1034,7 @@ h1.page-title,
 .filter-toggle{
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text);
@@ -1047,20 +1047,20 @@ h1.page-title,
   pointer-events: none;
 }
 .filter-toggle__track{
-  width: 34px;
-  height: 20px;
+  width: 51px;
+  height: 30px;
   border-radius: 999px;
-  border: 1px solid color-mix(in oklab, var(--text) 18%, transparent);
+  border: 1.5px solid color-mix(in oklab, var(--text) 18%, transparent);
   background: color-mix(in oklab, var(--surface) 86%, var(--bg));
   display: inline-flex;
   align-items: center;
-  padding: 2px;
+  padding: 3px;
   transition: background .18s ease, border-color .18s ease;
   box-sizing: border-box;
 }
 .filter-toggle__thumb{
-  width: 14px;
-  height: 14px;
+  width: 21px;
+  height: 21px;
   border-radius: 50%;
   background: var(--text);
   transition: transform .18s ease, background .18s ease;
@@ -1070,7 +1070,7 @@ h1.page-title,
   border-color: color-mix(in oklab, var(--accent) 55%, transparent);
 }
 .filter-toggle input:checked + .filter-toggle__track .filter-toggle__thumb{
-  transform: translateX(14px);
+  transform: translateX(21px);
   background: var(--accent);
 }
 .filter-toggle__icon{
@@ -1079,6 +1079,10 @@ h1.page-title,
   justify-content: center;
   color: color-mix(in oklab, var(--text) 55%, var(--muted));
   transition: color .18s ease;
+}
+.filter-toggle__icon svg{
+  width: 27px;
+  height: 27px;
 }
 .filter-toggle__icon--active{
   color: #f2c94c;
@@ -2382,12 +2386,14 @@ a:hover{ opacity: .9; }
   font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 .diet-detail__section + .diet-detail__section{
-  margin-top: 14px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
 }
 .diet-detail__title{
   margin: 0 0 8px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   color: var(--text);
 }
 .diet-detail__list{

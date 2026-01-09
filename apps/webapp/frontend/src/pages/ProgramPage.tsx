@@ -16,7 +16,7 @@ import {
     renderProgramDays,
     setProgramContext,
 } from '../ui/render_program';
-import { readInitData, readPreferredLocale, tmeReady } from '../telegram';
+import { readInitData, readPreferredLocale, tmeHapticImpact, tmeReady } from '../telegram';
 import type { Locale, Program } from '../api/types';
 import { renderSegmented, SegmentId } from '../components/Segmented';
 import TopBar from '../components/TopBar';
@@ -411,6 +411,7 @@ const ProgramPage: React.FC = () => {
         if (currentItemId === null) {
             return;
         }
+        tmeHapticImpact('light');
         if (activeSegment === 'subscriptions') {
             setSubscriptionFavorites((prev) => toggleFavoriteId(SUBSCRIPTION_FAVORITES_KEY, prev, currentItemId));
             return;

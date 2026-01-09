@@ -6,7 +6,15 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { applyLang, useI18n } from '../i18n/i18n';
 import { getDietPlan, getDietPlans, HttpError } from '../api/http';
 import { fmtDate } from '../ui/render_program';
-import { readInitData, readPreferredLocale, showBackButton, hideBackButton, onBackButtonClick, offBackButtonClick } from '../telegram';
+import {
+    readInitData,
+    readPreferredLocale,
+    showBackButton,
+    hideBackButton,
+    onBackButtonClick,
+    offBackButtonClick,
+    tmeHapticImpact,
+} from '../telegram';
 import type { DietPlan, DietPlanSummary, Locale } from '../api/types';
 import { useGenerationProgress } from '../hooks/useGenerationProgress';
 import { loadFavoriteIds, toggleFavoriteId } from '../utils/favorites';
@@ -239,11 +247,13 @@ const DietPage: React.FC = () => {
         if (!dietId) {
             return;
         }
+        tmeHapticImpact('light');
         const numericId = Number(dietId);
         setFavoriteIds((prev) => toggleFavoriteId(FAVORITES_KEY, prev, numericId));
     }, [dietId]);
 
     const handleToggleFavoriteId = useCallback((id: number) => {
+        tmeHapticImpact('light');
         setFavoriteIds((prev) => toggleFavoriteId(FAVORITES_KEY, prev, id));
     }, []);
 
@@ -277,8 +287,7 @@ const DietPage: React.FC = () => {
         try {
             await navigator.clipboard.writeText(detailText);
             setCopyState('done');
-            const tg = (window as any).Telegram?.WebApp;
-            tg?.HapticFeedback?.impactOccurred?.('light');
+            tmeHapticImpact('light');
             window.setTimeout(() => setCopyState('idle'), 1400);
         } catch {
         }

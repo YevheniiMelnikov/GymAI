@@ -24,6 +24,7 @@ type TelegramWebApp = {
   setHeaderColor?: (color: string | 'bg_color' | 'secondary_bg_color') => void;
   themeParams?: TelegramThemeParams;
   BackButton?: TelegramBackButton;
+  HapticFeedback?: TelegramHapticFeedback;
 };
 
 type TelegramBackButton = {
@@ -32,6 +33,12 @@ type TelegramBackButton = {
   offClick: (cb: () => void) => void;
   show: () => void;
   hide: () => void;
+};
+
+type TelegramHapticFeedback = {
+  impactOccurred?: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
+  selectionChanged?: () => void;
+  notificationOccurred?: (type: 'error' | 'success' | 'warning') => void;
 };
 
 type TelegramNamespace = { WebApp?: TelegramWebApp };
@@ -78,6 +85,10 @@ export function tmeSetHeaderColor(color: string): void {
 export function tmeSetBackgroundColor(color: string): void {
   if (!color) return;
   try { getWebApp()?.setBackgroundColor?.(color); } catch {}
+}
+
+export function tmeHapticImpact(style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft' = 'light'): void {
+  try { getWebApp()?.HapticFeedback?.impactOccurred?.(style); } catch {}
 }
 
 export function tmeForceDarkTheme(): void {
