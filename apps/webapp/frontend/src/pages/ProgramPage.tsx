@@ -24,7 +24,6 @@ import BottomNav from '../components/BottomNav';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { loadFavoriteIds, toggleFavoriteId } from '../utils/favorites';
 import { useGenerationProgress } from '../hooks/useGenerationProgress';
-import { closeWebApp } from '../telegram';
 
 const LAST_WORKOUT_SEGMENT_KEY = 'gymbot.workouts.lastSegment';
 const INTRO_SEEN_KEY = 'gymbot.webapp.introSeen';
