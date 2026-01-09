@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     DEBUG: bool = Field(default=False, description="Enable application debug mode, providing detailed error pages.")
     TIME_ZONE: Annotated[str, Field(default="Europe/Kyiv", description="Default timezone for the application, used for dates and times.")]
     DEFAULT_LANG: Annotated[str, Field(default="ua", description="Default language for user-facing content.")]
-    ADMIN_LANG: Annotated[str, Field(default="ru", description="Default language for the admin interface.")]
     SITE_NAME: Annotated[str, Field(default="Lifty", description="Public name of the site or application.")]
     SECRET_KEY: Annotated[str, Field(default="", description="Secret key for signing session data and tokens. Must be set in production.")]
 
@@ -270,7 +269,6 @@ class Settings(BaseSettings):
     PUBLIC_OFFER: Annotated[str, Field(default="", description="URL to the public offer document.")]
     PRIVACY_POLICY: Annotated[str, Field(default="", description="URL to the privacy policy document.")]
     EMAIL: Annotated[str, Field(default="", description="Contact email address.")]
-    ADMIN_ID: Annotated[str, Field(default="", description="Telegram user ID of the primary administrator.")]
     BACKUP_RETENTION_DAYS: int = Field(default=30, description="Number of days to retain database and storage backups.")
     ENABLE_KB_BACKUPS: bool = Field(default=False, description="Enable scheduled backups for Neo4j and Qdrant.")
 

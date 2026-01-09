@@ -8,6 +8,8 @@ from pydantic import ValidationError
 
 from core.ai_coach import AiDietPlanPayload
 from core.tasks.ai_coach import generate_ai_diet_plan, handle_ai_diet_failure, notify_ai_diet_ready_task
+from django.core.cache import cache
+from config.app_settings import settings
 
 
 def enqueue_diet_plan_generation(
@@ -17,7 +19,7 @@ def enqueue_diet_plan_generation(
     diet_allergies: str | None,
     diet_products: list[str],
     cost: int,
-) -> bool:
+) -> str | None:
     request_id = uuid4().hex
     allergy_note = diet_allergies or "none"
     products_note = ", ".join(diet_products) if diet_products else "not specified"
@@ -35,7 +37,7 @@ def enqueue_diet_plan_generation(
         )
     except ValidationError as exc:
         logger.error(f"webapp_diet_invalid_payload profile_id={profile_id} request_id={request_id} error={exc!s}")
-        return False
+        return None
 
     payload = payload_model.model_dump(mode="json")
     headers = {
@@ -71,16 +73,23 @@ def enqueue_diet_plan_generation(
             request_id,
             exc,
         )
-        return False
+        return None
 
     task_id = cast(str | None, getattr(async_result, "id", None))
     if task_id is None:
         logger.error(f"webapp_diet_missing_task_id profile_id={profile_id} request_id={request_id}")
-        return False
+        return None
+
+    cache.set(
+        f"generation_status:{request_id}",
+        {"status": "queued", "progress": 5, "stage": "queued"},
+        timeout=settings.AI_COACH_TIMEOUT,
+    )
+
     logger.debug(
         "webapp_diet_dispatch_success request_id={} profile_id={} task_id={}",
         request_id,
         profile_id,
         task_id,
     )
-    return True
+    return request_id

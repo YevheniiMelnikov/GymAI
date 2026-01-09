@@ -154,7 +154,7 @@
   "diet.notes": "Notes",
 
   "faq.title": "FAQ",
-  "faq.support": "Contact support 🆘",
+  "faq.support": "Contact support",
   "faq.q1.question": "What is included in Program and Subscription?",
   "faq.q1.program.label": "Program",
   "faq.q1.program.body": "is a personalized workout plan with exercise technique demonstrations and the ability to manually adjust training load.",
@@ -192,8 +192,12 @@
   "workout_flow.topup.title": "Not enough credits",
   "workout_flow.topup.body": "Top up your balance to continue.",
   "workout_flow.topup.cta": "Choose a package",
-  "workout_flow.processing": "Processing your request will take a few minutes, we will notify you when everything is ready ⏳",
+  "workout_flow.processing": "The process will take a few minutes. We will notify you when everything is ready. You can close this window",
   "workout_flow.processing_ok": "OK",
+
+  "progress.processing": "Processing your request...",
+  "progress.hint": "The process will take a few minutes. We will notify you when everything is ready. You can close this window",
+  "progress.cancel": "Cancel",
 
   "weekly_survey.title": "Weekly Survey",
   "weekly_survey.loading": "Preparing your weekly survey...",

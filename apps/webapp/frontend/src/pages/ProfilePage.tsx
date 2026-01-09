@@ -6,6 +6,7 @@ import { applyLang, t, type LangCode, type TranslationKey } from '../i18n/i18n';
 import {
     closeWebApp,
     readInitData,
+    readPreferredLocale,
     showBackButton,
     hideBackButton,
     onBackButtonClick,
@@ -100,7 +101,8 @@ const ProfilePage: React.FC = () => {
     }, [navigate, view]);
 
     useEffect(() => {
-        void applyLang(paramLang).then((resolved) => setLang(resolved));
+        const preferred = readPreferredLocale(paramLang);
+        void applyLang(preferred).then((resolved) => setLang(resolved));
     }, [paramLang]);
 
     useEffect(() => {
@@ -129,7 +131,8 @@ const ProfilePage: React.FC = () => {
             }
             try {
                 const data = await getProfile(initData, controller.signal);
-                const appliedLang = await applyLang(data.language ?? paramLang);
+                const preferred = readPreferredLocale(paramLang);
+                const appliedLang = await applyLang(data.language ?? preferred);
                 setLang(appliedLang);
                 setProfile(data);
             } catch (err) {

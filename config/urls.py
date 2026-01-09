@@ -129,6 +129,11 @@ urlpatterns = [
         cast(WebappView, webapp_views.exercise_gif),
         name="webapp-exercise-gif-direct",
     ),
+    path(
+        "api/generation-status/",
+        cast(WebappView, webapp_views.generation_status),
+        name="webapp-generation-status-direct",
+    ),
     path("webapp", RedirectView.as_view(url="/webapp/", permanent=False)),
     path("webapp/", include("apps.webapp.urls")),
     path("", RedirectView.as_view(url="/webapp/", permanent=False, query_string=True)),

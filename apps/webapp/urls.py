@@ -89,6 +89,11 @@ urlpatterns = [
         name="webapp-subscription-exercise-replace-status",
     ),
     path(  # pyrefly: ignore[no-matching-overload]
+        "api/generation-status/",
+        views.generation_status,
+        name="webapp-generation-status",
+    ),
+    path(  # pyrefly: ignore[no-matching-overload]
         "api/program/exercise/", views.update_exercise_sets, name="webapp-program-exercise-update"
     ),
     path(  # pyrefly: ignore[no-matching-overload]

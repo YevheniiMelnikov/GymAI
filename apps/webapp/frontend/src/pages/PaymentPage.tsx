@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getPaymentData, HttpError, initPayment, PaymentData, PaymentInitData } from '../api/http';
 import { applyLang, t, type TranslationKey } from '../i18n/i18n';
-import { closeWebApp, openTelegramLink, readInitData } from '../telegram';
+import { closeWebApp, openTelegramLink, readInitData, readPreferredLocale } from '../telegram';
 import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
 
@@ -47,7 +47,8 @@ const PaymentPage: React.FC = () => {
         } else {
           payload = await initPayment(packageIdParam ?? '', initData, controller.signal);
         }
-        await applyLang(payload.locale);
+        const preferred = readPreferredLocale(payload.locale);
+        await applyLang(preferred);
         setPayment({
           checkoutUrl: payload.checkoutUrl,
           amount: payload.amount,

@@ -245,6 +245,14 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
         )
         return None
 
+    from django.core.cache import cache
+
+    cache.set(
+        f"generation_status:{request_id}",
+        {"status": "processing", "progress": 20, "stage": "agent_start"},
+        timeout=settings.AI_COACH_TIMEOUT,
+    )
+
     logger.info(
         f"ai_generate_plan started profile_id={profile_id} plan_type={plan_type.value} "
         f"request_id={request_id} attempt={attempt} split_number={split_number}"
@@ -261,6 +269,11 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
             workout_location=workout_location,
             request_id=request_id or None,
         )
+        cache.set(
+            f"generation_status:{request_id}",
+            {"status": "processing", "progress": 90, "stage": "plan_received"},
+            timeout=settings.AI_COACH_TIMEOUT,
+        )
     except APIClientHTTPError as exc:
         logger.error(
             f"ai_generate_plan failed profile_id={profile_id} plan_type={plan_type.value} "
@@ -274,6 +287,11 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
                 action="create",
                 error=exc.reason or f"http_{exc.status}",
                 profile_id=profile_id,
+            )
+            cache.set(
+                f"generation_status:{request_id}",
+                {"status": "error", "progress": 0, "error": exc.reason or f"http_{exc.status}"},
+                timeout=settings.AI_COACH_TIMEOUT,
             )
             return None
         raise
@@ -296,6 +314,11 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
         logger.error(
             "ai_generate_plan returned empty "
             f"profile_id={profile_id} plan_type={plan_type.value} request_id={request_id}"
+        )
+        cache.set(
+            f"generation_status:{request_id}",
+            {"status": "error", "progress": 0, "error": "empty_plan"},
+            timeout=settings.AI_COACH_TIMEOUT,
         )
         await _notify_error(
             plan_type=plan_type,
@@ -331,6 +354,11 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
         METRICS_EVENT_WORKOUT_PLAN,
         source=METRICS_SOURCE_WORKOUT_PLAN,
         source_id=request_id,
+    )
+    cache.set(
+        f"generation_status:{request_id}",
+        {"status": "success", "progress": 100, "stage": "completed", "result_id": plan_payload.get("id")},
+        timeout=settings.AI_COACH_TIMEOUT,
     )
     return notify_payload
 

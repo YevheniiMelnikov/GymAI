@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 export type LangCode = 'en' | 'ru' | 'uk';
 export const LANG_MAP: Record<string, LangCode> = { eng: 'en', en: 'en', ru: 'ru', ua: 'uk', uk: 'uk' };
 export const LANG_CHANGED_EVENT = 'app:lang-changed';
@@ -27,7 +29,7 @@ export const fallbackEn = {
   show_ai: 'Show AI workout plans',
   back: 'Back',
   open_from_telegram: 'Open this page from Telegram.',
-  'program.title': 'My Workouts 🏋️',
+  'program.title': 'My Workouts',
   'program.created': '📅 Created: {date}',
   'program.view_history': 'Archive',
   'program.week': 'Week {n}',
@@ -80,7 +82,7 @@ export const fallbackEn = {
     'Subscription: personal coaching with weekly plan updates based on your progress.',
   'intro.ok': 'OK',
   'page.program': 'Program',
-  'page.history': 'Archive 🗂️',
+  'page.history': 'Archive',
   'page.subscriptions': 'Subscriptions',
   'payment.title': 'Payment',
   'payment.amount': 'Amount: {amount} {currency}',
@@ -96,7 +98,7 @@ export const fallbackEn = {
   'topup.title': 'Package selection',
   'topup.subtitle': 'Choose a package',
   'topup.pay': 'Pay',
-  'profile.title': 'My Profile 👤',
+  'profile.title': 'My Profile',
   'profile.balance.title': 'Balance',
   'profile.balance.label': '{count} credits',
   'profile.balance.topup': 'Top up',
@@ -163,7 +165,7 @@ export const fallbackEn = {
   'diet.grams_unit': 'g',
   'diet.kcal_unit': 'kcal',
   'diet.notes': 'Notes',
-  'faq.title': 'FAQ ❓',
+  'faq.title': 'FAQ',
   'faq.support': 'Contact support 🆘',
   'faq.placeholder.title': 'Answers are on the way',
   'faq.placeholder.body': 'We are preparing the FAQ page. Please check back soon.',
@@ -230,7 +232,22 @@ export const fallbackEn = {
   'weekly_survey.sending': 'Sending...',
   'weekly_survey.comment.add': 'Add comment',
   'weekly_survey.comment.edit': 'Edit comment',
-  'weekly_survey.comment.placeholder': 'You can leave any information that might help your coach'
+  'weekly_survey.comment.placeholder': 'You can leave any information that might help your coach',
+  'progress.generating': 'Generating...',
+  'progress.hint': 'This usually takes a few minutes. We will notify you when your plan is ready. You can close this window now.',
+  'progress.close_app': 'Close App',
+  'progress.stage.idle': 'Idle',
+  'progress.stage.initializing': 'Starting...',
+  'progress.stage.unknown': 'Processing...',
+  'progress.stage.queued': 'Waiting in queue...',
+  'progress.stage.processing': 'Processing...',
+  'progress.stage.agent_start': 'Analyzing your profile...',
+  'progress.stage.knowledge_base_retrieval': 'Consulting knowledge base...',
+  'progress.stage.llm_generation': 'Compiling your plan...',
+  'progress.stage.plan_received': 'Plan received, finalizing...',
+  'progress.stage.completed': 'Completed!',
+  'progress.stage.error': 'An error occurred.',
+  'progress.processing': 'Cooking your plan...'
 } as const;
 
 export type TranslationKey = keyof typeof fallbackEn;
@@ -238,18 +255,27 @@ export type TemplateVars = Record<string, string | number>;
 
 type Messages = Partial<Record<TranslationKey, string>>;
 let messages: Messages = {};
+let activeLang: LangCode | null = null;
 
 async function loadMessages(code: LangCode): Promise<void> {
   const base = (window as any).__STATIC_PREFIX__ || '/static/';
+  const url = `${base}i18n/${code}.json`;
   try {
-    const res = await fetch(`${base}i18n/${code}.json`, { cache: 'no-store' });
+    const res = await fetch(url, { cache: 'no-store' });
+    console.info('i18n.load', { code, url, status: res.status, ok: res.ok });
+    if (!res.ok) {
+      console.warn('i18n.load.failed', { code, status: res.status });
+    }
     messages = res.ok ? ((await res.json()) as Messages) : { ...fallbackEn };
   } catch {
+    console.warn('i18n.load.error', { code });
     messages = { ...fallbackEn };
   }
+  activeLang = code;
 }
 
-function interpolate(template: string, vars?: TemplateVars): string {
+function interpolate(template: string | null | undefined, vars?: TemplateVars): string {
+  if (!template) return '';
   if (!vars) return template;
   return template.replace(/\{(\w+)\}/g, (_, key: string) => {
     const value = vars[key];
@@ -259,7 +285,20 @@ function interpolate(template: string, vars?: TemplateVars): string {
 
 export function t<K extends TranslationKey>(key: K, vars?: TemplateVars): string {
   const template = messages[key] ?? fallbackEn[key];
+  if (template === undefined) {
+    return interpolate(String(key), vars);
+  }
   return interpolate(template, vars);
+}
+
+export function useI18n() {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const handler = () => setTick(t => t + 1);
+    window.addEventListener(LANG_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(LANG_CHANGED_EVENT, handler);
+  }, []);
+  return { t, code: document.documentElement.lang as LangCode };
 }
 
 export async function applyLang(): Promise<LangCode>;
@@ -281,14 +320,21 @@ export async function applyLang(raw?: string): Promise<LangCode> {
   }
 
   const code = resolveLangCode(incoming);
+  if (code === activeLang && document.documentElement.lang === code) {
+    return code;
+  }
   await loadMessages(code);
+  console.info('i18n.apply', { incoming, resolved: code });
+  const prevLang = document.documentElement.lang;
   document.documentElement.lang = code;
   try {
     window.sessionStorage.setItem(LANG_STORAGE_KEY, code);
   } catch {
   }
   try {
-    window.dispatchEvent(new CustomEvent(LANG_CHANGED_EVENT, { detail: { code } }));
+    if (prevLang !== code) {
+      window.dispatchEvent(new CustomEvent(LANG_CHANGED_EVENT, { detail: { code } }));
+    }
   } catch {
   }
   return code;

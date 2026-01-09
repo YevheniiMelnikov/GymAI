@@ -42,6 +42,7 @@ Deliver production-grade improvements to GymBot's multi-service stack (Django AP
 - When invoking `task` or `uv` commands locally, always set `UV_CACHE_DIR` (or `XDG_CACHE_HOME`) to a directory you own, e.g. `UV_CACHE_DIR=/tmp/uv-cache-<your-username> task format`, so the cache stays outside the repo/host `~/.cache` and avoids permission issues. Do not modify the Taskfile for this; wrap commands with the environment variable instead.
 
 ## Important
+- Always keep chat all communication in **Russian**.
 - If you are unsure about what needs to be done, **always text me** with a request for additional context. I will describe the desired behavior of the application and provide the necessary context by executing the commands you request, if you are unable to execute them yourself, from a working Docker container, for example.
 - Whenever possible, always try to separate helper functions into a separate module (or package) with utilities, if appropriate. Often, such places already exist; just find the right one. Prefer adding small helpers to an existing, related utilities module; only create a new module when it will group multiple related helpers (not a single-use 1–2 function file).
 - Prefer to make neat, precise corrections where the task does not imply otherwise.
@@ -50,6 +51,6 @@ Deliver production-grade improvements to GymBot's multi-service stack (Django AP
 
 ## Code Review Checklist
 - Full type hints, no `Any` leaks in public APIs, and cohesive module boundaries.
-- Comments/docstrings in **English**, chat communication in **Russian**.
+- Comments/docstrings in **English**.
 - No premature abstractions or one-off helpers. Prefer direct, readable code with clear dependencies.
 - Verify that Celery schedules, bot webhooks, and API endpoints keep their contracts. Flag risky assumptions explicitly in the review summary.

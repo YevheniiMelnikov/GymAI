@@ -47,8 +47,6 @@ async def ask_ai_handler(callback_query: CallbackQuery, state: FSMContext) -> No
     )
 
 
-
-
 @chat_router.callback_query(States.ask_ai_question)
 async def ask_ai_question_navigation(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()

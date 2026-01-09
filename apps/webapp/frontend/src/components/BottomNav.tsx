@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { t } from '../i18n/i18n';
+import { useI18n } from '../i18n/i18n';
 
 type NavItem = {
     key: 'faq' | 'archive' | 'workouts' | 'diets' | 'profile';
@@ -52,6 +52,7 @@ type BottomNavProps = {
 const BottomNav: React.FC<BottomNavProps> = ({ activeKey }) => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { t } = useI18n();
     const pathName = location.pathname;
 
     return (
@@ -63,12 +64,12 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeKey }) => {
                     item.key === 'faq'
                         ? t('nav.faq')
                         : item.key === 'archive'
-                        ? t('nav.archive')
-                        : item.key === 'diets'
-                        ? t('nav.diets')
-                        : item.key === 'profile'
-                        ? t('nav.profile')
-                        : t('nav.workouts');
+                            ? t('nav.archive')
+                            : item.key === 'diets'
+                                ? t('nav.diets')
+                                : item.key === 'profile'
+                                    ? t('nav.profile')
+                                    : t('nav.workouts');
                 return (
                     <button
                         key={item.key}

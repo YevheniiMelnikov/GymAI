@@ -376,6 +376,8 @@ services:
     depends_on:
       api:
         condition: service_started
+      bot:
+        condition: service_started
     restart: unless-stopped
 
 volumes:

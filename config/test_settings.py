@@ -12,7 +12,6 @@ env_defaults = {
     "PUBLIC_OFFER": "http://offer",
     "PRIVACY_POLICY": "http://privacy",
     "EMAIL": "test@example.com",
-    "ADMIN_ID": "1",
     "PAYMENT_PRIVATE_KEY": "priv",
     "PAYMENT_PUB_KEY": "pub",
     "CHECKOUT_URL": "http://checkout",

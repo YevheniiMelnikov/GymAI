@@ -2,11 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
-import { applyLang, t } from '../i18n/i18n';
+import { applyLang, useI18n } from '../i18n/i18n';
 import { getDietPlan, getDietPlans, HttpError } from '../api/http';
 import { fmtDate } from '../ui/render_program';
-import { readInitData, showBackButton, hideBackButton, onBackButtonClick, offBackButtonClick } from '../telegram';
+import { readInitData, readPreferredLocale, showBackButton, hideBackButton, onBackButtonClick, offBackButtonClick } from '../telegram';
 import type { DietPlan, DietPlanSummary, Locale } from '../api/types';
+import ProgressBar from '../components/ProgressBar';
+import { useGenerationProgress } from '../hooks/useGenerationProgress';
 
 const STATIC_PREFIX = ((window as any).__STATIC_PREFIX__ as string | undefined) ?? '/static/';
 const fallbackIllustration =
@@ -17,7 +19,7 @@ const formatFloat = (value: number): string => {
     return fixed.replace(/\.0$/, '').replace(/\.$/, '');
 };
 
-const formatDietPlanText = (plan: DietPlan | null): string => {
+const formatDietPlanText = (plan: DietPlan | null, t: any): string => {
     if (!plan) {
         return '';
     }
@@ -27,7 +29,7 @@ const formatDietPlanText = (plan: DietPlan | null): string => {
             lines.push(meal.name);
         }
         meal.items.forEach((item) => {
-            lines.push(`- ${item.name} — ${item.grams} ${t('diet.grams_unit')}`);
+            lines.push(`• ${item.name} — ${item.grams} ${t('diet.grams_unit')}`);
         });
         lines.push('');
     });
@@ -36,7 +38,7 @@ const formatDietPlanText = (plan: DietPlan | null): string => {
         lines.push(`${t('diet.notes')}:`);
         plan.notes.forEach((note) => {
             if (note) {
-                lines.push(`- ${note}`);
+                lines.push(`• ${note}`);
             }
         });
     }
@@ -54,6 +56,7 @@ const formatDietPlanText = (plan: DietPlan | null): string => {
 
 const DietPage: React.FC = () => {
     const navigate = useNavigate();
+    const { t } = useI18n();
     const [searchParams, setSearchParams] = useSearchParams();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -64,13 +67,28 @@ const DietPage: React.FC = () => {
     const [listLocale, setListLocale] = useState<Locale>('en');
     const [copyState, setCopyState] = useState<'idle' | 'done'>('idle');
     const [fabPressed, setFabPressed] = useState(false);
+    const [detailLoading, setDetailLoading] = useState(false);
+
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    const progressHelper = useGenerationProgress('diet', (data: any) => {
+        const query = searchParams.toString();
+        const createdId = data?.result_id;
+        if (createdId) {
+            // Force redirection to detail view
+            navigate(query ? `/diets?diet_id=${createdId}&${query}` : `/diets?diet_id=${createdId}`);
+        } else {
+            setRefreshKey(Date.now());
+        }
+    });
 
     const dietId = searchParams.get('diet_id') || '';
     const paramLang = searchParams.get('lang') || undefined;
     const initData = readInitData();
 
     useEffect(() => {
-        void applyLang(paramLang);
+        const preferred = readPreferredLocale(paramLang);
+        void applyLang(preferred);
     }, [paramLang]);
 
     useEffect(() => {
@@ -101,17 +119,19 @@ const DietPage: React.FC = () => {
             active = false;
             controller.abort();
         };
-    }, [initData]);
+    }, [initData, refreshKey]);
 
     useEffect(() => {
         if (!dietId) {
             setDetailPlan(null);
             setDetailDate(null);
+            setDetailLoading(false);
             return;
         }
         const controller = new AbortController();
         let active = true;
         setError(null);
+        setDetailLoading(true);
         getDietPlan(initData, dietId, controller.signal)
             .then((data) => {
                 if (!active) return;
@@ -127,6 +147,9 @@ const DietPage: React.FC = () => {
                     return;
                 }
                 setError(t('unexpected_error'));
+            })
+            .finally(() => {
+                if (active) setDetailLoading(false);
             });
         return () => {
             active = false;
@@ -178,7 +201,7 @@ const DietPage: React.FC = () => {
         navigate(query ? `/diet-flow?${query}` : '/diet-flow');
     }, [navigate, searchParams]);
 
-    const detailText = useMemo(() => formatDietPlanText(detailPlan), [detailPlan]);
+    const detailText = useMemo(() => formatDietPlanText(detailPlan, t), [detailPlan, t]);
 
     const handleCopy = useCallback(async () => {
         if (!detailText) return;
@@ -218,13 +241,20 @@ const DietPage: React.FC = () => {
             <TopBar title={dietId ? t('diet.detail.title') : t('diet.title')} onBack={dietId ? handleBack : undefined} />
 
             <div className="page-shell">
+                {progressHelper.isActive && !dietId ? (
+                    <ProgressBar
+                        progress={progressHelper.progress}
+                        stage={progressHelper.stage}
+                        onClose={progressHelper.reset}
+                    />
+                ) : null}
                 {error && <div className="error-block">{error}</div>}
                 <section className="diet-flow" data-view={dietId ? 'detail' : 'list'} aria-busy={loading}>
                     <div className="diet-flow__track">
                         <div className="diet-pane diet-pane--list">
                             <div className="diet-list" style={{ border: 'none' }}>
                                 {loading && <div className="diet-empty">{t('workout_flow.loading')}</div>}
-                                {!loading && diets.length === 0 && (
+                                {!loading && diets.length === 0 && !progressHelper.isActive && (
                                     <div className="empty-state history-empty">
                                         <img
                                             src={`${STATIC_PREFIX}images/404.png`}
@@ -249,10 +279,10 @@ const DietPage: React.FC = () => {
                                             onClick={() => handleOpenDiet(diet.id)}
                                         >
                                             <div>
-                                                <p className="diet-row__label">{t('diet.title')}</p>
+
                                                 <p className="diet-row__value">
                                                     {t('diet.created', {
-                                                        date: fmtDate(new Date(diet.created_at * 1000).toISOString(), listLocale),
+                                                        date: fmtDate(diet.created_at, listLocale),
                                                     })}
                                                 </p>
                                             </div>
@@ -273,16 +303,102 @@ const DietPage: React.FC = () => {
                         </div>
 
                         <div className="diet-pane diet-pane--detail">
-                            <div className="diet-detail">
+                            <div className="diet-detail" aria-busy={detailLoading}>
+                                {detailLoading && !detailPlan && (
+                                    <div className="diet-empty">{t('workout_flow.loading')}</div>
+                                )}
                                 {detailPlan && (
                                     <>
-                                        <button type="button" className="diet-copy" onClick={handleCopy}>
-                                            {copyState === 'done' ? t('diet.copy.done') : t('diet.copy')}
+                                        <button
+                                            type="button"
+                                            className="diet-copy"
+                                            onClick={handleCopy}
+                                            aria-label={copyState === 'done' ? t('diet.copy.done') : t('diet.copy')}
+                                            title={copyState === 'done' ? t('diet.copy.done') : t('diet.copy')}
+                                        >
+                                            {copyState === 'done' ? (
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                    <path
+                                                        d="M20 6L9 17l-5-5"
+                                                        stroke="currentColor"
+                                                        strokeWidth="2"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                    />
+                                                </svg>
+                                            ) : (
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                    <rect
+                                                        x="9"
+                                                        y="9"
+                                                        width="10"
+                                                        height="10"
+                                                        rx="2"
+                                                        stroke="currentColor"
+                                                        strokeWidth="1.6"
+                                                    />
+                                                    <path
+                                                        d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"
+                                                        stroke="currentColor"
+                                                        strokeWidth="1.6"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                    />
+                                                </svg>
+                                            )}
                                         </button>
                                         {detailDate && (
                                             <div className="diet-date">{t('diet.created', { date: fmtDate(detailDate, detailLocale) })}</div>
                                         )}
-                                        <pre className="diet-detail__text">{detailText}</pre>
+                                        <div className="diet-detail__content">
+                                            {detailPlan.meals.map((meal, mealIndex) => (
+                                                <div key={`${mealIndex}-${meal.name ?? 'meal'}`} className="diet-detail__section">
+                                                    {meal.name && (
+                                                        <h4 className="diet-detail__title">{meal.name}</h4>
+                                                    )}
+                                                    <ul className="diet-detail__list">
+                                                        {meal.items.map((item, itemIndex) => (
+                                                            <li key={`${mealIndex}-${itemIndex}`}>
+                                                                {item.name} — {item.grams} {t('diet.grams_unit')}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            ))}
+                                            {detailPlan.notes && detailPlan.notes.length > 0 && (
+                                                <div className="diet-detail__section">
+                                                    <h4 className="diet-detail__title">{t('diet.notes')}</h4>
+                                                    <ul className="diet-detail__list">
+                                                        {detailPlan.notes.filter(Boolean).map((note, noteIndex) => (
+                                                            <li key={`note-${noteIndex}`}>{note}</li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                            <div className="diet-summary">
+                                                <div className="diet-summary__title">{t('diet.summary')}</div>
+                                                <table className="diet-summary__table">
+                                                    <tbody>
+                                                        <tr>
+                                                            <th scope="row">{t('diet.calories')}</th>
+                                                            <td>{detailPlan.totals.calories} {t('diet.kcal_unit')}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th scope="row">{t('diet.protein')}</th>
+                                                            <td>{formatFloat(detailPlan.totals.protein_g)} {t('diet.grams_unit')}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th scope="row">{t('diet.fat')}</th>
+                                                            <td>{formatFloat(detailPlan.totals.fat_g)} {t('diet.grams_unit')}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th scope="row">{t('diet.carbs')}</th>
+                                                            <td>{formatFloat(detailPlan.totals.carbs_g)} {t('diet.grams_unit')}</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
                                     </>
                                 )}
                             </div>
@@ -291,7 +407,7 @@ const DietPage: React.FC = () => {
                 </section>
             </div>
 
-            {!dietId && (
+            {!dietId && !progressHelper.isActive && (
                 <button
                     type="button"
                     style={fabStyle}

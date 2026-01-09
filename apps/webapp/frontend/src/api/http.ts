@@ -287,6 +287,7 @@ export type WorkoutPlanCreatePayload = {
 export type WorkoutPlanCreateResp = {
   status: string;
   subscription_id?: number | null;
+  task_id?: string;
 };
 
 export async function getWorkoutPlanOptions(
@@ -427,7 +428,7 @@ export async function getDietPlanOptions(
   return await getJSON<DietPlanOptionsResp>(url.toString(), { headers, signal });
 }
 
-export async function createDietPlan(initData: string): Promise<void> {
+export async function createDietPlan(initData: string): Promise<{ status: string; task_id?: string }> {
   const url = new URL('api/diets/create/', window.location.href);
   const headers: Record<string, string> = {};
   if (initData) headers['X-Telegram-InitData'] = initData;
@@ -443,6 +444,7 @@ export async function createDietPlan(initData: string): Promise<void> {
     }
     throw new HttpError(resp.status, errorKey ?? statusToMessage(resp.status));
   }
+  return (await resp.json()) as { status: string; task_id?: string };
 }
 
 export async function updateProfile(payload: ProfileUpdatePayload, initData: string): Promise<ProfileResp> {

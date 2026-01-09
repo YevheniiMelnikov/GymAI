@@ -7,7 +7,7 @@ import {
     HttpError,
     WorkoutAction
 } from '../api/http';
-import { applyLang, t } from '../i18n/i18n';
+import { applyLang, useI18n } from '../i18n/i18n';
 import {
     EXERCISE_EDIT_SAVED_EVENT,
     EXERCISE_TECHNIQUE_EVENT,
@@ -16,11 +16,14 @@ import {
     renderProgramDays,
     setProgramContext,
 } from '../ui/render_program';
-import { readInitData, readLocale, tmeReady } from '../telegram';
+import { readInitData, readPreferredLocale, tmeReady } from '../telegram';
 import type { Locale, Program } from '../api/types';
 import { renderSegmented, SegmentId } from '../components/Segmented';
 import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
+import ProgressBar from '../components/ProgressBar';
+import { useGenerationProgress } from '../hooks/useGenerationProgress';
+import { closeWebApp } from '../telegram';
 
 const LAST_WORKOUT_SEGMENT_KEY = 'gymbot.workouts.lastSegment';
 const INTRO_SEEN_KEY = 'gymbot.webapp.introSeen';
@@ -53,6 +56,7 @@ const storeLastWorkoutSegment = (segment: SegmentId): void => {
 
 const ProgramPage: React.FC = () => {
     const navigate = useNavigate();
+    const { t } = useI18n();
     const [searchParams, setSearchParams] = useSearchParams();
     const searchParamsKey = searchParams.toString();
     const contentRef = useRef<HTMLDivElement>(null);
@@ -77,11 +81,16 @@ const ProgramPage: React.FC = () => {
         return readLastWorkoutSegment();
     });
 
-    const programId = searchParams.get('id') || '';
+    const progressHelper = useGenerationProgress('workout', () => {
+        setRefreshKey(Date.now());
+    });
+
+    const programId = searchParams.get('program_id') || searchParams.get('id') || '';
     const paramLang = searchParams.get('lang') || undefined;
 
     useEffect(() => {
-        void applyLang(paramLang);
+        const preferred = readPreferredLocale(paramLang);
+        void applyLang(preferred);
     }, [paramLang]);
 
     const prevSourceRef = useRef(searchParams.get('source'));
@@ -266,8 +275,8 @@ const ProgramPage: React.FC = () => {
         activeSegment === 'program'
             ? 'create_program'
             : activeSegment === 'subscriptions'
-            ? 'create_subscription'
-            : null;
+                ? 'create_subscription'
+                : null;
 
     const handleFabClick = useCallback(async () => {
         if (!creationAction) {
@@ -330,7 +339,7 @@ const ProgramPage: React.FC = () => {
 
         const checkEmptyState = async () => {
             try {
-                const locale = readLocale();
+                const locale = readPreferredLocale(paramLang);
                 const url = new URL('/api/programs/', window.location.origin);
                 url.searchParams.set('locale', locale);
                 const headers: Record<string, string> = { 'X-Telegram-InitData': initData };
@@ -389,38 +398,48 @@ const ProgramPage: React.FC = () => {
             <TopBar title={t('program.title')} />
 
             <div className="page-shell">
-                <div id="content" aria-busy={loading}>
-                    <div className="history-panel program-panel">
-                        <div ref={switcherRef} id="segmented" className="segmented-container" />
+                {progressHelper.isActive ? (
+                    <ProgressBar
+                        progress={progressHelper.progress}
+                        stage={progressHelper.stage}
+                        onClose={closeWebApp}
+                    />
+                ) : (
+                    <>
+                        <div id="content" aria-busy={loading}>
+                            <div className="history-panel program-panel">
+                                <div ref={switcherRef} id="segmented" className="segmented-container" />
 
-                        <div ref={contentRef} className="week centered" />
-                        <div id="program-date" hidden={!dateText}>
-                            {dateText}
+                                <div ref={contentRef} className="week centered" />
+                                <div id="program-date" hidden={!dateText}>
+                                    {dateText}
+                                </div>
+
+                                {loading && <div aria-busy="true">Loading...</div>}
+                                {error && (
+                                    <div className="empty-state history-empty">
+                                        <img
+                                            src="/static/images/404.png"
+                                            alt={t('no_programs')}
+                                            className="history-empty__image"
+                                            onError={(ev) => {
+                                                const target = ev.currentTarget;
+                                                if (target.src !== fallbackIllustration) {
+                                                    target.src = fallbackIllustration;
+                                                }
+                                            }}
+                                        />
+                                        <p className="history-empty__caption">{error}</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
-                        {loading && <div aria-busy="true">Loading...</div>}
-                        {error && (
-                            <div className="empty-state history-empty">
-                                <img
-                                    src="/static/images/404.png"
-                                    alt={t('no_programs')}
-                                    className="history-empty__image"
-                                    onError={(ev) => {
-                                        const target = ev.currentTarget;
-                                        if (target.src !== fallbackIllustration) {
-                                            target.src = fallbackIllustration;
-                                        }
-                                    }}
-                                />
-                                <p className="history-empty__caption">{error}</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div className="history-footer" />
+                        <div className="history-footer" />
+                    </>
+                )}
             </div>
-            {creationAction && !isExerciseEditOpen && !isTechniqueOpen && (
+            {creationAction && !isExerciseEditOpen && !isTechniqueOpen && !progressHelper.isActive && (
                 <button
                     type="button"
                     style={fabStyle}

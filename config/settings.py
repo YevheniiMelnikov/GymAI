@@ -48,6 +48,7 @@ SESSION_COOKIE_SAMESITE = settings.SESSION_COOKIE_SAMESITE
 CSRF_COOKIE_SAMESITE = settings.CSRF_COOKIE_SAMESITE
 
 INSTALLED_APPS = [
+    "unfold",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -55,7 +56,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.postgres",
-    "unfold",
     "apps.profiles.apps.ProfilesConfig",
     "apps.payments.apps.PaymentsConfig",
     "apps.metrics.apps.MetricsConfig",

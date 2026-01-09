@@ -11,6 +11,7 @@ import {
     onBackButtonClick,
     offBackButtonClick,
     readInitData,
+    readPreferredLocale,
     showBackButton,
     tmeReady
 } from '../telegram';
@@ -73,7 +74,8 @@ const WeeklySurveyPage: React.FC = () => {
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
-        void applyLang(paramLang);
+        const preferred = readPreferredLocale(paramLang);
+        void applyLang(preferred);
     }, [paramLang]);
 
     useEffect(() => {
@@ -87,7 +89,8 @@ const WeeklySurveyPage: React.FC = () => {
             setProgramContext(null, null);
             try {
                 const subscription = await getSubscription(initData, subscriptionId, controller.signal);
-                await applyLang(subscription.language || paramLang);
+                const preferred = readPreferredLocale(paramLang);
+                await applyLang(subscription.language || preferred);
                 if (!subscription.days) {
                     setError(t('weekly_survey.no_data'));
                     return;

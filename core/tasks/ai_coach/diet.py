@@ -358,6 +358,14 @@ async def _generate_diet_plan_impl(payload: dict[str, Any], task: Task) -> dict[
         attempt,
     )
 
+    from django.core.cache import cache
+
+    cache.set(
+        f"generation_status:{request_id}",
+        {"status": "processing", "progress": 20, "stage": "agent_start"},
+        timeout=settings.AI_COACH_TIMEOUT,
+    )
+
     response: Any | None = None
     try:
         response = await APIService.ai_coach.create_diet_plan(
@@ -368,18 +376,29 @@ async def _generate_diet_plan_impl(payload: dict[str, Any], task: Task) -> dict[
             prompt=prompt,
             request_id=request_id or None,
         )
+        cache.set(
+            f"generation_status:{request_id}",
+            {"status": "processing", "progress": 90, "stage": "plan_received"},
+            timeout=settings.AI_COACH_TIMEOUT,
+        )
     except APIClientHTTPError as exc:
         logger.error(
             f"event=ai_diet_failed profile_id={profile_id} request_id={request_id} attempt={attempt} "
             f"status={exc.status} retryable={exc.retryable} reason={exc.reason}"
         )
         if not exc.retryable:
-            return await _notify_ai_diet_error(
+            error_payload = await _notify_ai_diet_error(
                 profile_id=profile_id,
                 request_id=request_id,
                 error=exc.reason or f"http_{exc.status}",
                 cost=cost,
             )
+            cache.set(
+                f"generation_status:{request_id}",
+                {"status": "error", "progress": 0, "error": exc.reason or f"http_{exc.status}"},
+                timeout=settings.AI_COACH_TIMEOUT,
+            )
+            return error_payload
         raise
     except Exception as exc:  # noqa: BLE001
         logger.error(
@@ -395,12 +414,18 @@ async def _generate_diet_plan_impl(payload: dict[str, Any], task: Task) -> dict[
 
     if response is None:
         logger.error(f"event=ai_diet_empty_response profile_id={profile_id} request_id={request_id}")
-        return await _notify_ai_diet_error(
+        error_payload = await _notify_ai_diet_error(
             profile_id=profile_id,
             request_id=request_id,
             error="empty_response",
             cost=cost,
         )
+        cache.set(
+            f"generation_status:{request_id}",
+            {"status": "error", "progress": 0, "error": "empty_response"},
+            timeout=settings.AI_COACH_TIMEOUT,
+        )
+        return error_payload
 
     diet_plan = response if isinstance(response, DietPlan) else DietPlan.model_validate(response)
     notify_payload: dict[str, Any] = {
@@ -420,6 +445,11 @@ async def _generate_diet_plan_impl(payload: dict[str, Any], task: Task) -> dict[
         METRICS_EVENT_DIET_PLAN,
         source=METRICS_SOURCE_DIET,
         source_id=request_id,
+    )
+    cache.set(
+        f"generation_status:{request_id}",
+        {"status": "success", "progress": 100, "stage": "completed", "result_id": diet_plan.id},
+        timeout=settings.AI_COACH_TIMEOUT,
     )
     return notify_payload
 

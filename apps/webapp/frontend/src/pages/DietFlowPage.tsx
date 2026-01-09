@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
-import { applyLang, t, type TranslationKey } from '../i18n/i18n';
+import { applyLang, useI18n, type TranslationKey } from '../i18n/i18n';
 import {
     createDietPlan,
     getDietPlanOptions,
@@ -10,8 +10,18 @@ import {
     HttpError,
     updateProfile
 } from '../api/http';
-import { closeWebApp, readInitData, showBackButton, hideBackButton, onBackButtonClick, offBackButtonClick } from '../telegram';
+import {
+    readInitData,
+    readPreferredLocale,
+    showBackButton,
+    hideBackButton,
+    onBackButtonClick,
+    offBackButtonClick,
+    closeWebApp
+} from '../telegram';
 import type { DietProduct, ProfileResp } from '../api/types';
+import ProgressBar from '../components/ProgressBar';
+import { useGenerationProgress } from '../hooks/useGenerationProgress';
 
 const DIET_PRODUCT_OPTIONS: Array<{ value: DietProduct; labelKey: TranslationKey }> = [
     { value: 'plant_food', labelKey: 'profile.diet_products.plant_food' },
@@ -25,6 +35,7 @@ type FlowStep = 'allergies' | 'products' | 'confirm';
 
 const DietFlowPage: React.FC = () => {
     const navigate = useNavigate();
+    const { t } = useI18n();
     const [searchParams] = useSearchParams();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -36,13 +47,22 @@ const DietFlowPage: React.FC = () => {
     const [savingPrefs, setSavingPrefs] = useState(false);
     const [creating, setCreating] = useState(false);
     const [showTopup, setShowTopup] = useState(false);
-    const [showProcessing, setShowProcessing] = useState(false);
     const paramLang = searchParams.get('lang') || undefined;
+    const progressHelper = useGenerationProgress('diet', (data: any) => {
+        const query = searchParams.toString();
+        const dietId = data?.result_id;
+        if (dietId) {
+            navigate(query ? `/diets?diet_id=${dietId}&${query}` : `/diets?diet_id=${dietId}`);
+        } else {
+            navigate(query ? `/diets?${query}` : '/diets');
+        }
+    });
 
     const initData = readInitData();
 
     useEffect(() => {
-        void applyLang(paramLang);
+        const preferred = readPreferredLocale(paramLang);
+        void applyLang(preferred);
     }, [paramLang]);
 
     useEffect(() => {
@@ -56,7 +76,8 @@ const DietFlowPage: React.FC = () => {
         ])
             .then(([profileData, options]) => {
                 if (!active) return;
-                void applyLang(profileData.language || paramLang);
+                const preferred = readPreferredLocale(paramLang);
+                void applyLang(profileData.language || preferred);
                 setProfile(profileData);
                 setPrice(options.price);
                 setDietAllergies(profileData.diet_allergies ?? '');
@@ -92,6 +113,8 @@ const DietFlowPage: React.FC = () => {
     const stepIndex = useMemo(() => steps.indexOf(step), [steps, step]);
 
     const handleBack = useCallback(() => {
+        // If progress is active, back button should likely be disabled or handle specific logic
+        // But here we rely on hideBackButton in useEffect if progress active
         if (stepIndex > 0) {
             setStep(steps[stepIndex - 1]);
             return;
@@ -101,13 +124,17 @@ const DietFlowPage: React.FC = () => {
     }, [navigate, searchParams, stepIndex, steps]);
 
     useEffect(() => {
+        if (progressHelper.isActive) {
+            hideBackButton();
+            return;
+        }
         showBackButton();
         onBackButtonClick(handleBack);
         return () => {
             offBackButtonClick(handleBack);
             hideBackButton();
         };
-    }, [handleBack]);
+    }, [handleBack, progressHelper.isActive]);
 
     const handleNextAllergies = useCallback(() => {
         setStep('products');
@@ -145,8 +172,10 @@ const DietFlowPage: React.FC = () => {
         }
         setCreating(true);
         try {
-            await createDietPlan(initData);
-            setShowProcessing(true);
+            const result = await createDietPlan(initData);
+            if (result.task_id) {
+                progressHelper.start(result.task_id);
+            }
         } catch (err) {
             if (err instanceof HttpError) {
                 if (err.message === 'not_enough_credits') {
@@ -162,7 +191,7 @@ const DietFlowPage: React.FC = () => {
         } finally {
             setCreating(false);
         }
-    }, [creating, initData]);
+    }, [creating, initData, progressHelper]);
 
     const handleTopup = useCallback(() => {
         const query = searchParams.toString();
@@ -183,7 +212,16 @@ const DietFlowPage: React.FC = () => {
             <div className="page-shell">
                 {error && <div className="error-block">{error}</div>}
                 {loading && <div className="notice">{t('workout_flow.loading')}</div>}
-                {!loading && (
+
+                {progressHelper.isActive && !loading && !error && (
+                    <ProgressBar
+                        progress={progressHelper.progress}
+                        stage={progressHelper.stage}
+                        onClose={closeWebApp}
+                    />
+                )}
+
+                {!loading && !error && !progressHelper.isActive && (
                     <section className="workout-flow" aria-live="polite">
                         <div className="workout-flow__track" style={trackStyle}>
                             {steps.includes('allergies') && (
@@ -294,23 +332,8 @@ const DietFlowPage: React.FC = () => {
                     </div>
                 </div>
             )}
-            {showProcessing && (
-                <div role="dialog" aria-modal="true" className="subscription-confirm">
-                    <div className="subscription-confirm__dialog">
-                        <p className="subscription-confirm__body">{t('workout_flow.processing')}</p>
-                        <div className="subscription-confirm__actions">
-                            <button
-                                type="button"
-                                className="subscription-confirm__btn subscription-confirm__btn--confirm"
-                                onClick={closeWebApp}
-                            >
-                                {t('workout_flow.processing_ok')}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {!showTopup && !showProcessing && <BottomNav activeKey="diets" />}
+            {!showTopup && !progressHelper.isActive && <BottomNav activeKey="diets" />}
+            {progressHelper.isActive && <BottomNav activeKey="diets" />}
         </div>
     );
 };

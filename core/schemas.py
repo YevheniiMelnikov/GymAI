@@ -225,6 +225,7 @@ class DietMeal(BaseModel):
 
 
 class DietPlan(BaseModel):
+    id: int | None = None
     meals: list[DietMeal] = Field(default_factory=list)
     totals: NutritionTotals
     notes: list[str] = Field(default_factory=list)

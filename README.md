@@ -99,7 +99,7 @@ The Django API is served by `uvicorn`.
 **Local URLs**
 
 * Admin panel (via API directly): [http://localhost:8000/admin/](http://localhost:8000/admin/)
-* Admin panel (via local Nginx proxy): [http://localhost:9090/admin/](http://localhost:9090/admin/)
+* Admin panel (via local Nginx proxy): [https://api.gymbot.site/admin/](http://localhost:9090/admin/)
 * Healthcheck: [http://localhost:8000/health/](http://localhost:8000/health/)
 
 **Production (behind Nginx)**

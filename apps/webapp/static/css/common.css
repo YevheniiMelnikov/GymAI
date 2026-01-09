@@ -967,6 +967,26 @@ h1.page-title,
   gap: clamp(14px, 2.6vw, 24px);
   padding: 0;
 }
+.history-page .history-panel{
+  max-width: 920px;
+  align-items: stretch;
+}
+.history-page .history-panel .diet-flow{
+  width: 100%;
+}
+.history-page .diet-list,
+.history-page .history-detail__content{
+  max-width: 720px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+.history-page .history-detail__content .week{
+  margin-top: 6px;
+}
+.history-page .history-detail .diet-date{
+  text-align: center;
+}
 .program-panel{
   width: 100%;
   align-items: stretch;
@@ -1001,13 +1021,13 @@ h1.page-title,
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
+  padding: 6px 10px;
   min-height: 36px;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 0.5px solid var(--border);
   background: color-mix(in oklab, var(--surface) 85%, var(--bg));
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.2;
   font-weight: 600;
   cursor: pointer;
@@ -2189,28 +2209,85 @@ a:hover{ opacity: .9; }
   position: relative;
   padding: 6px 2px 24px;
 }
-.diet-detail__text{
+.diet-copy{
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
+  background: color-mix(in oklab, var(--surface) 80%, transparent);
+  color: var(--text);
+  padding: 0;
+  cursor: pointer;
+  transition: transform .12s ease, background .18s ease, border-color .18s ease;
+}
+.diet-copy:hover{
+  background: color-mix(in oklab, var(--surface) 70%, transparent);
+  border-color: color-mix(in oklab, var(--text) 22%, transparent);
+}
+.diet-copy:active{
+  transform: scale(.96);
+}
+.diet-detail__content{
   margin: 18px 0 0;
-  white-space: pre-wrap;
   font-size: 14px;
   line-height: 1.5;
   padding: 16px;
   border-radius: 18px;
   border: 1px solid color-mix(in oklab, var(--text) 10%, transparent);
   background: color-mix(in oklab, var(--surface) 78%, transparent);
+  font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
-.diet-copy{
-  position: absolute;
-  top: 0;
-  right: 0;
-  border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
-  background: color-mix(in oklab, var(--surface) 80%, transparent);
+.diet-detail__section + .diet-detail__section{
+  margin-top: 14px;
+}
+.diet-detail__title{
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text);
-  border-radius: 999px;
-  padding: 6px 12px;
+}
+.diet-detail__list{
+  margin: 0;
+  padding-left: 18px;
+  list-style: disc;
+}
+.diet-detail__list li{
+  margin: 4px 0;
+}
+.diet-summary{
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in oklab, var(--text) 10%, transparent);
+}
+.diet-summary__title{
   font-size: 12px;
   font-weight: 600;
-  cursor: pointer;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.diet-summary__table{
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.diet-summary__table th,
+.diet-summary__table td{
+  padding: 6px 0;
+  text-align: left;
+}
+.diet-summary__table th{
+  font-weight: 500;
+  color: var(--muted);
+}
+.diet-summary__table td{
+  font-weight: 600;
+  color: var(--text);
 }
 .diet-date{
   font-size: 12px;
@@ -2327,13 +2404,14 @@ a:hover{ opacity: .9; }
   display: flex;
   align-items: center;
   gap: clamp(8px, 1.4vw, 16px);
-  padding: 0;
+  padding-inline: clamp(16px, 15vw, 220px);
   scroll-snap-type: x mandatory;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  scroll-padding-inline: 16px;
-  touch-action: pan-x;
+  scroll-padding-inline: clamp(16px, 15vw, 220px);
+  touch-action: pan-y;
+  scroll-behavior: auto;
 }
 .topup-carousel::-webkit-scrollbar{
   width: 0;

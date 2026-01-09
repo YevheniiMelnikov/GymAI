@@ -23,7 +23,7 @@ x-common-env: &common_env
     VECTOR_DB_PROVIDER: ${VECTOR_DB_PROVIDER:-qdrant}
     VECTOR_DB_URL: ${VECTOR_DB_URL:-http://qdrant:6333}
     VECTOR_DB_KEY: ${VECTOR_DB_KEY:-}
-    BOT_INTERNAL_HOST: ${BOT_UPSTREAM_HOST:-host.docker.internal}
+    BOT_INTERNAL_HOST: ${BOT_UPSTREAM_HOST:-bot}
     BOT_INTERNAL_PORT: ${BOT_UPSTREAM_PORT:-8088}
   env_file:
     - .env
@@ -171,7 +171,7 @@ services:
       --bind 0.0.0.0:${API_PORT:-8000}
       --workers 2
       --timeout 60
-      --access-logfile -
+      --access-logfile /dev/null
       --error-logfile -
     depends_on:
       redis:
@@ -313,7 +313,7 @@ services:
       db:
         condition: service_healthy
       neo4j:
-        condition: service_healthy
+        condition: service_started
       qdrant:
         condition: service_started
     healthcheck:

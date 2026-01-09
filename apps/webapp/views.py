@@ -78,6 +78,7 @@ from .view_helpers import (
     resolve_workout_plan_required,
 )
 from .schemas import DietPlanSavePayload
+from core.services import APIService
 from .workout_flow import WorkoutPlanRequest, enqueue_workout_plan_generation
 from .diet_flow import enqueue_diet_plan_generation
 
@@ -830,6 +831,10 @@ async def diet_plan_create(request: HttpRequest) -> JsonResponse:
         return profile_or_error
     profile = profile_or_error
 
+    if not await APIService.ai_coach.health():
+        logger.warning(f"diet_plan_create_aborted_unhealthy profile_id={profile.id}")
+        return JsonResponse({"error": "service_unavailable"}, status=503)
+
     required = int(settings.DIET_PLAN_PRICE)
     credits = int(getattr(profile, "credits", 0) or 0)
     if credits < required:
@@ -847,17 +852,17 @@ async def diet_plan_create(request: HttpRequest) -> JsonResponse:
     await call_repo(ProfileRepository.invalidate_cache, profile.id, getattr(profile, "tg_id", None))
     await Cache.profile.update_record(profile.id, {"credits": new_credits})
 
-    queued = enqueue_diet_plan_generation(
+    task_id = enqueue_diet_plan_generation(
         profile_id=profile.id,
         language=language,
         diet_allergies=diet_allergies,
         diet_products=diet_products,
         cost=required,
     )
-    if not queued:
+    if task_id is None:
         return JsonResponse({"error": "server_error"}, status=500)
 
-    return JsonResponse({"status": "ok"})
+    return JsonResponse({"status": "ok", "task_id": task_id})
 
 
 @csrf_exempt  # type: ignore[bad-specialization]
@@ -908,6 +913,10 @@ async def workout_plan_create(request: HttpRequest) -> JsonResponse:
     if isinstance(profile_or_error, JsonResponse):
         return profile_or_error
     profile = profile_or_error
+
+    if not await APIService.ai_coach.health():
+        logger.warning(f"workout_plan_create_aborted_unhealthy profile_id={profile.id}")
+        return JsonResponse({"error": "service_unavailable"}, status=503)
 
     try:
         payload_raw = json.loads(request.body or "{}")
@@ -973,7 +982,7 @@ async def workout_plan_create(request: HttpRequest) -> JsonResponse:
             },
         )
 
-    queued = enqueue_workout_plan_generation(
+    task_id = enqueue_workout_plan_generation(
         profile_id=profile.id,
         language=language,
         plan_type=payload.plan_type,
@@ -983,10 +992,10 @@ async def workout_plan_create(request: HttpRequest) -> JsonResponse:
         period=payload.period,
         previous_subscription_id=previous_subscription_id,
     )
-    if not queued:
+    if not task_id:
         return JsonResponse({"error": "server_error"}, status=500)
 
-    return JsonResponse({"status": "ok", "subscription_id": subscription_id})
+    return JsonResponse({"status": "ok", "subscription_id": subscription_id, "task_id": task_id})
 
 
 @csrf_exempt  # type: ignore[bad-specialization]
@@ -1407,3 +1416,16 @@ def index(request: HttpRequest) -> HttpResponse:
 def ping(request: HttpRequest) -> HttpResponse:
     logger.info(f"Webapp ping: {request.method} {request.get_full_path()}")
     return HttpResponse("ok")
+
+
+@require_GET  # type: ignore[misc]
+async def generation_status(request: HttpRequest) -> JsonResponse:
+    task_id = request.GET.get("task_id")
+    if not task_id:
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    status_data = cache.get(f"generation_status:{task_id}")
+    if not isinstance(status_data, dict):
+        return JsonResponse({"status": "unknown", "progress": 0})
+
+    return JsonResponse(status_data)

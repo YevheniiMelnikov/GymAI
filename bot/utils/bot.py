@@ -31,7 +31,7 @@ _WEBAPP_TARGETS: dict[str, _WebAppTarget] = {
     "program": _WebAppTarget("program", "direct", "program", "#/program"),
     "subscription": _WebAppTarget("program", "subscription", "subscriptions", "#/subscriptions"),
     "subscriptions": _WebAppTarget("program", "subscription", "subscriptions", "#/subscriptions"),
-    "diets": _WebAppTarget("diet", None, "diets", "#/diets"),
+    "diets": _WebAppTarget("diet", None, None, None),
     "payment": _WebAppTarget("payment", None, None, None),
     "topup": _WebAppTarget("topup", None, None, "#/topup"),
     "faq": _WebAppTarget("faq", "direct", "faq", "#/faq"),

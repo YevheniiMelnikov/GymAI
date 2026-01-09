@@ -11,7 +11,7 @@ import {
     onBackButtonClick,
     openTelegramLink,
     readInitData,
-    readLocale,
+    readPreferredLocale,
     showBackButton,
 } from '../telegram';
 
@@ -50,6 +50,9 @@ const TopupPage: React.FC = () => {
     const pointerMovedRef = useRef(false);
     const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
     const swipeStartIndexRef = useRef<number | null>(null);
+    const lockedScrollRef = useRef<number | null>(null);
+    const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+    const touchStartIndexRef = useRef<number | null>(null);
     const [paying, setPaying] = useState(false);
     const [payError, setPayError] = useState<string | null>(null);
 
@@ -60,8 +63,8 @@ const TopupPage: React.FC = () => {
             stored = window.sessionStorage.getItem('app:lang');
         } catch {
         }
-        const docLang = document.documentElement.lang || undefined;
-        return paramLang ?? stored ?? docLang ?? readLocale();
+        const preferred = readPreferredLocale(paramLang);
+        return stored ?? preferred;
     }, [paramLang]);
 
     useEffect(() => {
@@ -342,6 +345,27 @@ const TopupPage: React.FC = () => {
     const handleViewportPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
         swipeStartRef.current = { x: event.clientX, y: event.clientY };
         swipeStartIndexRef.current = activeIndexRef.current;
+        const viewport = viewportRef.current;
+        if (viewport) {
+            lockedScrollRef.current = viewport.scrollLeft;
+            try {
+                event.preventDefault();
+            } catch {
+            }
+            try {
+                viewport.setPointerCapture(event.pointerId);
+            } catch {
+            }
+        }
+    }, []);
+
+    const handleViewportPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+        const viewport = viewportRef.current;
+        if (!viewport || lockedScrollRef.current === null) {
+            return;
+        }
+        viewport.scrollLeft = lockedScrollRef.current;
+        event.preventDefault();
     }, []);
 
     const handleViewportPointerUp = useCallback(
@@ -350,11 +374,76 @@ const TopupPage: React.FC = () => {
             const startIndex = swipeStartIndexRef.current;
             swipeStartRef.current = null;
             swipeStartIndexRef.current = null;
+            const viewport = viewportRef.current;
+            if (viewport) {
+                lockedScrollRef.current = null;
+                try {
+                    viewport.releasePointerCapture(event.pointerId);
+                } catch {
+                }
+            }
             if (!start || startIndex === null) {
                 return;
             }
             const dx = event.clientX - start.x;
             const dy = event.clientY - start.y;
+            if (Math.abs(dx) <= 18 || Math.abs(dx) <= Math.abs(dy)) {
+                return;
+            }
+            const direction = dx > 0 ? -1 : 1;
+            const targetIndex = Math.max(0, Math.min(cards.length - 1, startIndex + direction));
+            if (targetIndex === startIndex) {
+                return;
+            }
+            ensureLang();
+            initDoneRef.current = true;
+            hapticEnabledRef.current = true;
+            setActiveIndex(targetIndex);
+            scrollToIndex(targetIndex, 'auto');
+        },
+        [cards.length, ensureLang, scrollToIndex]
+    );
+
+    const handleTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+        const viewport = viewportRef.current;
+        const activeIndex = activeIndexRef.current;
+        if (!viewport) {
+            return;
+        }
+        const touch = event.touches[0];
+        if (!touch) {
+            return;
+        }
+        touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+        touchStartIndexRef.current = activeIndex;
+        lockedScrollRef.current = viewport.scrollLeft;
+    }, []);
+
+    const handleTouchMove = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+        const viewport = viewportRef.current;
+        if (!viewport || lockedScrollRef.current === null) {
+            return;
+        }
+        viewport.scrollLeft = lockedScrollRef.current;
+        event.preventDefault();
+    }, []);
+
+    const handleTouchEnd = useCallback(
+        (event: React.TouchEvent<HTMLDivElement>) => {
+            const start = touchStartRef.current;
+            const startIndex = touchStartIndexRef.current;
+            touchStartRef.current = null;
+            touchStartIndexRef.current = null;
+            lockedScrollRef.current = null;
+            if (!start || startIndex === null) {
+                return;
+            }
+            const touch = event.changedTouches[0];
+            if (!touch) {
+                return;
+            }
+            const dx = touch.clientX - start.x;
+            const dy = touch.clientY - start.y;
             if (Math.abs(dx) <= 18 || Math.abs(dx) <= Math.abs(dy)) {
                 return;
             }
@@ -448,10 +537,20 @@ const TopupPage: React.FC = () => {
                             hapticEnabledRef.current = true;
                         }}
                         onPointerDownCapture={handleViewportPointerDown}
+                        onPointerMove={handleViewportPointerMove}
                         onPointerUp={handleViewportPointerUp}
                         onPointerCancel={() => {
                             swipeStartRef.current = null;
                             swipeStartIndexRef.current = null;
+                            lockedScrollRef.current = null;
+                        }}
+                        onTouchStart={handleTouchStart}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={handleTouchEnd}
+                        onTouchCancel={() => {
+                            touchStartRef.current = null;
+                            touchStartIndexRef.current = null;
+                            lockedScrollRef.current = null;
                         }}
                         onClick={handleViewportClick}
                     >

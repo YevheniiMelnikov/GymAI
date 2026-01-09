@@ -9,7 +9,7 @@ import {
     type WorkoutPlanCreatePayload,
 } from '../api/http';
 import type { ProfileResp, SubscriptionPlanOption, WorkoutPlanKind, WorkoutPlanOptionsResp } from '../api/types';
-import { applyLang, t } from '../i18n/i18n';
+import { applyLang, useI18n } from '../i18n/i18n';
 import BottomNav from '../components/BottomNav';
 import {
     closeWebApp,
@@ -17,9 +17,12 @@ import {
     onBackButtonClick,
     offBackButtonClick,
     readInitData,
+    readPreferredLocale,
     showBackButton,
     tmeReady,
 } from '../telegram';
+import ProgressBar from '../components/ProgressBar';
+import { useGenerationProgress } from '../hooks/useGenerationProgress';
 
 const DEFAULT_SPLIT_NUMBER = 3;
 const MIN_SPLIT_NUMBER = 1;
@@ -27,6 +30,7 @@ const MAX_SPLIT_NUMBER = 7;
 
 const WorkoutFlowPage: React.FC = () => {
     const navigate = useNavigate();
+    const { t } = useI18n();
     const [searchParams] = useSearchParams();
     const paramLang = searchParams.get('lang') || undefined;
     const [loading, setLoading] = useState(true);
@@ -36,10 +40,10 @@ const WorkoutFlowPage: React.FC = () => {
     const [stepIndex, setStepIndex] = useState(0);
     const [splitNumber, setSplitNumber] = useState(DEFAULT_SPLIT_NUMBER);
     const [plan, setPlan] = useState<WorkoutPlanKind | null>(null);
+    const planRef = useRef<WorkoutPlanKind | null>(null);
     const [selectedPeriod, setSelectedPeriod] = useState<SubscriptionPlanOption | null>(null);
     const [wishes, setWishes] = useState('');
     const [showTopupModal, setShowTopupModal] = useState(false);
-    const [showProcessingModal, setShowProcessingModal] = useState(false);
     const [showSubscriptionConfirm, setShowSubscriptionConfirm] = useState(false);
     const [checkingSubscriptionStatus, setCheckingSubscriptionStatus] = useState(false);
     const [subscriptionStatus, setSubscriptionStatus] = useState<{ checked: boolean; active: boolean }>({
@@ -49,10 +53,43 @@ const WorkoutFlowPage: React.FC = () => {
     const [submitting, setSubmitting] = useState(false);
     const [tooltipOpen, setTooltipOpen] = useState(false);
     const tooltipRef = useRef<HTMLDivElement | null>(null);
+    const progressHelper = useGenerationProgress('workout', (data: any) => {
+        const resultId = data?.result_id ? String(data.result_id) : null;
+        const params = new URLSearchParams(searchParams.toString());
+        const storedPlan = window.localStorage.getItem('generation_plan_type_workout');
+        const resolvedPlan = planRef.current ?? (storedPlan as WorkoutPlanKind | null);
+
+        if (resolvedPlan === 'subscription') {
+            params.delete('program_id');
+            params.delete('id');
+            params.set('source', 'subscription');
+            if (resultId) {
+                params.set('subscription_id', resultId);
+            }
+            window.localStorage.removeItem('generation_plan_type_workout');
+            const query = params.toString();
+            navigate(query ? `/?${query}` : '/');
+            return;
+        }
+
+        params.delete('subscription_id');
+        params.delete('source');
+        if (resultId) {
+            params.set('program_id', resultId);
+        }
+        window.localStorage.removeItem('generation_plan_type_workout');
+        const query = params.toString();
+        navigate(query ? `/?${query}` : '/');
+    });
 
     useEffect(() => {
-        void applyLang(paramLang);
+        const preferred = readPreferredLocale(paramLang);
+        void applyLang(preferred);
     }, [paramLang]);
+
+    useEffect(() => {
+        planRef.current = plan;
+    }, [plan]);
 
     useEffect(() => {
         if (!profile?.language) {
@@ -110,6 +147,12 @@ const WorkoutFlowPage: React.FC = () => {
     }, [tooltipOpen]);
 
     useEffect(() => {
+        // Disable back button if generating content
+        if (progressHelper.isActive) {
+            hideBackButton();
+            return;
+        }
+
         const handleBack = () => {
             if (stepIndex > 0) {
                 setStepIndex((prev) => Math.max(0, prev - 1));
@@ -127,7 +170,7 @@ const WorkoutFlowPage: React.FC = () => {
             offBackButtonClick(handleBack);
             hideBackButton();
         };
-    }, [navigate, stepIndex]);
+    }, [navigate, stepIndex, progressHelper.isActive]);
 
     const steps = useMemo(() => ['plan', 'days', 'wishes'], []);
     const stepsCount = steps.length;
@@ -202,10 +245,19 @@ const WorkoutFlowPage: React.FC = () => {
         if (plan === 'subscription' && selectedPeriod) {
             payload.period = selectedPeriod.period;
         }
+        try {
+            window.localStorage.setItem('generation_plan_type_workout', plan);
+        } catch {
+        }
         setSubmitting(true);
         try {
-            await createWorkoutPlan(payload, initData);
-            setShowProcessingModal(true);
+            const result = await createWorkoutPlan(payload, initData);
+            if (result.task_id) {
+                progressHelper.start(result.task_id);
+            } else {
+                // Fallback or error if task_id missing is unexpected
+                console.error('Task ID missing from createWorkoutPlan response');
+            }
         } catch (err) {
             if (err instanceof HttpError && err.message === 'not_enough_credits') {
                 setShowTopupModal(true);
@@ -216,7 +268,7 @@ const WorkoutFlowPage: React.FC = () => {
         } finally {
             setSubmitting(false);
         }
-    }, [plan, selectedPeriod, splitNumber, submitting, wishes]);
+    }, [plan, selectedPeriod, splitNumber, submitting, wishes, progressHelper]);
 
     const handlePlanNext = useCallback(async () => {
         if (checkingSubscriptionStatus || !plan) {
@@ -301,153 +353,162 @@ const WorkoutFlowPage: React.FC = () => {
     return (
         <div className="page-container workout-flow-page">
             <div className="page-shell">
-                <section className="workout-flow" aria-live="polite">
-                    <div className="workout-flow__track" style={trackStyle}>
-                        {options && (
+                {progressHelper.isActive ? (
+                    <ProgressBar
+                        progress={progressHelper.progress}
+                        stage={progressHelper.stage}
+                        onClose={closeWebApp}
+                    />
+                ) : (
+                    <section className="workout-flow" aria-live="polite">
+                        <div className="workout-flow__track" style={trackStyle}>
+                            {options && (
+                                <div className="workout-flow__pane" style={paneStyle}>
+                                    <div className="workout-flow__pane-inner">
+                                        <h2 className="workout-flow__title">{t('workout_flow.plan.title')}</h2>
+                                        <div className="workout-flow__balance">
+                                            <span className="workout-flow__balance-label">
+                                                {t('profile.balance.title')}
+                                            </span>
+                                            <span className="workout-flow__balance-value">
+                                                {t('profile.balance.label', { count: profile?.credits ?? 0 })}
+                                            </span>
+                                        </div>
+                                        <div className="workout-flow__plan-blocks">
+                                            <div className="plan-section">
+                                                <div className="plan-section__title">
+                                                    {t('workout_flow.plan.subscription_label')}
+                                                </div>
+                                                <div className="subscription-options">
+                                                    {options.subscriptions.map((option) => {
+                                                        const active =
+                                                            plan === 'subscription' && selectedPeriod?.period === option.period;
+                                                        return (
+                                                            <button
+                                                                key={option.period}
+                                                                type="button"
+                                                                className={`subscription-option ${active ? 'is-active' : ''}`}
+                                                                onClick={() => handleSubscriptionSelect(option)}
+                                                            >
+                                                                <span className="subscription-option__title">
+                                                                    {subscriptionTitleForPeriod(option.period)}
+                                                                </span>
+                                                                <span className="subscription-option__price">
+                                                                    {t('profile.balance.label', { count: option.price })}
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                            <div className="plan-section">
+                                                <div className="plan-section__title">
+                                                    {t('workout_flow.plan.program_label')}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    className={`subscription-option ${plan === 'program' ? 'is-active' : ''}`}
+                                                    onClick={handleProgramSelect}
+                                                >
+                                                    <span className="subscription-option__title">
+                                                        {t('workout_flow.plan.program_option')}
+                                                    </span>
+                                                    <span className="subscription-option__price">
+                                                        {t('profile.balance.label', { count: options.program_price })}
+                                                    </span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="primary-button workout-flow__next"
+                                            disabled={!plan || checkingSubscriptionStatus || (plan === 'subscription' && !selectedPeriod)}
+                                            onClick={handlePlanNext}
+                                        >
+                                            {t('workout_flow.next')}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                             <div className="workout-flow__pane" style={paneStyle}>
                                 <div className="workout-flow__pane-inner">
-                                    <h2 className="workout-flow__title">{t('workout_flow.plan.title')}</h2>
-                                    <div className="workout-flow__balance">
-                                        <span className="workout-flow__balance-label">
-                                            {t('profile.balance.title')}
-                                        </span>
-                                        <span className="workout-flow__balance-value">
-                                            {t('profile.balance.label', { count: profile?.credits ?? 0 })}
-                                        </span>
-                                    </div>
-                                    <div className="workout-flow__plan-blocks">
-                                        <div className="plan-section">
-                                            <div className="plan-section__title">
-                                                {t('workout_flow.plan.subscription_label')}
-                                            </div>
-                                            <div className="subscription-options">
-                                                {options.subscriptions.map((option) => {
-                                                    const active =
-                                                        plan === 'subscription' && selectedPeriod?.period === option.period;
-                                                    return (
-                                                        <button
-                                                            key={option.period}
-                                                            type="button"
-                                                            className={`subscription-option ${active ? 'is-active' : ''}`}
-                                                            onClick={() => handleSubscriptionSelect(option)}
-                                                        >
-                                                            <span className="subscription-option__title">
-                                                                {subscriptionTitleForPeriod(option.period)}
-                                                            </span>
-                                                            <span className="subscription-option__price">
-                                                                {t('profile.balance.label', { count: option.price })}
-                                                            </span>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                        <div className="plan-section">
-                                            <div className="plan-section__title">
-                                                {t('workout_flow.plan.program_label')}
-                                            </div>
-                                            <button
-                                                type="button"
-                                                className={`subscription-option ${plan === 'program' ? 'is-active' : ''}`}
-                                                onClick={handleProgramSelect}
-                                            >
-                                                <span className="subscription-option__title">
-                                                    {t('workout_flow.plan.program_option')}
-                                                </span>
-                                                <span className="subscription-option__price">
-                                                    {t('profile.balance.label', { count: options.program_price })}
-                                                </span>
-                                            </button>
-                                        </div>
+                                    <h2 className="workout-flow__title">{t('workout_flow.days.title')}</h2>
+                                    <div className="day-selector">
+                                        <button
+                                            type="button"
+                                            className="day-selector__btn"
+                                            onClick={decrementSplit}
+                                            aria-label={t('workout_flow.days.decrease')}
+                                        >
+                                            -
+                                        </button>
+                                        <div className="day-selector__value">{splitNumber}</div>
+                                        <button
+                                            type="button"
+                                            className="day-selector__btn"
+                                            onClick={incrementSplit}
+                                            aria-label={t('workout_flow.days.increase')}
+                                        >
+                                            +
+                                        </button>
                                     </div>
                                     <button
                                         type="button"
                                         className="primary-button workout-flow__next"
-                                        disabled={!plan || checkingSubscriptionStatus || (plan === 'subscription' && !selectedPeriod)}
-                                        onClick={handlePlanNext}
+                                        onClick={() => setStepIndex(2)}
                                     >
                                         {t('workout_flow.next')}
                                     </button>
                                 </div>
                             </div>
-                        )}
-                        <div className="workout-flow__pane" style={paneStyle}>
-                            <div className="workout-flow__pane-inner">
-                                <h2 className="workout-flow__title">{t('workout_flow.days.title')}</h2>
-                                <div className="day-selector">
-                                    <button
-                                        type="button"
-                                        className="day-selector__btn"
-                                        onClick={decrementSplit}
-                                        aria-label={t('workout_flow.days.decrease')}
-                                    >
-                                        -
-                                    </button>
-                                    <div className="day-selector__value">{splitNumber}</div>
-                                    <button
-                                        type="button"
-                                        className="day-selector__btn"
-                                        onClick={incrementSplit}
-                                        aria-label={t('workout_flow.days.increase')}
-                                    >
-                                        +
-                                    </button>
-                                </div>
-                                <button
-                                    type="button"
-                                    className="primary-button workout-flow__next"
-                                    onClick={() => setStepIndex(2)}
-                                >
-                                    {t('workout_flow.next')}
-                                </button>
-                            </div>
-                        </div>
-                        <div className="workout-flow__pane" style={paneStyle}>
-                            <div className="workout-flow__pane-inner">
-                                <div className="workout-flow__wishes-head">
-                                    <h2 className="workout-flow__title">
-                                        <span className="workout-flow__title-inline">
-                                            {t('workout_flow.wishes.title')}
-                                            {'\u00a0'}
-                                            <span className="tooltip" ref={tooltipRef}>
-                                                <button
-                                                    type="button"
-                                            className="tooltip__button"
-                                            aria-label={t('workout_flow.wishes.tooltip_label')}
-                                            onClick={() => setTooltipOpen((prev) => !prev)}
-                                            onMouseEnter={() => setTooltipOpen(true)}
-                                            onMouseLeave={() => setTooltipOpen(false)}
-                                        >
-                                            i
-                                        </button>
-                                        {tooltipOpen && (
-                                            <div className="tooltip__bubble" role="tooltip">
-                                                {t('workout_flow.wishes.tooltip')}
-                                            </div>
-                                        )}
+                            <div className="workout-flow__pane" style={paneStyle}>
+                                <div className="workout-flow__pane-inner">
+                                    <div className="workout-flow__wishes-head">
+                                        <h2 className="workout-flow__title">
+                                            <span className="workout-flow__title-inline">
+                                                {t('workout_flow.wishes.title')}
+                                                {'\u00a0'}
+                                                <span className="tooltip" ref={tooltipRef}>
+                                                    <button
+                                                        type="button"
+                                                        className="tooltip__button"
+                                                        aria-label={t('workout_flow.wishes.tooltip_label')}
+                                                        onClick={() => setTooltipOpen((prev) => !prev)}
+                                                        onMouseEnter={() => setTooltipOpen(true)}
+                                                        onMouseLeave={() => setTooltipOpen(false)}
+                                                    >
+                                                        i
+                                                    </button>
+                                                    {tooltipOpen && (
+                                                        <div className="tooltip__bubble" role="tooltip">
+                                                            {t('workout_flow.wishes.tooltip')}
+                                                        </div>
+                                                    )}
+                                                </span>
                                             </span>
-                                        </span>
-                                    </h2>
+                                        </h2>
+                                    </div>
+                                    <textarea
+                                        className="workout-flow__textarea"
+                                        rows={5}
+                                        value={wishes}
+                                        onChange={(event) => setWishes(event.target.value)}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="primary-button workout-flow__generate"
+                                        onClick={handleGenerate}
+                                        disabled={submitting}
+                                    >
+                                        {submitting ? t('workout_flow.generating') : t('workout_flow.generate')}
+                                    </button>
                                 </div>
-                                <textarea
-                                    className="workout-flow__textarea"
-                                    rows={5}
-                                    value={wishes}
-                                    onChange={(event) => setWishes(event.target.value)}
-                                />
-                                <button
-                                    type="button"
-                                    className="primary-button workout-flow__generate"
-                                    onClick={handleGenerate}
-                                    disabled={submitting}
-                                >
-                                    {submitting ? t('workout_flow.generating') : t('workout_flow.generate')}
-                                </button>
                             </div>
                         </div>
-                    </div>
-                </section>
-                {!showTopupModal && !showProcessingModal && !showSubscriptionConfirm && (
+                    </section>
+                )}
+
+                {!showTopupModal && !showSubscriptionConfirm && (
                     <BottomNav activeKey="workouts" />
                 )}
             </div>
@@ -487,24 +548,6 @@ const WorkoutFlowPage: React.FC = () => {
                                 className="subscription-confirm__btn subscription-confirm__btn--confirm"
                             >
                                 {t('subscriptions.replace_confirm.confirm')}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {showProcessingModal && (
-                <div role="dialog" aria-modal="true" className="subscription-confirm">
-                    <div className="subscription-confirm__dialog">
-                        <p className="subscription-confirm__body">
-                            {t('workout_flow.processing')}
-                        </p>
-                        <div className="subscription-confirm__actions">
-                            <button
-                                type="button"
-                                className="subscription-confirm__btn subscription-confirm__btn--confirm"
-                                onClick={closeWebApp}
-                            >
-                                {t('workout_flow.processing_ok')}
                             </button>
                         </div>
                     </div>

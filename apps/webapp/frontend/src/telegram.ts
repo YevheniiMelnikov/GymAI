@@ -188,9 +188,10 @@ export function readInitData(): string {
   return getWebApp()?.initData ?? '';
 }
 
-const LOCALE_MAP: Record<string, Locale> = { en: 'en', ru: 'ru', uk: 'uk' };
+const LOCALE_MAP: Record<string, Locale> = { en: 'en', eng: 'en', ru: 'ru', uk: 'uk', ua: 'uk' };
+const LANG_STORAGE_KEY = 'app:lang';
 
-function normalizeLocale(raw?: string): Locale | null {
+function normalizeLocale(raw?: string | null): Locale | null {
   if (!raw) return null;
   const normalized = raw.toLowerCase();
   if (normalized in LOCALE_MAP) return LOCALE_MAP[normalized];
@@ -199,6 +200,30 @@ function normalizeLocale(raw?: string): Locale | null {
 }
 
 export function readLocale(fallback: Locale = 'en'): Locale {
+  try {
+    const stored = window.sessionStorage.getItem(LANG_STORAGE_KEY);
+    const storedLocale = normalizeLocale(stored);
+    if (storedLocale) return storedLocale;
+  } catch {
+  }
+
+  const docLocale = normalizeLocale(document.documentElement.lang);
+  if (docLocale) return docLocale;
+
   const raw = getWebApp()?.initDataUnsafe?.user?.language_code;
   return normalizeLocale(raw) ?? fallback;
+}
+
+export function readPreferredLocale(paramLang?: string, fallback: Locale = 'en'): Locale {
+  try {
+    const stored = window.sessionStorage.getItem(LANG_STORAGE_KEY);
+    const storedLocale = normalizeLocale(stored);
+    if (storedLocale) return storedLocale;
+  } catch {
+  }
+
+  const paramLocale = normalizeLocale(paramLang);
+  if (paramLocale) return paramLocale;
+
+  return readLocale(fallback);
 }

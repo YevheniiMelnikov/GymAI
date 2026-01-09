@@ -13,6 +13,8 @@ from core.tasks.ai_coach import (
     handle_ai_plan_failure,
     notify_ai_plan_ready_task,
 )
+from django.core.cache import cache
+from config.app_settings import settings
 
 
 class WorkoutPlanRequest(BaseModel):
@@ -41,7 +43,7 @@ def enqueue_workout_plan_generation(
     split_number: int,
     period: SubscriptionPeriod | None,
     previous_subscription_id: int | None = None,
-) -> bool:
+) -> str | None:
     request_id = uuid4().hex
     try:
         payload_model = AiPlanGenerationPayload(
@@ -57,7 +59,7 @@ def enqueue_workout_plan_generation(
         )
     except ValidationError as exc:
         logger.error(f"webapp_plan_invalid_payload profile_id={profile_id} request_id={request_id} error={exc!s}")
-        return False
+        return None
 
     payload = payload_model.model_dump(mode="json")
     headers = {
@@ -104,12 +106,19 @@ def enqueue_workout_plan_generation(
             f"webapp_plan_dispatch_failed profile_id={profile_id} plan_type={plan_type.value} "
             f"request_id={request_id} error={exc!s}"
         )
-        return False
+        return None
 
     task_id = cast(str | None, getattr(async_result, "id", None))
     if task_id is None:
         logger.error(f"webapp_plan_missing_task_id profile_id={profile_id} request_id={request_id}")
-        return False
+        return None
+
+    cache.set(
+        f"generation_status:{request_id}",
+        {"status": "queued", "progress": 5, "stage": "queued"},
+        timeout=settings.AI_COACH_TIMEOUT,
+    )
+
     logger.debug(
         "webapp_plan_dispatch_success request_id={} profile_id={} plan_type={} task_id={}",
         request_id,
@@ -117,4 +126,4 @@ def enqueue_workout_plan_generation(
         plan_type.value,
         task_id,
     )
-    return True
+    return request_id

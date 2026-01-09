@@ -7,7 +7,7 @@ import {
     closeWebApp,
     openTelegramLink,
     readInitData,
-    readLocale,
+    readPreferredLocale,
     showBackButton,
     hideBackButton,
     onBackButtonClick,
@@ -102,7 +102,8 @@ const FaqPage: React.FC = () => {
     }, [navigate]);
 
     useEffect(() => {
-        void applyLang(paramLang ?? readLocale()).then((resolved) => setLang(resolved));
+        const preferred = readPreferredLocale(paramLang);
+        void applyLang(preferred).then((resolved) => setLang(resolved));
     }, [paramLang]);
 
     useEffect(() => {
