@@ -1,10 +1,12 @@
 """Celery tasks that proxy calls to the bot service."""
 
+from datetime import timedelta
 from typing import TYPE_CHECKING, TypedDict
 
 import httpx
 import orjson
 from loguru import logger
+from django.utils import timezone
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -25,8 +27,20 @@ class WeeklySurveyPayload(TypedDict):
     recipients: list[WeeklySurveyRecipient]
 
 
+class SubscriptionRenewalRecipient(TypedDict):
+    profile_id: int
+    tg_id: int
+    language: str | None
+    subscription_id: int
+
+
+class SubscriptionRenewalPayload(TypedDict):
+    recipients: list[SubscriptionRenewalRecipient]
+
+
 __all__ = [
     "send_weekly_survey",
+    "send_subscription_renewal_reminders",
 ]
 
 
@@ -51,6 +65,33 @@ def _fetch_weekly_survey_recipients() -> list[WeeklySurveyRecipient]:
         "profile_id",
         "profile__tg_id",
         "profile__language",
+    ):
+        tg_id = row.get("profile__tg_id")
+        if tg_id is None:
+            continue
+        recipients.append(
+            {
+                "profile_id": int(row["profile_id"]),
+                "tg_id": int(tg_id),
+                "language": row.get("profile__language"),
+                "subscription_id": int(row["id"]),
+            }
+        )
+    return recipients
+
+
+def _fetch_subscription_renewal_recipients() -> list[SubscriptionRenewalRecipient]:
+    recipients: list[SubscriptionRenewalRecipient] = []
+    target_date = (timezone.localdate() + timedelta(days=1)).isoformat()
+    for row in (
+        _active_subscriptions_queryset()
+        .filter(payment_date=target_date)
+        .values(
+            "id",
+            "profile_id",
+            "profile__tg_id",
+            "profile__language",
+        )
     ):
         tg_id = row.get("profile__tg_id")
         if tg_id is None:
@@ -95,4 +136,36 @@ def send_weekly_survey(self) -> None:
         resp.raise_for_status()
     except httpx.HTTPError as exc:
         logger.warning(f"Bot call failed for weekly survey: {exc!s}")
+        raise self.retry(exc=exc)
+
+
+@app.task(
+    bind=True,
+    autoretry_for=(httpx.HTTPError,),
+    retry_backoff=180,
+    retry_jitter=True,
+    max_retries=3,
+)  # pyrefly: ignore[not-callable]
+def send_subscription_renewal_reminders(self) -> None:
+    recipients = _fetch_subscription_renewal_recipients()
+    if not recipients:
+        logger.info("subscription_renewal_skipped reason=no_recipients")
+        return
+
+    payload: SubscriptionRenewalPayload = {"recipients": recipients}
+    body = orjson.dumps(payload)
+    headers = build_internal_hmac_auth_headers(
+        key_id=settings.INTERNAL_KEY_ID,
+        secret_key=settings.INTERNAL_API_KEY,
+        body=body,
+    )
+    base_url = settings.BOT_INTERNAL_URL.rstrip("/")
+    url = f"{base_url}/internal/tasks/send_subscription_renewal/"
+    timeout = internal_request_timeout(settings)
+
+    try:
+        resp = httpx.post(url, content=body, headers=headers, timeout=timeout)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning(f"Bot call failed for subscription renewal: {exc!s}")
         raise self.retry(exc=exc)

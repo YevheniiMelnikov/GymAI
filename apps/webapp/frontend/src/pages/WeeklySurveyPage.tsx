@@ -5,6 +5,7 @@ import type { Day, Exercise, WorkoutDay } from '../api/types';
 import { applyLang, t } from '../i18n/i18n';
 import type { TranslationKey } from '../i18n/i18n';
 import TopBar from '../components/TopBar';
+import LoadingSpinner from '../components/LoadingSpinner';
 import {
     closeWebApp,
     hideBackButton,
@@ -255,9 +256,7 @@ const WeeklySurveyPage: React.FC = () => {
 
             <div className="page-shell weekly-survey">
                 {loading && (
-                    <div className="notice weekly-survey__notice" aria-busy="true">
-                        {t('weekly_survey.loading')}
-                    </div>
+                    <LoadingSpinner className="weekly-survey__notice" />
                 )}
 
                 {!loading && error && (

@@ -144,6 +144,11 @@ weekly_survey_prompt:
   ru: "Как прошла ваша неделя? Поделитесь с {bot_name} своими результатами для обновления вашего тренировочного плана."
   ua: "Як пройшов ваш тиждень? Поділіться з {bot_name} своїми результатами для оновлення вашого тренувального плану."
 
+subscription_renewal_prompt:
+  eng: "⏰ Your current subscription expires tomorrow. You can start a new one in the \"Workouts\" section."
+  ru: "⏰ Ваша текущая подписка истекает завтра. Новую подписку можно оформить в разделе \"Тренировки\"."
+  ua: "⏰ Ваша поточна підписка закінчується завтра. Нову підписку можна оформити в розділі \"Тренування\"."
+
 
 coach_agent_error:
   eng: "An error occurred while processing your request. Please contact <a href='{tg}'>support</a> ✍️"

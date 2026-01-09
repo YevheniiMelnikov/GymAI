@@ -66,6 +66,11 @@ beat_schedule = {
         "schedule": crontab(day_of_week="sun", hour=10, minute=0),
         "options": {"queue": "maintenance"},
     },
+    "send_subscription_renewal_reminders": {
+        "task": "core.tasks.bot_calls.send_subscription_renewal_reminders",
+        "schedule": crontab(hour=9, minute=30),
+        "options": {"queue": "maintenance"},
+    },
 }
 
 if settings.ENABLE_KB_BACKUPS:

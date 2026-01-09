@@ -72,6 +72,7 @@ class MessageText(AutoName):
     select_language = auto()
 
     weekly_survey_prompt = auto()
+    subscription_renewal_prompt = auto()
 
     payment_success = auto()
     payment_failure = auto()

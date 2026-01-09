@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
+import LoadingSpinner from '../components/LoadingSpinner';
 import { applyLang, useI18n, type TranslationKey } from '../i18n/i18n';
 import {
     createDietPlan,
@@ -22,6 +23,7 @@ import {
 import type { DietProduct, ProfileResp } from '../api/types';
 import ProgressBar from '../components/ProgressBar';
 import { useGenerationProgress } from '../hooks/useGenerationProgress';
+import { waitForLatestDietId } from '../utils/diets';
 
 const DIET_PRODUCT_OPTIONS: Array<{ value: DietProduct; labelKey: TranslationKey }> = [
     { value: 'plant_food', labelKey: 'profile.diet_products.plant_food' },
@@ -47,18 +49,24 @@ const DietFlowPage: React.FC = () => {
     const [savingPrefs, setSavingPrefs] = useState(false);
     const [creating, setCreating] = useState(false);
     const [showTopup, setShowTopup] = useState(false);
+    const initData = readInitData();
     const paramLang = searchParams.get('lang') || undefined;
     const progressHelper = useGenerationProgress('diet', (data: any) => {
         const query = searchParams.toString();
         const dietId = data?.result_id;
         if (dietId) {
             navigate(query ? `/diets?diet_id=${dietId}&${query}` : `/diets?diet_id=${dietId}`);
-        } else {
-            navigate(query ? `/diets?${query}` : '/diets');
+            return;
         }
+        void (async () => {
+            const latestId = await waitForLatestDietId(initData);
+            if (latestId) {
+                navigate(query ? `/diets?diet_id=${latestId}&${query}` : `/diets?diet_id=${latestId}`);
+                return;
+            }
+            navigate(query ? `/diets?${query}` : '/diets');
+        })();
     });
-
-    const initData = readInitData();
 
     useEffect(() => {
         const preferred = readPreferredLocale(paramLang);
@@ -211,7 +219,7 @@ const DietFlowPage: React.FC = () => {
             <TopBar title={t('diet.flow.title')} onBack={handleBack} />
             <div className="page-shell">
                 {error && <div className="error-block">{error}</div>}
-                {loading && <div className="notice">{t('workout_flow.loading')}</div>}
+                {loading && <LoadingSpinner />}
 
                 {progressHelper.isActive && !loading && !error && (
                     <ProgressBar

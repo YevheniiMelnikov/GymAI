@@ -11,6 +11,7 @@ import {
 import type { ProfileResp, SubscriptionPlanOption, WorkoutPlanKind, WorkoutPlanOptionsResp } from '../api/types';
 import { applyLang, useI18n } from '../i18n/i18n';
 import BottomNav from '../components/BottomNav';
+import LoadingSpinner from '../components/LoadingSpinner';
 import {
     closeWebApp,
     hideBackButton,
@@ -23,6 +24,7 @@ import {
 } from '../telegram';
 import ProgressBar from '../components/ProgressBar';
 import { useGenerationProgress } from '../hooks/useGenerationProgress';
+import { waitForLatestWorkoutId } from '../utils/workouts';
 
 const DEFAULT_SPLIT_NUMBER = 3;
 const MIN_SPLIT_NUMBER = 1;
@@ -50,6 +52,7 @@ const WorkoutFlowPage: React.FC = () => {
         checked: false,
         active: false,
     });
+    const initData = readInitData();
     const [submitting, setSubmitting] = useState(false);
     const [tooltipOpen, setTooltipOpen] = useState(false);
     const tooltipRef = useRef<HTMLDivElement | null>(null);
@@ -58,28 +61,47 @@ const WorkoutFlowPage: React.FC = () => {
         const params = new URLSearchParams(searchParams.toString());
         const storedPlan = window.localStorage.getItem('generation_plan_type_workout');
         const resolvedPlan = planRef.current ?? (storedPlan as WorkoutPlanKind | null);
+        const isSubscription = resolvedPlan === 'subscription';
+        const locale = readPreferredLocale(paramLang);
 
-        if (resolvedPlan === 'subscription') {
-            params.delete('program_id');
-            params.delete('id');
-            params.set('source', 'subscription');
-            if (resultId) {
-                params.set('subscription_id', resultId);
+        const applyParams = (nextId?: string | null) => {
+            if (isSubscription) {
+                params.delete('program_id');
+                params.delete('id');
+                params.set('source', 'subscription');
+                if (nextId) {
+                    params.set('subscription_id', nextId);
+                } else {
+                    params.delete('subscription_id');
+                }
+            } else {
+                params.delete('subscription_id');
+                params.delete('source');
+                if (nextId) {
+                    params.set('program_id', nextId);
+                } else {
+                    params.delete('program_id');
+                }
             }
+        };
+
+        const finalizeNavigate = () => {
             window.localStorage.removeItem('generation_plan_type_workout');
             const query = params.toString();
             navigate(query ? `/?${query}` : '/');
+        };
+
+        if (resultId) {
+            applyParams(resultId);
+            finalizeNavigate();
             return;
         }
 
-        params.delete('subscription_id');
-        params.delete('source');
-        if (resultId) {
-            params.set('program_id', resultId);
-        }
-        window.localStorage.removeItem('generation_plan_type_workout');
-        const query = params.toString();
-        navigate(query ? `/?${query}` : '/');
+        void (async () => {
+            const latestId = await waitForLatestWorkoutId(initData, isSubscription ? 'subscription' : 'program', locale);
+            applyParams(latestId ? String(latestId) : null);
+            finalizeNavigate();
+        })();
     });
 
     useEffect(() => {
@@ -334,7 +356,7 @@ const WorkoutFlowPage: React.FC = () => {
         return (
             <div className="page-container workout-flow-page">
                 <div className="page-shell">
-                    <div className="notice">{t('workout_flow.loading')}</div>
+                    <LoadingSpinner />
                 </div>
             </div>
         );

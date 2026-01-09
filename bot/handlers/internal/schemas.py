@@ -43,3 +43,14 @@ class WeeklySurveyRecipient(BaseModel):
 
 class WeeklySurveyNotify(BaseModel):
     recipients: list[WeeklySurveyRecipient] = Field(default_factory=list)
+
+
+class SubscriptionRenewalRecipient(BaseModel):
+    profile_id: int
+    tg_id: int
+    language: str | None = None
+    subscription_id: int
+
+
+class SubscriptionRenewalNotify(BaseModel):
+    recipients: list[SubscriptionRenewalRecipient] = Field(default_factory=list)

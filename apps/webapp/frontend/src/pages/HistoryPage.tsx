@@ -3,11 +3,16 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { renderSegmented, SegmentId } from '../components/Segmented';
 import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
+import LoadingSpinner from '../components/LoadingSpinner';
 import { applyLang, t } from '../i18n/i18n';
 import { readInitData, readPreferredLocale, showBackButton, hideBackButton, onBackButtonClick, offBackButtonClick } from '../telegram';
 import type { HistoryItem, HistoryResp, Locale } from '../api/types';
 import { getProgram, getSubscription, HttpError } from '../api/http';
 import { fmtDate, renderLegacyProgram, renderProgramDays, setProgramContext } from '../ui/render_program';
+import { loadFavoriteIds, toggleFavoriteId } from '../utils/favorites';
+
+const STATIC_PREFIX = ((window as any).__STATIC_PREFIX__ as string | undefined) ?? '/static/';
+const STATIC_VERSION = ((window as any).__STATIC_VERSION__ as string | undefined) ?? '';
 
 async function getHistory(locale: Locale): Promise<HistoryResp> {
     const headers: Record<string, string> = {};
@@ -26,6 +31,8 @@ async function getHistory(locale: Locale): Promise<HistoryResp> {
 }
 
 const HistoryPage: React.FC = () => {
+    const PROGRAM_FAVORITES_KEY = 'history_favorites_programs';
+    const SUBSCRIPTION_FAVORITES_KEY = 'history_favorites_subscriptions';
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const switcherRef = useRef<HTMLDivElement>(null);
@@ -37,11 +44,16 @@ const HistoryPage: React.FC = () => {
     const [data, setData] = useState<HistoryResp | null>(null);
     const [listLocale, setListLocale] = useState<Locale>('en');
     const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+    const [showSavedOnly, setShowSavedOnly] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailError, setDetailError] = useState<string | null>(null);
     const [detailLocale, setDetailLocale] = useState<Locale>('en');
     const [detailDate, setDetailDate] = useState<string | number | null>(null);
+    const [programFavorites, setProgramFavorites] = useState<Set<number>>(() => loadFavoriteIds(PROGRAM_FAVORITES_KEY));
+    const [subscriptionFavorites, setSubscriptionFavorites] = useState<Set<number>>(
+        () => loadFavoriteIds(SUBSCRIPTION_FAVORITES_KEY)
+    );
     const [activeSegment, setActiveSegment] = useState<SegmentId>(() => {
         const segment = searchParams.get('segment');
         if (segment === 'subscriptions') {
@@ -59,7 +71,9 @@ const HistoryPage: React.FC = () => {
         () => (activeSegment === 'subscriptions' ? data?.subscriptions : data?.programs) ?? [],
         [activeSegment, data]
     );
+    const activeFavorites = activeSegment === 'subscriptions' ? subscriptionFavorites : programFavorites;
     const canSort = activeItems.length > 1;
+    const showControls = activeItems.length > 0 && !detailOpen;
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -162,15 +176,32 @@ const HistoryPage: React.FC = () => {
         fetchData();
     }, []);
 
-    const sortedItems = useMemo(() => {
-        if (activeItems.length === 0) return [];
-        return [...activeItems].sort((a, b) => {
-            if (sortOrder === 'newest') {
-                return b.created_at - a.created_at;
+    const visibleItems = useMemo(() => {
+        const baseList = showSavedOnly ? activeItems.filter((item) => activeFavorites.has(item.id)) : activeItems;
+        if (baseList.length === 0) {
+            return [];
+        }
+        return [...baseList].sort((a, b) => {
+            if (sortOrder === 'oldest') {
+                return a.created_at - b.created_at;
             }
-            return a.created_at - b.created_at;
+            return b.created_at - a.created_at;
         });
-    }, [activeItems, sortOrder]);
+    }, [activeFavorites, activeItems, showSavedOnly, sortOrder]);
+    const detailNumericId = detailId ? Number(detailId) : Number.NaN;
+    const canFavoriteDetail = Number.isFinite(detailNumericId);
+    const isDetailFavorite = canFavoriteDetail ? activeFavorites.has(detailNumericId) : false;
+
+    const handleToggleFavorite = useCallback(
+        (id: number) => {
+            if (activeSegment === 'subscriptions') {
+                setSubscriptionFavorites((prev) => toggleFavoriteId(SUBSCRIPTION_FAVORITES_KEY, prev, id));
+                return;
+            }
+            setProgramFavorites((prev) => toggleFavoriteId(PROGRAM_FAVORITES_KEY, prev, id));
+        },
+        [activeSegment]
+    );
 
     const handleProgramClick = (id: number) => {
         const params = new URLSearchParams(searchParams.toString());
@@ -316,8 +347,36 @@ const HistoryPage: React.FC = () => {
                     <div className="history-panel">
                         <div ref={switcherRef} id="segmented" className="segmented-container" />
 
-                        {canSort && (
+                        {showControls && (
                             <div className="history-controls" ref={dropdownRef}>
+                                <div className="history-controls__filters">
+                                    <label className="filter-toggle">
+                                        <span
+                                            className={`filter-toggle__icon${showSavedOnly ? ' filter-toggle__icon--active' : ''}`}
+                                            aria-hidden="true"
+                                        >
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                                <path
+                                                    d="M12 3.3l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9 6.8 19.3l1-5.8L3.6 9.4l5.8-.8L12 3.3Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.6"
+                                                    strokeLinejoin="round"
+                                                    fill="currentColor"
+                                                />
+                                            </svg>
+                                        </span>
+                                        <input
+                                            type="checkbox"
+                                            checked={showSavedOnly}
+                                            onChange={(event) => setShowSavedOnly(event.target.checked)}
+                                            aria-label={t('saved_label')}
+                                        />
+                                        <span className="filter-toggle__track" aria-hidden="true">
+                                            <span className="filter-toggle__thumb" />
+                                        </span>
+                                        <span className="sr-only">{t('saved_label')}</span>
+                                    </label>
+                                </div>
                                 <div className="sort-menu">
                                     <button
                                         type="button"
@@ -360,23 +419,23 @@ const HistoryPage: React.FC = () => {
                                         </span>
                                     </button>
 
-                                    {isDropdownOpen && (
-                                        <div className="sort-dropdown" role="listbox">
-                                            <button
-                                                type="button"
-                                                className={`sort-option ${sortOrder === 'newest' ? 'is-active' : ''}`}
-                                                onClick={() => {
-                                                    setSortOrder('newest');
-                                                    setIsDropdownOpen(false);
-                                                }}
-                                            >
-                                                {t('sort_newest')}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={`sort-option ${sortOrder === 'oldest' ? 'is-active' : ''}`}
-                                                onClick={() => {
-                                                    setSortOrder('oldest');
+                                        {isDropdownOpen && (
+                                            <div className="sort-dropdown" role="listbox">
+                                                <button
+                                                    type="button"
+                                                    className={`sort-option ${sortOrder === 'newest' ? 'is-active' : ''}`}
+                                                    onClick={() => {
+                                                        setSortOrder('newest');
+                                                        setIsDropdownOpen(false);
+                                                    }}
+                                                >
+                                                    {t('sort_newest')}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className={`sort-option ${sortOrder === 'oldest' ? 'is-active' : ''}`}
+                                                    onClick={() => {
+                                                        setSortOrder('oldest');
                                                     setIsDropdownOpen(false);
                                                 }}
                                             >
@@ -394,12 +453,20 @@ const HistoryPage: React.FC = () => {
                             <div className="diet-flow__track">
                                 <div className="diet-pane diet-pane--list">
                                     <div className="diet-list" style={{ border: 'none' }}>
-                                        {loading && <div className="diet-empty">{t('workout_flow.loading')}</div>}
-                                        {!loading && !error && sortedItems.length === 0 && (
+                                        {loading && <LoadingSpinner />}
+                                        {!loading && !error && visibleItems.length === 0 && (
                                             <div className="empty-state history-empty">
                                                 <img
-                                                    src="/static/images/404.png"
-                                                    alt={activeSegment === 'subscriptions' ? t('subscriptions.title') : t('no_programs')}
+                                                    src={`${STATIC_PREFIX}images/404.png${STATIC_VERSION ? `?v=${STATIC_VERSION}` : ''}`}
+                                                    alt={
+                                                        showSavedOnly
+                                                            ? activeSegment === 'subscriptions'
+                                                                ? t('subscriptions.saved_empty')
+                                                                : t('program.saved_empty')
+                                                            : activeSegment === 'subscriptions'
+                                                                ? t('subscriptions.title')
+                                                                : t('no_programs')
+                                                    }
                                                     className="history-empty__image"
                                                     onError={(ev) => {
                                                         const target = ev.currentTarget;
@@ -409,11 +476,17 @@ const HistoryPage: React.FC = () => {
                                                     }}
                                                 />
                                                 <p className="history-empty__caption">
-                                                    {activeSegment === 'subscriptions' ? t('subscriptions.empty') : t('no_programs')}
+                                                    {showSavedOnly
+                                                        ? activeSegment === 'subscriptions'
+                                                            ? t('subscriptions.saved_empty')
+                                                            : t('program.saved_empty')
+                                                        : activeSegment === 'subscriptions'
+                                                            ? t('subscriptions.empty')
+                                                            : t('no_programs')}
                                                 </p>
                                             </div>
                                         )}
-                                        {!loading && !error && sortedItems.length > 0 && sortedItems.map((it) => (
+                                        {!loading && !error && visibleItems.length > 0 && visibleItems.map((it) => (
                                             <button
                                                 key={it.id}
                                                 type="button"
@@ -431,16 +504,39 @@ const HistoryPage: React.FC = () => {
                                                         {t('program.created', { date: fmtDate(it.created_at, listLocale) })}
                                                     </p>
                                                 </div>
-                                                <span className="diet-row__chevron" aria-hidden="true">
-                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                                                        <path
-                                                            d="M7 10l5 5 5-5"
-                                                            stroke="currentColor"
-                                                            strokeWidth="1.6"
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                        />
-                                                    </svg>
+                                                <span className="diet-row__actions">
+                                                    <button
+                                                        type="button"
+                                                        className={`diet-row__favorite${activeFavorites.has(it.id) ? ' is-active' : ''}`}
+                                                        onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            handleToggleFavorite(it.id);
+                                                        }}
+                                                        aria-pressed={activeFavorites.has(it.id)}
+                                                        aria-label={t('saved_label')}
+                                                        title={t('saved_label')}
+                                                    >
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                            <path
+                                                                d="M12 3.3l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9 6.8 19.3l1-5.8L3.6 9.4l5.8-.8L12 3.3Z"
+                                                                stroke="currentColor"
+                                                                strokeWidth="1.6"
+                                                                strokeLinejoin="round"
+                                                                fill={activeFavorites.has(it.id) ? 'currentColor' : 'none'}
+                                                            />
+                                                        </svg>
+                                                    </button>
+                                                    <span className="diet-row__chevron" aria-hidden="true">
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                                                            <path
+                                                                d="M7 10l5 5 5-5"
+                                                                stroke="currentColor"
+                                                                strokeWidth="1.6"
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                            />
+                                                        </svg>
+                                                    </span>
                                                 </span>
                                             </button>
                                         ))}
@@ -449,16 +545,38 @@ const HistoryPage: React.FC = () => {
 
                                 <div className="diet-pane diet-pane--detail">
                                     <div className="diet-detail" aria-busy={detailLoading}>
-                                        {detailLoading && <div className="diet-empty">{t('workout_flow.loading')}</div>}
+                                        {detailLoading && <LoadingSpinner />}
                                         {detailError && <div className="error-block">{detailError}</div>}
                                         {detailOpen && !detailError && (
                                             <div className="history-detail">
+                                                <div className="history-detail__meta">
+                                                    {canFavoriteDetail && (
+                                                        <button
+                                                            type="button"
+                                                            className={`diet-favorite${isDetailFavorite ? ' is-active' : ''}`}
+                                                            onClick={() => handleToggleFavorite(detailNumericId)}
+                                                            aria-pressed={isDetailFavorite}
+                                                            aria-label={t('saved_label')}
+                                                            title={t('saved_label')}
+                                                        >
+                                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                                <path
+                                                                    d="M12 3.3l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9 6.8 19.3l1-5.8L3.6 9.4l5.8-.8L12 3.3Z"
+                                                                    stroke="currentColor"
+                                                                    strokeWidth="1.6"
+                                                                    strokeLinejoin="round"
+                                                                    fill={isDetailFavorite ? 'currentColor' : 'none'}
+                                                                />
+                                                            </svg>
+                                                        </button>
+                                                    )}
+                                                    {detailDate && (
+                                                        <div className="diet-date">
+                                                            {t('program.created', { date: fmtDate(detailDate, detailLocale) })}
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <div ref={detailRef} className="history-detail__content" />
-                                                {detailDate && (
-                                                    <div className="diet-date">
-                                                        {t('program.created', { date: fmtDate(detailDate, detailLocale) })}
-                                                    </div>
-                                                )}
                                             </div>
                                         )}
                                     </div>

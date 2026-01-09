@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from bot.keyboards import program_view_kb as _program_view_kb, weekly_survey_kb
 from bot.texts import MessageText, translate
 from bot.utils.urls import support_contact_url, get_webapp_url
-from bot.handlers.internal.schemas import WeeklySurveyNotify
+from bot.handlers.internal.schemas import WeeklySurveyNotify, SubscriptionRenewalNotify
 from bot.handlers.internal.workout_plans import FINALIZERS, PlanFinalizeContext
 from config.app_settings import settings
 from core.exceptions import ProfileNotFoundError
@@ -242,6 +242,40 @@ async def internal_send_weekly_survey(request: web.Request) -> web.Response:
             logger.info(f"weekly_survey_sent profile_id={recipient.profile_id}")
         except Exception as exc:
             logger.error(f"weekly_survey_failed profile_id={recipient.profile_id} error={exc!s}")
+
+    return web.json_response({"result": "ok", "sent": len(payload.recipients)})
+
+
+@require_internal_auth
+async def internal_send_subscription_renewal(request: web.Request) -> web.Response:
+    bot: Bot = request.app["bot"]
+    try:
+        raw_payload = await request.json()
+    except Exception:
+        logger.error("subscription_renewal_invalid_json")
+        return web.json_response({"detail": "Invalid JSON"}, status=400)
+
+    try:
+        payload = SubscriptionRenewalNotify.model_validate(raw_payload)
+    except ValidationError as exc:
+        logger.error(f"subscription_renewal_invalid_payload error={exc}")
+        return web.json_response({"detail": "Invalid payload"}, status=400)
+
+    if not payload.recipients:
+        logger.info("subscription_renewal_skipped reason=no_recipients")
+        return web.json_response({"result": "no_recipients"})
+
+    for recipient in payload.recipients:
+        lang = recipient.language or settings.DEFAULT_LANG
+        try:
+            await bot.send_message(
+                chat_id=recipient.tg_id,
+                text=translate(MessageText.subscription_renewal_prompt, lang),
+                disable_notification=True,
+            )
+            logger.info(f"subscription_renewal_sent profile_id={recipient.profile_id}")
+        except Exception as exc:
+            logger.error(f"subscription_renewal_failed profile_id={recipient.profile_id} error={exc!s}")
 
     return web.json_response({"result": "ok", "sent": len(payload.recipients)})
 

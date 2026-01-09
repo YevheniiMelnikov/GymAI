@@ -33,7 +33,39 @@ if [ "${SKIP_COLLECTSTATIC}" = "true" ]; then
   echo "▶ Skipping collectstatic (disabled)"
 elif [ "$ROLE" = "web" ] || [ "$ROLE" = "api" ]; then
   echo "▶ Collecting static files..."
-  python apps/manage.py collectstatic --noinput || echo "Skipping collectstatic"
+  CLEAR_FLAG=""
+  if [ "${COLLECTSTATIC_CLEAR}" = "true" ]; then
+    CLEAR_FLAG="--clear"
+  fi
+  python apps/manage.py collectstatic --noinput $CLEAR_FLAG || echo "Skipping collectstatic"
+  if [ -d "/app/apps/webapp/static" ]; then
+    mkdir -p /app/staticfiles/css /app/staticfiles/i18n /app/staticfiles/images
+    copy_static_file() {
+      SRC="$1"
+      DST="$2"
+      if [ ! -f "$SRC" ]; then
+        return 0
+      fi
+      if [ -f "$DST" ]; then
+        SRC_INODE=$(stat -c "%d:%i" "$SRC")
+        DST_INODE=$(stat -c "%d:%i" "$DST")
+        if [ "$SRC_INODE" = "$DST_INODE" ]; then
+          return 0
+        fi
+      fi
+      cp -f "$SRC" "$DST"
+    }
+    copy_static_file "/app/apps/webapp/static/css/common.css" "/app/staticfiles/css/common.css"
+    if [ -d "/app/apps/webapp/static/i18n" ]; then
+      for JSON_FILE in /app/apps/webapp/static/i18n/*.json; do
+        if [ -f "$JSON_FILE" ]; then
+          BASENAME=$(basename "$JSON_FILE")
+          copy_static_file "$JSON_FILE" "/app/staticfiles/i18n/$BASENAME"
+        fi
+      done
+    fi
+    copy_static_file "/app/apps/webapp/static/images/404.png" "/app/staticfiles/images/404.png"
+  fi
 else
   echo "▶ Skipping collectstatic for role $ROLE"
 fi

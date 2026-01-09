@@ -303,6 +303,7 @@ main#app{
   flex-direction: column;
   gap: clamp(18px, 2.4vw, 26px);
   flex: 1 1 auto;
+  position: relative;
 }
 
 .page-container{
@@ -1003,6 +1004,8 @@ h1.page-title,
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
   width: 100%;
   max-width: 720px;
   align-self: stretch;
@@ -1012,6 +1015,73 @@ h1.page-title,
   position: sticky;
   top: 62px;
   z-index: 11;
+}
+.history-controls__filters{
+  display: flex;
+  align-items: center;
+}
+.sr-only{
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.filter-toggle{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+.filter-toggle input{
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.filter-toggle__track{
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--text) 18%, transparent);
+  background: color-mix(in oklab, var(--surface) 86%, var(--bg));
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  transition: background .18s ease, border-color .18s ease;
+  box-sizing: border-box;
+}
+.filter-toggle__thumb{
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text);
+  transition: transform .18s ease, background .18s ease;
+}
+.filter-toggle input:checked + .filter-toggle__track{
+  background: color-mix(in oklab, var(--accent) 22%, var(--bg));
+  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+}
+.filter-toggle input:checked + .filter-toggle__track .filter-toggle__thumb{
+  transform: translateX(14px);
+  background: var(--accent);
+}
+.filter-toggle__icon{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in oklab, var(--text) 55%, var(--muted));
+  transition: color .18s ease;
+}
+.filter-toggle__icon--active{
+  color: #f2c94c;
 }
 .sort-menu{
   position: relative;
@@ -2201,6 +2271,36 @@ a:hover{ opacity: .9; }
   font-size: 14px;
   font-weight: 600;
 }
+.diet-row__actions{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.diet-row__favorite{
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
+  background: color-mix(in oklab, var(--surface) 80%, transparent);
+  color: var(--text);
+  padding: 0;
+  cursor: pointer;
+  transition: transform .12s ease, background .18s ease, border-color .18s ease, color .18s ease;
+}
+.diet-row__favorite:hover{
+  background: color-mix(in oklab, var(--surface) 70%, transparent);
+  border-color: color-mix(in oklab, var(--text) 22%, transparent);
+}
+.diet-row__favorite:active{
+  transform: scale(.95);
+}
+.diet-row__favorite.is-active{
+  color: #f2c94c;
+  border-color: color-mix(in oklab, #f2c94c 70%, transparent);
+}
 .diet-row__chevron{
   color: var(--muted);
   transform: rotate(-90deg);
@@ -2208,6 +2308,44 @@ a:hover{ opacity: .9; }
 .diet-detail{
   position: relative;
   padding: 6px 2px 24px;
+}
+.diet-detail__actions{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.diet-detail__actions .diet-copy{
+  position: static;
+  right: auto;
+  top: auto;
+}
+.diet-favorite{
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
+  background: color-mix(in oklab, var(--surface) 80%, transparent);
+  color: var(--text);
+  padding: 0;
+  cursor: pointer;
+  transition: transform .12s ease, background .18s ease, border-color .18s ease, color .18s ease;
+}
+.diet-favorite:hover{
+  background: color-mix(in oklab, var(--surface) 70%, transparent);
+  border-color: color-mix(in oklab, var(--text) 22%, transparent);
+}
+.diet-favorite:active{
+  transform: scale(.96);
+}
+.diet-favorite.is-active{
+  color: #f2c94c;
+  border-color: color-mix(in oklab, #f2c94c 70%, transparent);
+  background: color-mix(in oklab, #f2c94c 10%, var(--surface));
 }
 .diet-copy{
   position: absolute;
@@ -2294,10 +2432,81 @@ a:hover{ opacity: .9; }
   color: var(--muted);
   margin-top: 26px;
 }
+.history-detail__meta,
+.program-meta{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 6px 0 12px;
+}
+.history-detail__meta .diet-date,
+.program-meta .diet-date{
+  margin-top: 0;
+  order: -1;
+}
 .diet-empty{
   padding: 18px 2px;
   color: var(--muted);
   text-align: center;
+}
+.progress-view{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 12;
+  background: transparent;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+}
+.progress-view__content{
+  width: 90%;
+  max-width: 400px;
+  background: transparent;
+  padding: 18px 12px;
+  border-radius: 0;
+  box-shadow: none;
+  text-align: center;
+  color: var(--tg-theme-text-color, #000000);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin: auto !important;
+  position: relative !important;
+}
+.progress-view__spinner{
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--tg-theme-secondary-bg-color, #e0e0e0);
+  border-top: 3px solid var(--tg-theme-button-color, #007AFF);
+  border-radius: 50%;
+  animation: progress-spin 1s linear infinite;
+}
+@keyframes progress-spin{
+  0%{ transform: rotate(0deg); }
+  100%{ transform: rotate(360deg); }
+}
+.progress-view__hint{
+  font-size: 12px;
+  color: color-mix(in oklab, var(--tg-theme-text-color, #000000) 55%, var(--tg-theme-hint-color, #8e8e93));
+  line-height: 1.45;
+  margin: 0;
+  padding: 0;
+  max-width: 320px;
+}
+.progress-view__art{
+  width: min(260px, 70vw);
+  max-width: 260px;
+  max-height: 320px;
+  height: auto;
+  object-fit: contain;
+  margin: 0 auto;
 }
 .diet-flow__hint{
   margin: 0;

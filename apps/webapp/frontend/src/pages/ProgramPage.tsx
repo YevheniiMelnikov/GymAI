@@ -21,7 +21,8 @@ import type { Locale, Program } from '../api/types';
 import { renderSegmented, SegmentId } from '../components/Segmented';
 import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
-import ProgressBar from '../components/ProgressBar';
+import LoadingSpinner from '../components/LoadingSpinner';
+import { loadFavoriteIds, toggleFavoriteId } from '../utils/favorites';
 import { useGenerationProgress } from '../hooks/useGenerationProgress';
 import { closeWebApp } from '../telegram';
 
@@ -55,6 +56,8 @@ const storeLastWorkoutSegment = (segment: SegmentId): void => {
 };
 
 const ProgramPage: React.FC = () => {
+    const PROGRAM_FAVORITES_KEY = 'history_favorites_programs';
+    const SUBSCRIPTION_FAVORITES_KEY = 'history_favorites_subscriptions';
     const navigate = useNavigate();
     const { t } = useI18n();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -73,6 +76,11 @@ const ProgramPage: React.FC = () => {
     const [dateText, setDateText] = useState('');
     const [showSubscriptionConfirm, setShowSubscriptionConfirm] = useState(false);
     const [showIntro, setShowIntro] = useState(false);
+    const [currentItemId, setCurrentItemId] = useState<number | null>(null);
+    const [programFavorites, setProgramFavorites] = useState<Set<number>>(() => loadFavoriteIds(PROGRAM_FAVORITES_KEY));
+    const [subscriptionFavorites, setSubscriptionFavorites] = useState<Set<number>>(
+        () => loadFavoriteIds(SUBSCRIPTION_FAVORITES_KEY)
+    );
     const [activeSegment, setActiveSegment] = useState<SegmentId>(() => {
         const source = searchParams.get('source');
         if (source === 'subscription') {
@@ -87,6 +95,9 @@ const ProgramPage: React.FC = () => {
 
     const programId = searchParams.get('program_id') || searchParams.get('id') || '';
     const paramLang = searchParams.get('lang') || undefined;
+    const isSubscriptionView = activeSegment === 'subscriptions';
+    const activeFavorites = isSubscriptionView ? subscriptionFavorites : programFavorites;
+    const isCurrentFavorite = currentItemId !== null ? activeFavorites.has(currentItemId) : false;
 
     useEffect(() => {
         const preferred = readPreferredLocale(paramLang);
@@ -173,6 +184,7 @@ const ProgramPage: React.FC = () => {
             setLoading(true);
             setError(null);
             setDateText('');
+            setCurrentItemId(null);
             if (contentRef.current) contentRef.current.innerHTML = '';
 
             try {
@@ -187,9 +199,21 @@ const ProgramPage: React.FC = () => {
 
                     if (load.kind === 'structured') {
                         programData = load.program;
+                        if (programData.id) {
+                            const numericId = Number(programData.id);
+                            if (Number.isFinite(numericId)) {
+                                setCurrentItemId(numericId);
+                            }
+                        }
                     } else {
                         legacyText = load.programText;
                         createdAt = load.createdAt ?? null;
+                        if (programId) {
+                            const numericId = Number(programId);
+                            if (Number.isFinite(numericId)) {
+                                setCurrentItemId(numericId);
+                            }
+                        }
                     }
                 } else {
                     // Subscriptions
@@ -204,8 +228,20 @@ const ProgramPage: React.FC = () => {
                             created_at: sub.created_at ?? null,
                             days: sub.days
                         };
+                        if (sub.id) {
+                            const numericId = Number(sub.id);
+                            if (Number.isFinite(numericId)) {
+                                setCurrentItemId(numericId);
+                            }
+                        }
                     } else if (sub.program) {
                         legacyText = sub.program;
+                        if (subscriptionId) {
+                            const numericId = Number(subscriptionId);
+                            if (Number.isFinite(numericId)) {
+                                setCurrentItemId(numericId);
+                            }
+                        }
                     } else {
                         throw new Error('no_programs');
                     }
@@ -372,6 +408,17 @@ const ProgramPage: React.FC = () => {
         setShowIntro(false);
     }, []);
 
+    const handleToggleFavorite = useCallback(() => {
+        if (currentItemId === null) {
+            return;
+        }
+        if (activeSegment === 'subscriptions') {
+            setSubscriptionFavorites((prev) => toggleFavoriteId(SUBSCRIPTION_FAVORITES_KEY, prev, currentItemId));
+            return;
+        }
+        setProgramFavorites((prev) => toggleFavoriteId(PROGRAM_FAVORITES_KEY, prev, currentItemId));
+    }, [activeSegment, currentItemId]);
+
     const fabStyle: React.CSSProperties = {
         position: 'fixed',
         bottom: 'calc(56px + var(--bottom-nav-offset, 0px))',
@@ -398,24 +445,40 @@ const ProgramPage: React.FC = () => {
             <TopBar title={t('program.title')} />
 
             <div className="page-shell">
-                {progressHelper.isActive ? (
-                    <ProgressBar
-                        progress={progressHelper.progress}
-                        stage={progressHelper.stage}
-                        onClose={closeWebApp}
-                    />
-                ) : (
-                    <>
-                        <div id="content" aria-busy={loading}>
-                            <div className="history-panel program-panel">
-                                <div ref={switcherRef} id="segmented" className="segmented-container" />
+                <>
+                    <div id="content" aria-busy={loading}>
+                        <div className="history-panel program-panel">
+                            <div ref={switcherRef} id="segmented" className="segmented-container" />
+
+                                {(currentItemId !== null || dateText) && (
+                                    <div className="program-meta">
+                                        {currentItemId !== null && (
+                                            <button
+                                                type="button"
+                                                className={`diet-favorite${isCurrentFavorite ? ' is-active' : ''}`}
+                                                onClick={handleToggleFavorite}
+                                                aria-pressed={isCurrentFavorite}
+                                                aria-label={t('saved_label')}
+                                                title={t('saved_label')}
+                                            >
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                    <path
+                                                        d="M12 3.3l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9 6.8 19.3l1-5.8L3.6 9.4l5.8-.8L12 3.3Z"
+                                                        stroke="currentColor"
+                                                        strokeWidth="1.6"
+                                                        strokeLinejoin="round"
+                                                        fill={isCurrentFavorite ? 'currentColor' : 'none'}
+                                                    />
+                                                </svg>
+                                            </button>
+                                        )}
+                                        {dateText && <div className="diet-date">{dateText}</div>}
+                                    </div>
+                                )}
 
                                 <div ref={contentRef} className="week centered" />
-                                <div id="program-date" hidden={!dateText}>
-                                    {dateText}
-                                </div>
 
-                                {loading && <div aria-busy="true">Loading...</div>}
+                                {loading && <LoadingSpinner />}
                                 {error && (
                                     <div className="empty-state history-empty">
                                         <img
@@ -436,8 +499,7 @@ const ProgramPage: React.FC = () => {
                         </div>
 
                         <div className="history-footer" />
-                    </>
-                )}
+                </>
             </div>
             {creationAction && !isExerciseEditOpen && !isTechniqueOpen && !progressHelper.isActive && (
                 <button
