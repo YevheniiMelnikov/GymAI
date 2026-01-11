@@ -335,12 +335,17 @@ function attachDetailsAnimation(details: HTMLDetailsElement, content: HTMLElemen
     return;
   }
   let isAnimating = false;
+  let animationTimer: number | null = null;
 
   const cleanup = () => {
     content.style.height = '';
     content.style.overflow = '';
     content.style.transition = '';
     isAnimating = false;
+    if (animationTimer !== null) {
+      window.clearTimeout(animationTimer);
+      animationTimer = null;
+    }
   };
 
   const animateOpen = () => {
@@ -361,6 +366,7 @@ function attachDetailsAnimation(details: HTMLDetailsElement, content: HTMLElemen
       cleanup();
     };
     content.addEventListener('transitionend', finish);
+    animationTimer = window.setTimeout(finish, 520);
   };
 
   const animateClose = () => {
@@ -393,6 +399,7 @@ function attachDetailsAnimation(details: HTMLDetailsElement, content: HTMLElemen
       cleanup();
     };
     content.addEventListener('transitionend', finish);
+    animationTimer = window.setTimeout(finish, 460);
   };
 
   summary.addEventListener('click', (event) => {
