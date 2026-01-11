@@ -10,7 +10,7 @@ GymBot is a Dockerized platform that includes a Telegram bot (aiogram), API (Dja
 * Telegram bot based on `aiogram`
 * Redis and PostgreSQL for data and caching
 * ASGI server (`uvicorn`)
-* Reverse proxy via Nginx with HTTPS
+* Reverse proxy via Nginx
 * Ready for Docker deployment
 
 ---
@@ -25,7 +25,7 @@ GymBot is a Dockerized platform that includes a Telegram bot (aiogram), API (Dja
 * **Celery + Beat** – background jobs and schedules (AI Coach tasks run on dedicated `ai_coach_worker`).
 * **Redis** – cache, queues, idempotency.
 * **PostgreSQL + Qdrant** – relational storage via PostgreSQL while Qdrant handles vector embeddings.
-* **Nginx** – reverse proxy and TLS termination.
+* **Nginx** – reverse proxy.
 
 **Key directories**
 
@@ -63,13 +63,13 @@ GymBot is a Dockerized platform that includes a Telegram bot (aiogram), API (Dja
 4. Build and run the services (locally):
 
    ```bash
-   task localrun
+   task run
    ```
 
    Or manually:
 
    ```bash
-   docker compose -f docker/docker-compose.yml up --build
+   docker compose -f docker/docker-compose-local.yml up --build
    ```
 
 ---
@@ -80,13 +80,8 @@ Sources are located in `bot/` with the entrypoint `bot/main.py`.
 
 Local development options:
 
-* With Docker Compose (recommended for API/DB/Redis): `task localrun` starts Postgres, Redis, API, local Nginx on [http://localhost:9090](http://localhost:9090). When `CF_TUNNEL_TOKEN` is defined the bundled Cloudflare tunnel also connects to expose the stack for local development (never run the tunnel in production).
-* Run the bot locally from your IDE or terminal:
-
-  * Ensure Redis and API are up (via `task localrun`).
-  * Start the bot: `uv run python -m bot.main`.
-  * Local Nginx forwards webhooks to `host.docker.internal:8088` as configured in `docker/nginx.local.conf`.
-* (Optional) Expose the local stack to Telegram via the bundled Cloudflare tunnel. Set `CF_TUNNEL_TOKEN` in `.env` before running `task localrun` so the tunnel container can authenticate; without the token the container exits immediately. The tunnel is meant purely for local testing—use proper ingress in production. Use the published URL as `WEBHOOK_HOST` when tunnelling Telegram webhooks.
+* With Docker Compose: `task run` starts Postgres, Redis, RabbitMQ, Qdrant, Neo4j, API, bot, AI coach, and local Nginx on [http://localhost:8000](http://localhost:8000). When `CF_TUNNEL_TOKEN` is defined the bundled Cloudflare tunnel also connects to expose the stack for local development (never run the tunnel in production).
+* (Optional) Expose the local stack to Telegram via the bundled Cloudflare tunnel. Set `CF_TUNNEL_TOKEN` in `.env` before running `task run` so the tunnel container can authenticate; without the token the container exits immediately. The tunnel is meant purely for local testing—use proper ingress in production. Use the published URL as `WEBHOOK_HOST` when tunnelling Telegram webhooks.
 
 > To run bot locally FULLY with docker set `DOCKER_BOT_START=true`
 
@@ -94,18 +89,18 @@ Local development options:
 
 ## API
 
-The Django API is served by `uvicorn`.
+The Django API is served by Gunicorn with Uvicorn workers.
 
 **Local URLs**
 
-* Admin panel (via API directly): [http://localhost:8000/admin/](http://localhost:8000/admin/)
-* Admin panel (via local Nginx proxy): [https://api.gymbot.site/admin/](http://localhost:9090/admin/)
-* Healthcheck: [http://localhost:8000/health/](http://localhost:8000/health/)
+* Admin panel (via API directly): [http://localhost:18000/admin/](http://localhost:18000/admin/)
+* Admin panel (via local Nginx proxy): [http://localhost:8000/admin/](http://localhost:8000/admin/)
+* Healthcheck: [http://localhost:18000/health/](http://localhost:18000/health/)
 
 **Production (behind Nginx)**
 
-* Admin panel: `https://<your-domain>/admin/`
-* Healthcheck: `https://<your-domain>/health/`
+* Admin panel: `http://<your-domain>/admin/`
+* Healthcheck: `http://<your-domain>/health/`
 
 Use the credentials from `docker/.env` (`DJANGO_ADMIN` / `DJANGO_PASSWORD`) to access the admin interface.
 
@@ -126,7 +121,7 @@ Redis keeps acting as the cache layer and Celery result backend. The production 
 ## RabbitMQ
 
 RabbitMQ is the Celery broker. Credentials and the vhost are configurable through `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, and `RABBITMQ_VHOST`. `RABBITMQ_URL` can be set directly; otherwise it is constructed from the individual parts. The management UI is exposed on port `15672` by default in Docker Compose and authenticates with the same `RABBITMQ_USER`/`RABBITMQ_PASSWORD` values (defaults `rabbitmq`/`rabbitmq`).
-In the production compose file the RabbitMQ ports are not published to the host; to reach the management UI use `docker compose port rabbitmq 15672` or a local override file that maps ports for debugging only.
+In the production compose file the RabbitMQ ports are published to the host (see the `HOST_RABBITMQ_PORT` and `HOST_RABBITMQ_MANAGEMENT_PORT` mappings).
 
 ---
 
@@ -136,7 +131,7 @@ For local development, `docker-compose-local.yml` includes a `webapp_watch` serv
 
 ## Celery
 
-Background tasks are processed by Celery workers. Docker Compose includes two services (`celery` and `beat`) for this purpose. When running the worker outside of Docker make sure RabbitMQ and Redis are reachable and set `RABBITMQ_URL` and `REDIS_URL` accordingly. You may also need to set `BOT_INTERNAL_URL` so Celery can reach the bot API.
+Background tasks are processed by Celery workers. Docker Compose includes `celery_worker` and `ai_coach_worker` in the local stack, plus `beat` in `docker-compose.yml`. When running the worker outside of Docker make sure RabbitMQ and Redis are reachable and set `RABBITMQ_URL` and `REDIS_URL` accordingly. You may also need to set `BOT_INTERNAL_URL` so Celery can reach the bot API.
 
 ```bash
 PYTHONPATH=. celery -A config.celery:celery_app worker \
@@ -167,7 +162,7 @@ AI coach reports successful `ask_ai`, diet, and plan generations to the API via 
 
 ## AI Coach and Knowledge Base
 
-The project ships an AI coach backed by Cognee. Each client and chat is mapped to datasets named `client_<id>_message`. Chat entries are stored with a `user:` or `bot:` prefix so Cognee keeps the full dialog history. SHA‑256 hashes are cached in Redis with a TTL derived from `BACKUP_RETENTION_DAYS` to prevent repeat ingestion. New texts are ingested asynchronously and cognified before they are searchable.
+The project ships an AI coach backed by Cognee. Profile and chat datasets are named `kb_profile_<id>` and `kb_chat_<id>`. Chat entries are stored with a `client:` or `ai_coach:` prefix so Cognee keeps the full dialog history. SHA‑256 hashes are cached in Redis with a TTL derived from `BACKUP_RETENTION_DAYS` to prevent repeat ingestion. New texts are ingested asynchronously and cognified before they are searchable.
 
 To refresh external knowledge (e.g., documents from Google Drive), Celery calls `refresh_external_knowledge` every `KNOWLEDGE_REFRESH_INTERVAL` seconds. The task sends an authenticated request to the AI coach, which in turn runs `KnowledgeBase.refresh()`.
 
@@ -214,13 +209,7 @@ For supersets, at least two exercises must share the same `superset_id`, and the
 
 ## Database Migrations
 
-Run inside Docker (API container):
-
-```bash
-task migrate
-```
-
-This will run `makemigrations` and `migrate`.
+Migrations run automatically on container start when `RUN_MIGRATIONS=true` (enabled in Docker Compose).
 
 ---
 
@@ -262,8 +251,8 @@ task lint
 
 **Installed hooks**
 
-* `ruff` for formatting and linting
-* `mypy` for static type checking
+* `ruff` for linting (with auto-fixes)
+* `pyrefly` for static type checking
 * `pytest` for running tests
 * `uv-lock` to check the lock file
 * Basic hooks: `check-yaml`, `trailing-whitespace`, `end-of-file-fixer`
@@ -298,13 +287,13 @@ curl http://localhost/health/
 
 ## Nginx
 
-Nginx acts as a reverse proxy with HTTPS (Let's Encrypt) and routes requests:
+Nginx acts as a reverse proxy and routes requests:
 
 * `/static/` → Django static files
 * `/api/` → API server
 * `/` → Telegram bot
 
-See `docker/nginx.conf` for configuration. Rebuild the image to apply changes:
+See `docker/nginx.conf.template` (production) and `docker/nginx.local.conf` for configuration. Rebuild the image to apply changes:
 
 ```bash
 docker compose -f docker/docker-compose.yml up -d --build nginx
@@ -319,9 +308,9 @@ Create `docker/.env` from `docker/.env.example` and set the following minimum va
 **Required**
 
 * `SECRET_KEY` – Django secret key
-* `API_KEY` – internal API key for bot/API communication (generate from Django container)
+* `API_KEY` – API key for bot/API communication
 * `BOT_TOKEN` – Telegram bot token
-* `WEBHOOK_HOST` – base URL for webhooks (e.g., `http://localhost:9090` for local Nginx)
+* `WEBHOOK_HOST` – base URL for webhooks (e.g., `http://localhost:8000` for local Nginx)
 * `CF_TUNNEL_TOKEN` – (optional, local development) Cloudflare Zero Trust token for the bundled `cloudflare` tunnel service; set it to make the tunnel container establish a connection automatically.
 
 > **Important:** To enable Google services (Sheets/Drive/Docs), you **must** place a file named `google_creds.json` at the **project root**. This file is bind-mounted into containers at `/app/google_creds.json` and should be referenced by `GOOGLE_APPLICATION_CREDENTIALS`.
