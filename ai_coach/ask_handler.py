@@ -13,6 +13,13 @@ from fastapi.responses import JSONResponse  # pyrefly: ignore[import-error]
 from loguru import logger  # pyrefly: ignore[import-error]
 from pydantic import ValidationError  # pyrefly: ignore[import-error]
 
+try:  # pragma: no cover - optional dependency guard
+    import pydantic_ai.exceptions as _pa_exceptions  # type: ignore
+except Exception:  # noqa: BLE001
+    ModelHTTPError = RuntimeError
+else:
+    ModelHTTPError = getattr(_pa_exceptions, "ModelHTTPError", RuntimeError)
+
 from ai_coach.agent import AgentDeps, CoachAgent
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent.knowledge.schemas import ProjectionStatus
@@ -670,6 +677,17 @@ async def handle_coach_request(
             )
             result = await _handle_abort(exc, deps, mode)
             return result
+        except ModelHTTPError as exc:
+            inflight_error = exc
+            status_code = int(getattr(exc, "status_code", 503) or 503)
+            if 400 <= status_code < 500:
+                logger.error(
+                    f"/ask agent failed rid={rid} request_id={data.request_id} "
+                    f"profile_id={data.profile_id} mode={mode.value} status={status_code} detail={exc}"
+                )
+                raise HTTPException(status_code=400, detail="ai_coach_invalid_request") from exc
+            logger.exception(f"/ask agent failed rid={rid}: {exc}")
+            raise HTTPException(status_code=503, detail="Service unavailable") from exc
         except ValidationError as exc:
             inflight_error = exc
             logger.exception(f"/ask agent validation error rid={rid}: {exc}")

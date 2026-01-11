@@ -4,6 +4,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from .constants import EQUIPMENT_TYPES
 from .models import ExerciseCatalogEntry
 
 
@@ -22,6 +23,11 @@ def _parse_entry(raw: dict[str, object]) -> ExerciseCatalogEntry | None:
     gif_key = str(raw.get("gif_key") or "").strip()
     canonical = str(raw.get("canonical") or "").strip()
     category = str(raw.get("category") or "").strip().lower()
+    equipment_raw = raw.get("equipment")
+    equipment_list = [equipment_raw] if isinstance(equipment_raw, str) else equipment_raw
+    equipment = _normalize_string_list(equipment_list)
+    if equipment and not set(item.lower() for item in equipment).issubset(EQUIPMENT_TYPES):
+        equipment = tuple()
     if not gif_key or not canonical or not category:
         return None
     return ExerciseCatalogEntry(
@@ -31,6 +37,7 @@ def _parse_entry(raw: dict[str, object]) -> ExerciseCatalogEntry | None:
         category=category,
         primary_muscles=_normalize_string_list(raw.get("primary_muscles")),
         secondary_muscles=_normalize_string_list(raw.get("secondary_muscles")),
+        equipment=equipment,
     )
 
 

@@ -22,6 +22,7 @@ import { renderSegmented, SegmentId } from '../components/Segmented';
 import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { triggerFavoriteAnimation } from '../utils/animations';
 import { loadFavoriteIds, toggleFavoriteId } from '../utils/favorites';
 import { useGenerationProgress } from '../hooks/useGenerationProgress';
 
@@ -456,7 +457,10 @@ const ProgramPage: React.FC = () => {
                                             <button
                                                 type="button"
                                                 className={`diet-favorite${isCurrentFavorite ? ' is-active' : ''}`}
-                                                onClick={handleToggleFavorite}
+                                                onClick={(event) => {
+                                                    triggerFavoriteAnimation(event.currentTarget);
+                                                    handleToggleFavorite();
+                                                }}
                                                 aria-pressed={isCurrentFavorite}
                                                 aria-label={t('saved_label')}
                                                 title={t('saved_label')}

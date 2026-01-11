@@ -1,4 +1,15 @@
 EXERCISE_CATEGORIES: set[str] = {"conditioning", "strength", "health"}
+EQUIPMENT_TYPES: set[str] = {
+    "kettlebell",
+    "dumbbell",
+    "barbell",
+    "smith",
+    "lever",
+    "cable",
+    "band",
+    "bodyweight",
+    "weighted bodyweight",
+}
 MUSCLE_GROUPS: set[str] = {
     "chest",
     "upper_back",
@@ -21,4 +32,4 @@ MUSCLE_GROUPS: set[str] = {
     "core",
 }
 
-__all__ = ["EXERCISE_CATEGORIES", "MUSCLE_GROUPS"]
+__all__ = ["EQUIPMENT_TYPES", "EXERCISE_CATEGORIES", "MUSCLE_GROUPS"]

@@ -12,7 +12,7 @@ from loguru import logger
 from config.app_settings import settings
 from core.ai_coach.state.plan import AiPlanState
 from core.celery_app import app
-from core.enums import WorkoutPlanType, WorkoutLocation
+from core.enums import SubscriptionPeriod, WorkoutPlanType, WorkoutLocation
 from core.internal_http import build_internal_hmac_auth_headers, internal_request_timeout
 from core.schemas import Program, Subscription
 from core.services import APIService
@@ -43,6 +43,65 @@ def _resolve_profile_id(payload: Mapping[str, Any]) -> int | None:
         return int(raw)
     except (TypeError, ValueError):
         return None
+
+
+def _resolve_refund_cost(payload: Mapping[str, Any], plan_type: WorkoutPlanType) -> int | None:
+    if plan_type is WorkoutPlanType.PROGRAM:
+        return int(settings.AI_PROGRAM_PRICE)
+    if plan_type is WorkoutPlanType.SUBSCRIPTION:
+        period_raw = payload.get("period")
+        if not period_raw:
+            return None
+        try:
+            period = SubscriptionPeriod(str(period_raw))
+        except ValueError:
+            return None
+        if period is SubscriptionPeriod.one_month:
+            return int(settings.SMALL_SUBSCRIPTION_PRICE)
+        if period is SubscriptionPeriod.six_months:
+            return int(settings.MEDIUM_SUBSCRIPTION_PRICE)
+        if period is SubscriptionPeriod.twelve_months:
+            return int(settings.LARGE_SUBSCRIPTION_PRICE)
+    return None
+
+
+async def _refund_plan_credits(
+    payload: Mapping[str, Any],
+    *,
+    profile_id: int,
+    request_id: str,
+    plan_type: WorkoutPlanType,
+) -> None:
+    if not request_id:
+        return
+    state = AiPlanState.create()
+    if await state.is_refunded(request_id):
+        logger.debug(f"ai_plan_refund_skip profile_id={profile_id} request_id={request_id} reason=already_refunded")
+        return
+    locked = await state.claim_refund(request_id, ttl_s=settings.AI_PLAN_NOTIFY_FAILURE_TTL)
+    if not locked:
+        logger.debug(f"ai_plan_refund_skip profile_id={profile_id} request_id={request_id} reason=lock_held")
+        return
+    try:
+        cost = _resolve_refund_cost(payload, plan_type)
+        if cost is None or cost <= 0:
+            logger.warning(
+                "ai_plan_refund_skip profile_id={} request_id={} reason=invalid_cost",
+                profile_id,
+                request_id,
+            )
+            return
+        await APIService.profile.adjust_credits(profile_id, cost)
+        await state.mark_refunded(request_id, ttl_s=settings.AI_PLAN_NOTIFY_FAILURE_TTL)
+        logger.info(f"ai_plan_refund_ok profile_id={profile_id} request_id={request_id} cost={cost}")
+    except APIClientHTTPError as exc:
+        logger.error(f"ai_plan_refund_failed profile_id={profile_id} request_id={request_id} error={exc.reason}")
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"ai_plan_refund_failed profile_id={profile_id} request_id={request_id} error={exc!s}")
+        raise
+    finally:
+        await state.release_refund_lock(request_id)
 
 
 def _normalize_payload(payload: Any, *, context: str) -> dict[str, Any] | None:
@@ -164,6 +223,7 @@ async def _handle_ai_plan_failure_impl(
         action=action,
         error=reason,
         profile_id=profile_id,
+        payload=payload,
     )
 
 
@@ -201,8 +261,11 @@ async def _notify_error(
     request_id: str,
     action: str,
     error: str,
+    payload: Mapping[str, Any] | None = None,
 ) -> None:
-    payload: dict[str, Any] = {
+    if action == "create" and payload is not None:
+        await _refund_plan_credits(payload, profile_id=profile_id, request_id=request_id, plan_type=plan_type)
+    notify_payload: dict[str, Any] = {
         "profile_id": profile_id,
         "plan_type": plan_type.value,
         "status": "error",
@@ -211,7 +274,7 @@ async def _notify_error(
         "error": error,
     }
     notify_ai_plan_ready_task.apply_async(  # pyrefly: ignore[not-callable]
-        args=[payload],
+        args=[notify_payload],
         queue="ai_coach",
         routing_key="ai_coach",
     )
@@ -287,6 +350,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
                 action="create",
                 error=exc.reason or f"http_{exc.status}",
                 profile_id=profile_id,
+                payload=payload,
             )
             cache.set(
                 f"generation_status:{request_id}",
@@ -307,6 +371,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
                 action="create",
                 error=str(exc),
                 profile_id=profile_id,
+                payload=payload,
             )
         raise
 
@@ -326,6 +391,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
             action="create",
             error="empty_plan",
             profile_id=profile_id,
+            payload=payload,
         )
         return None
 
@@ -410,6 +476,7 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> d
                 action="update",
                 error=exc.reason or f"http_{exc.status}",
                 profile_id=profile_id,
+                payload=payload,
             )
             return None
         raise
@@ -425,6 +492,7 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> d
                 action="update",
                 error=str(exc),
                 profile_id=profile_id,
+                payload=payload,
             )
         raise
 
@@ -438,6 +506,7 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> d
             action="update",
             error="empty_plan",
             profile_id=profile_id,
+            payload=payload,
         )
         return None
 

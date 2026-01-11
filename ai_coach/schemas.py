@@ -4,7 +4,14 @@ from typing import Any
 from pydantic import BaseModel, field_validator, model_validator
 
 from ai_coach.types import CoachMode
-from core.schemas import Program, DayExercises, Exercise
+from core.schemas import (
+    DayExercises,
+    DietMeal,
+    Exercise,
+    NutritionTotals,
+    Program,
+    QAResponseBlock,
+)
 from core.enums import WorkoutPlanType, WorkoutLocation
 
 
@@ -86,6 +93,76 @@ class ProgramPayload(Program):
         if self.split_number is None:
             self.split_number = len(self.exercises_by_day)
         return self
+
+
+class AgentExerciseSetDetailOutput(BaseModel):
+    reps: int
+    weight: float
+    weight_unit: str | None
+    model_config = {"extra": "ignore"}
+
+
+class AgentExerciseOutput(BaseModel):
+    name: str
+    sets: str | int
+    reps: str | int
+    weight: str | None
+    set_id: int | None
+    gif_key: str | None
+    drop_set: bool
+    superset_id: int | None
+    superset_order: int | None
+    sets_detail: list[AgentExerciseSetDetailOutput] | None
+    model_config = {"extra": "ignore"}
+
+
+class AgentDayExercisesOutput(BaseModel):
+    day: str
+    exercises: list[AgentExerciseOutput]
+    model_config = {"extra": "ignore"}
+
+
+class AgentProgramOutput(BaseModel):
+    id: int
+    profile: int
+    exercises_by_day: list[AgentDayExercisesOutput]
+    created_at: float
+    split_number: int | None
+    workout_location: str | None
+    wishes: str | None
+    schema_version: str | None = None
+    model_config = {"extra": "ignore"}
+
+
+class AgentSubscriptionOutput(BaseModel):
+    id: int
+    profile: int
+    enabled: bool
+    price: int
+    workout_location: str
+    wishes: str
+    period: str
+    split_number: int
+    exercises: list[AgentDayExercisesOutput]
+    payment_date: str
+    schema_version: str | None = None
+    model_config = {"extra": "ignore"}
+
+
+class AgentDietPlanOutput(BaseModel):
+    id: int | None
+    meals: list[DietMeal]
+    totals: NutritionTotals
+    notes: list[str]
+    schema_version: str | None
+    model_config = {"extra": "ignore"}
+
+
+class AgentQAResponseOutput(BaseModel):
+    answer: str
+    sources: list[str]
+    blocks: list[QAResponseBlock] | None = None
+    model_config = {"extra": "ignore"}
 
 
 class SubscriptionPayload(BaseModel):

@@ -9,6 +9,7 @@ class ExerciseCatalogEntry:
     category: str
     primary_muscles: tuple[str, ...]
     secondary_muscles: tuple[str, ...]
+    equipment: tuple[str, ...]
 
     def matches_name(self, query: str) -> bool:
         needle = query.lower()

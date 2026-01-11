@@ -1,6 +1,7 @@
 from asyncio import TimeoutError, wait_for
 from datetime import datetime
 from inspect import signature
+import json
 from time import monotonic
 from typing import Any, Callable, Coroutine, TypeVar, TypedDict, cast
 from zoneinfo import ZoneInfo
@@ -20,7 +21,13 @@ from ai_coach.types import CoachMode
 
 from ..schemas import ProgramPayload
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
-from core.ai_coach.exercise_catalog import EXERCISE_CATEGORIES, MUSCLE_GROUPS, load_exercise_catalog, search_exercises
+from core.ai_coach.exercise_catalog import (
+    EQUIPMENT_TYPES,
+    EXERCISE_CATEGORIES,
+    MUSCLE_GROUPS,
+    load_exercise_catalog,
+    search_exercises,
+)
 from ai_coach.agent.utils import ProgramAdapter, ensure_catalog_gif_keys, fill_missing_gif_keys
 from ai_coach.agent import utils as agent_utils
 
@@ -175,27 +182,30 @@ class ExerciseCatalogItem(TypedDict):
     category: str
     primary_muscles: list[str]
     secondary_muscles: list[str]
+    equipment: list[str]
 
 
 @toolset.tool(prepare=_single_use_prepare("tool_search_exercises"))  # pyrefly: ignore[no-matching-overload]
 async def tool_search_exercises(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
     *,
-    category: str | None = None,
-    primary_muscles: list[str] | None = None,
-    secondary_muscles: list[str] | None = None,
-    name_query: str | None = None,
-    limit: int = 30,
+    category: str | None,
+    primary_muscles: list[str] | None,
+    secondary_muscles: list[str] | None,
+    equipment: list[str] | None,
+    name_query: str | None,
+    limit: int | None,
 ) -> list[ExerciseCatalogItem]:
     """Search the exercise catalog by category, muscle groups, or name."""
     tool_name = "tool_search_exercises"
+    effective_limit = None
     cache_key = (
         tool_name,
         str(category or ""),
         ",".join(primary_muscles or []),
         ",".join(secondary_muscles or []),
+        ",".join(equipment or []),
         str(name_query or ""),
-        str(limit),
     )
     deps, skipped, cached = _start_tool(ctx, tool_name, cache_key=cache_key)
     if skipped:
@@ -210,17 +220,18 @@ async def tool_search_exercises(
         primary_muscles,
         secondary_muscles,
         str(name_query or "")[:80],
-        limit,
+        effective_limit,
     )
     results = search_exercises(
         category=category,
         primary_muscles=primary_muscles,
         secondary_muscles=secondary_muscles,
+        equipment=equipment,
         name_query=name_query,
-        limit=limit,
+        limit=effective_limit,
     )
     if not results:
-        fallback = search_exercises(limit=limit)
+        fallback = search_exercises(limit=effective_limit)
         if fallback:
             logger.info(
                 "tool_search_exercises_fallback profile_id={} reason=empty_results fallback_count={}",
@@ -241,6 +252,7 @@ async def tool_search_exercises(
             "category": entry.category,
             "primary_muscles": list(entry.primary_muscles),
             "secondary_muscles": list(entry.secondary_muscles),
+            "equipment": list(entry.equipment),
         }
         for entry in results
     ]
@@ -254,6 +266,10 @@ async def tool_search_exercises(
         invalid_secondary = {item.lower() for item in secondary_muscles} - MUSCLE_GROUPS
         if invalid_secondary:
             _log_tool_disabled(deps, tool_name, reason="invalid_secondary_muscles")
+    if equipment:
+        invalid_equipment = {item.lower() for item in equipment} - EQUIPMENT_TYPES
+        if invalid_equipment:
+            _log_tool_disabled(deps, tool_name, reason="invalid_equipment")
     return _cache_result(deps, tool_name, payload, cache_key=cache_key)
 
 
@@ -261,14 +277,15 @@ async def tool_search_exercises(
 async def tool_search_knowledge(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
     query: str,
-    k: int = 6,
+    k: int | None = None,
 ) -> list[str]:
     """Search client and global knowledge with top-k limit."""
     kb = get_knowledge_base()
 
     tool_name = "tool_search_knowledge"
     normalized_query = query.strip()
-    cache_key = (tool_name, normalized_query, str(k))
+    effective_k = 6 if k is None else int(k)
+    cache_key = (tool_name, normalized_query, str(effective_k))
     deps, skipped, cached = _start_tool(ctx, tool_name, cache_key=cache_key)
     timeout = _tool_timeout("tool_search_knowledge")
     profile_id = deps.profile_id
@@ -276,7 +293,7 @@ async def tool_search_knowledge(
         cap = float(settings.AI_COACH_GENERATION_SEARCH_TIMEOUT)
         if cap > 0:
             timeout = min(timeout, cap)
-    logger.debug(f"tool_search_knowledge profile_id={profile_id} query='{normalized_query[:80]}' k={k}")
+    logger.debug(f"tool_search_knowledge profile_id={profile_id} query='{normalized_query[:80]}' k={effective_k}")
     if skipped:
         cached_result = cast(list[str], cached if cached is not None else [])
         return cached_result
@@ -313,9 +330,9 @@ async def tool_search_knowledge(
         if fallback_fn is not None:
             try:
                 if _needs_instance_argument(fallback_fn):
-                    fallback_pairs = await fallback_fn(kb, profile_id, limit=k)
+                    fallback_pairs = await fallback_fn(kb, profile_id, limit=effective_k)
                 else:
-                    fallback_pairs = await fallback_fn(profile_id, limit=k)
+                    fallback_pairs = await fallback_fn(profile_id, limit=effective_k)
             except Exception as fallback_exc:  # noqa: BLE001 - diagnostics only
                 logger.debug(
                     f"knowledge_search_fallback_failed profile_id={profile_id} query='{normalized_query[:80]}' "
@@ -398,25 +415,26 @@ async def tool_search_knowledge(
 @toolset.tool(prepare=_single_use_prepare("tool_get_chat_history"))  # pyrefly: ignore[no-matching-overload]
 async def tool_get_chat_history(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
-    limit: int = 20,
+    limit: int | None = None,
 ) -> list[str]:
     """Load recent chat messages for context."""
     kb = get_knowledge_base()
     tool_name = "tool_get_chat_history"
-    cache_key = (tool_name, str(limit))
+    effective_limit = 20 if limit is None else int(limit)
+    cache_key = (tool_name, str(effective_limit))
     deps, skipped, cached = _start_tool(ctx, tool_name, cache_key=cache_key)
     timeout = _tool_timeout("tool_get_chat_history")
     profile_id = deps.profile_id
-    logger.debug(f"tool_get_chat_history profile_id={profile_id} limit={limit}")
+    logger.debug(f"tool_get_chat_history profile_id={profile_id} limit={effective_limit}")
     if skipped:
         cached_history = cast(list[str], cached if cached is not None else [])
-        limited = list(cached_history[:limit]) if limit is not None else list(cached_history)
+        limited = list(cached_history[:effective_limit])
         return limited
 
     history = deps.cached_history
     if history is None:
         try:
-            history = await wait_for(kb.get_message_history(profile_id, limit), timeout=timeout)
+            history = await wait_for(kb.get_message_history(profile_id, effective_limit), timeout=timeout)
         except TimeoutError:
             logger.info(f"chat_history_timeout profile_id={profile_id} tool=tool_get_chat_history timeout={timeout}")
             history = []
@@ -425,14 +443,14 @@ async def tool_get_chat_history(
             raise
         deps.cached_history = history
 
-    limited = list(history[:limit]) if limit is not None else list(history)
+    limited = list(history[:effective_limit])
     return _cache_result(deps, tool_name, limited, cache_key=cache_key)
 
 
 @toolset.tool(prepare=_single_use_prepare("tool_save_program"))  # pyrefly: ignore[no-matching-overload]
 async def tool_save_program(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
-    plan: "ProgramPayload",
+    plan_json: str,
 ) -> Program:
     """Persist generated plan for the current client."""
     from core.services import APIService
@@ -445,7 +463,14 @@ async def tool_save_program(
         raise RuntimeError("saving not allowed in this mode")
     profile_id = deps.profile_id
     logger.debug(f"tool_save_program profile_id={profile_id}")
-    program = ProgramAdapter.to_domain(plan)
+    try:
+        raw_payload = json.loads(plan_json)
+    except json.JSONDecodeError as exc:
+        raise ModelRetry(f"Program payload must be valid JSON: {exc}") from exc
+    if not isinstance(raw_payload, dict):
+        raise ModelRetry("Program payload must be a JSON object.")
+    program_payload = ProgramPayload.model_validate(raw_payload)
+    program = ProgramAdapter.to_domain(program_payload)
     timeout: float = float(settings.AI_COACH_SAVE_TIMEOUT)
     try:
         saved = await wait_for(
@@ -497,9 +522,9 @@ async def tool_get_program_history(
 async def tool_create_subscription(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
     split_number: int,
-    exercises: list[DayExercises],
-    period: SubscriptionPeriod = SubscriptionPeriod.one_month,
-    wishes: str | None = None,
+    exercises: list[dict[str, object]],
+    period: SubscriptionPeriod | None,
+    wishes: str | None,
 ) -> Subscription:
     """Create a subscription and return its summary."""
     from decimal import Decimal
@@ -518,13 +543,15 @@ async def tool_create_subscription(
     workout_location = profile.workout_location if profile and profile.workout_location else None
     if not workout_location:
         raise ModelRetry("Workout location is required to create a subscription.")
-    normalized_days = _normalize_exercise_day_labels(exercises)
+    day_models = [DayExercises.model_validate(day) for day in exercises]
+    normalized_days = _normalize_exercise_day_labels(day_models)
     normalized_split = max(1, min(7, int(split_number)))
+    normalized_period = period or SubscriptionPeriod.one_month
     logger.debug(
-        f"tool_create_subscription profile_id={profile_id} period={period} "
+        f"tool_create_subscription profile_id={profile_id} period={normalized_period} "
         f"split_number={normalized_split} days={normalized_days}"
     )
-    exercises_payload = [d.model_dump() for d in exercises]
+    exercises_payload = [d.model_dump() for d in day_models]
     fill_missing_gif_keys(exercises_payload)
     ensure_catalog_gif_keys(exercises_payload)
     price_map = {
@@ -532,14 +559,14 @@ async def tool_create_subscription(
         SubscriptionPeriod.six_months: int(settings.MEDIUM_SUBSCRIPTION_PRICE),
         SubscriptionPeriod.twelve_months: int(settings.LARGE_SUBSCRIPTION_PRICE),
     }
-    price = price_map.get(period, int(settings.SMALL_SUBSCRIPTION_PRICE))
+    price = price_map.get(normalized_period, int(settings.SMALL_SUBSCRIPTION_PRICE))
     try:
         sub_id = await APIService.workout.create_subscription(
             profile_id=profile_id,
             split_number=normalized_split,
             wishes=wishes or "",
             amount=Decimal(price),
-            period=period,
+            period=normalized_period,
             workout_location=workout_location,
             exercises=exercises_payload,
         )
@@ -557,7 +584,7 @@ async def tool_create_subscription(
             "price": price,
             "workout_location": workout_location,
             "wishes": wishes or "",
-            "period": period.value,
+            "period": normalized_period.value,
             "split_number": normalized_split,
             "exercises": exercises_payload,
             "payment_date": datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat(),

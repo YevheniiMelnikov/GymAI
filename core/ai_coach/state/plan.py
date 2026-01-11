@@ -13,6 +13,8 @@ from core.utils.redis_lock import get_redis_client_for_db
 AI_PLAN_CLAIM_KEY: Final[str] = "ai:plan:claim:{plan_id}"
 AI_PLAN_DELIVERED_KEY: Final[str] = "ai:plan:delivered:{plan_id}"
 AI_PLAN_FAILED_KEY: Final[str] = "ai:plan:failed:{plan_id}"
+AI_PLAN_REFUND_LOCK_KEY: Final[str] = "ai:plan:refund_lock:{plan_id}"
+AI_PLAN_REFUNDED_KEY: Final[str] = "ai:plan:refunded:{plan_id}"
 
 
 @dataclass(slots=True)
@@ -70,4 +72,40 @@ class AiPlanState:
             return bool(result)
         except RedisError as exc:
             logger.warning(f"ai_plan_state_is_failed_skip plan_id={plan_id} error={exc!s}")
+            return False
+
+    async def claim_refund(self, plan_id: str, ttl_s: int | None = None) -> bool:
+        ttl = ttl_s or settings.AI_PLAN_NOTIFY_FAILURE_TTL
+        key = AI_PLAN_REFUND_LOCK_KEY.format(plan_id=plan_id)
+        try:
+            result = await self.client.set(key, "1", nx=True, ex=ttl)
+            return bool(result)
+        except RedisError as exc:
+            logger.warning(f"ai_plan_refund_lock_failed plan_id={plan_id} error={exc!s}")
+            return False
+
+    async def release_refund_lock(self, plan_id: str) -> None:
+        key = AI_PLAN_REFUND_LOCK_KEY.format(plan_id=plan_id)
+        try:
+            await self.client.delete(key)
+        except RedisError as exc:
+            logger.warning(f"ai_plan_refund_lock_release_failed plan_id={plan_id} error={exc!s}")
+
+    async def mark_refunded(self, plan_id: str, ttl_s: int | None = None) -> bool:
+        ttl = ttl_s or settings.AI_PLAN_NOTIFY_FAILURE_TTL
+        key = AI_PLAN_REFUNDED_KEY.format(plan_id=plan_id)
+        try:
+            result = await self.client.set(key, "1", ex=ttl, nx=True)
+            return bool(result)
+        except RedisError as exc:
+            logger.warning(f"ai_plan_mark_refunded_failed plan_id={plan_id} error={exc!s}")
+        return False
+
+    async def is_refunded(self, plan_id: str) -> bool:
+        key = AI_PLAN_REFUNDED_KEY.format(plan_id=plan_id)
+        try:
+            result = await self.client.exists(key)
+            return bool(result)
+        except RedisError as exc:
+            logger.warning(f"ai_plan_is_refunded_skip plan_id={plan_id} error={exc!s}")
             return False

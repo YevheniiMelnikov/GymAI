@@ -17,6 +17,7 @@ import {
 import type { HistoryItem, HistoryResp, Locale } from '../api/types';
 import { getProgram, getSubscription, HttpError } from '../api/http';
 import { fmtDate, renderLegacyProgram, renderProgramDays, setProgramContext } from '../ui/render_program';
+import { triggerFavoriteAnimation } from '../utils/animations';
 import { loadFavoriteIds, toggleFavoriteId } from '../utils/favorites';
 
 const STATIC_PREFIX = ((window as any).__STATIC_PREFIX__ as string | undefined) ?? '/static/';
@@ -516,11 +517,12 @@ const HistoryPage: React.FC = () => {
                                                 <span className="diet-row__actions">
                                                     <button
                                                         type="button"
-                                                        className={`diet-row__favorite${activeFavorites.has(it.id) ? ' is-active' : ''}`}
-                                                        onClick={(event) => {
-                                                            event.stopPropagation();
-                                                            handleToggleFavorite(it.id);
-                                                        }}
+                                                    className={`diet-row__favorite${activeFavorites.has(it.id) ? ' is-active' : ''}`}
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        triggerFavoriteAnimation(event.currentTarget);
+                                                        handleToggleFavorite(it.id);
+                                                    }}
                                                         aria-pressed={activeFavorites.has(it.id)}
                                                         aria-label={t('saved_label')}
                                                         title={t('saved_label')}
@@ -563,7 +565,10 @@ const HistoryPage: React.FC = () => {
                                                         <button
                                                             type="button"
                                                             className={`diet-favorite${isDetailFavorite ? ' is-active' : ''}`}
-                                                            onClick={() => handleToggleFavorite(detailNumericId)}
+                                                            onClick={(event) => {
+                                                                triggerFavoriteAnimation(event.currentTarget);
+                                                                handleToggleFavorite(detailNumericId);
+                                                            }}
                                                             aria-pressed={isDetailFavorite}
                                                             aria-label={t('saved_label')}
                                                             title={t('saved_label')}

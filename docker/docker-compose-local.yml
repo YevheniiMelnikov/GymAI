@@ -143,8 +143,9 @@ services:
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "status"]
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 10s
+      retries: 10
+      start_period: 120s
     networks: [internal]
 
   api:
@@ -269,7 +270,7 @@ services:
       ai_coach:
         condition: service_started
       neo4j:
-        condition: service_started
+        condition: service_healthy
       qdrant:
         condition: service_started
     restart: unless-stopped
@@ -313,7 +314,7 @@ services:
       db:
         condition: service_healthy
       neo4j:
-        condition: service_started
+        condition: service_healthy
       qdrant:
         condition: service_started
     healthcheck:
@@ -392,7 +393,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 60s
     restart: unless-stopped
     networks: [internal]
 

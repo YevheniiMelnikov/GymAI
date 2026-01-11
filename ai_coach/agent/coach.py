@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from loguru import logger  # pyrefly: ignore[import-error]
 from pydantic_ai import ModelRetry  # pyrefly: ignore[import-error]
+from pydantic import ValidationError
 from pydantic_ai.messages import ModelMessage, ModelRequest  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 
@@ -35,7 +36,14 @@ from .prompts import (
     UPDATE_WORKOUT,
 )
 from ai_coach.types import CoachMode
-from ai_coach.agent.utils import ensure_catalog_gif_keys, fill_missing_gif_keys, get_knowledge_base
+from ai_coach.agent.utils import ensure_catalog_gif_keys, fill_missing_gif_keys, get_knowledge_base, ProgramAdapter
+from ai_coach.schemas import (
+    AgentDietPlanOutput,
+    AgentProgramOutput,
+    AgentQAResponseOutput,
+    AgentSubscriptionOutput,
+    ProgramPayload,
+)
 
 _LOG_PAYLOADS = os.getenv("AI_COACH_LOG_PAYLOADS", "").strip() == "1"
 
@@ -144,7 +152,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
         raw_result = await agent.run(
             user_prompt,
             deps=deps,
-            output_type=output_type,
+            output_type=AgentProgramOutput if output_type is Program else AgentSubscriptionOutput,
             message_history=history,
             model_settings=ModelSettings(
                 temperature=settings.COACH_AGENT_TEMPERATURE,
@@ -157,10 +165,19 @@ class CoachAgent(metaclass=CoachAgentMeta):
             profile_id=deps.profile_id,
             mode=deps.mode,
         )
-        if output_type is Program:
-            normalized = cls._normalize_output(raw_result, Program)
-        else:
-            normalized = cls._normalize_output(raw_result, Subscription)
+        try:
+            if output_type is Program:
+                agent_output = cls._normalize_output(raw_result, AgentProgramOutput)
+                program_payload = ProgramPayload.model_validate(agent_output.model_dump())
+                normalized = ProgramAdapter.to_domain(program_payload)
+            else:
+                agent_output = cls._normalize_output(raw_result, AgentSubscriptionOutput)
+                normalized = Subscription.model_validate(agent_output.model_dump())
+        except ValidationError as exc:
+            raise ModelRetry(
+                "Model output must match the Program schema with required fields "
+                "(id, profile, created_at, exercises_by_day). Return a single JSON object."
+            ) from exc
         logger.debug(
             f"agent.done profile_id={deps.profile_id} mode={deps.mode.value if deps.mode else 'unknown'} "
             f"tools_called={sorted(deps.called_tools)}"
@@ -229,7 +246,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
         raw_result = await agent.run(
             user_prompt,
             deps=deps,
-            output_type=DietPlan,
+            output_type=AgentDietPlanOutput,
             message_history=history,
             model_settings=ModelSettings(
                 temperature=settings.COACH_AGENT_TEMPERATURE,
@@ -242,7 +259,11 @@ class CoachAgent(metaclass=CoachAgentMeta):
             profile_id=deps.profile_id,
             mode=deps.mode,
         )
-        normalized = cls._normalize_output(raw_result, DietPlan)
+        try:
+            agent_output = cls._normalize_output(raw_result, AgentDietPlanOutput)
+            normalized = DietPlan.model_validate(agent_output.model_dump())
+        except ValidationError as exc:
+            raise ModelRetry("Model output must match the DietPlan schema. Return a single JSON object.") from exc
         logger.debug(
             f"agent.done profile_id={deps.profile_id} mode={deps.mode.value} tools_called={sorted(deps.called_tools)}"
         )
@@ -298,7 +319,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
         raw_result = await agent.run(
             user_prompt,
             deps=deps,
-            output_type=output_type,
+            output_type=AgentProgramOutput if output_type is Program else AgentSubscriptionOutput,
             message_history=history,
             model_settings=ModelSettings(
                 temperature=settings.COACH_AGENT_TEMPERATURE,
@@ -312,7 +333,15 @@ class CoachAgent(metaclass=CoachAgentMeta):
             mode=deps.mode,
         )
         if output_type is Program:
-            normalized = cls._normalize_output(raw_result, Program)
+            try:
+                agent_output = cls._normalize_output(raw_result, AgentProgramOutput)
+                program_payload = ProgramPayload.model_validate(agent_output.model_dump())
+                normalized = ProgramAdapter.to_domain(program_payload)
+            except ValidationError as exc:
+                raise ModelRetry(
+                    "Model output must match the Program schema with required fields "
+                    "(id, profile, created_at, exercises_by_day). Return a single JSON object."
+                ) from exc
             exercises = [day.model_dump() for day in normalized.exercises_by_day]
             try:
                 fill_missing_gif_keys(exercises)
@@ -323,7 +352,11 @@ class CoachAgent(metaclass=CoachAgentMeta):
                 ) from exc
             normalized.exercises_by_day = [DayExercises.model_validate(day) for day in exercises]
             return normalized
-        normalized = cls._normalize_output(raw_result, Subscription)
+        try:
+            agent_output = cls._normalize_output(raw_result, AgentSubscriptionOutput)
+            normalized = Subscription.model_validate(agent_output.model_dump())
+        except ValidationError as exc:
+            raise ModelRetry("Model output must match the Subscription schema. Return a single JSON object.") from exc
         exercises = [day.model_dump() for day in normalized.exercises]
         try:
             fill_missing_gif_keys(exercises)
@@ -374,7 +407,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
             result = await agent.run(
                 user_input,
                 deps=deps,
-                output_type=QAResponse,
+                output_type=AgentQAResponseOutput,
                 message_history=history,
                 model_settings=ModelSettings(
                     temperature=settings.COACH_AGENT_TEMPERATURE,
@@ -434,7 +467,11 @@ class CoachAgent(metaclass=CoachAgentMeta):
 
         if raw_result is None:
             raise RuntimeError("agent.ask_result_missing")
-        normalized = cls._normalize_output(raw_result, QAResponse)
+        try:
+            agent_output = cls._normalize_output(raw_result, AgentQAResponseOutput)
+            normalized = QAResponse.model_validate(agent_output.model_dump())
+        except ValidationError as exc:
+            raise ModelRetry("Model output must match the QAResponse schema. Return a single JSON object.") from exc
         normalized.answer = cls.llm_helper._strip_markup(normalized.answer).strip()
         if normalized.blocks:
             normalized.blocks = cls.llm_helper._normalize_blocks(normalized.blocks) or None

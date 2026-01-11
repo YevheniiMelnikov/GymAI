@@ -131,7 +131,7 @@ def test_custom_rules_append(monkeypatch: pytest.MonkeyPatch) -> None:
             return Program(
                 id=1,
                 profile=deps.profile_id,
-                exercises_by_day=[],
+                exercises_by_day=[DayExercises(day="d1", exercises=[Exercise(name="squat", sets="3", reps="10")])],
                 created_at=0.0,
                 split_number=1,
                 workout_location="",

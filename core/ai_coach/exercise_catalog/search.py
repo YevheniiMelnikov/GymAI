@@ -10,14 +10,16 @@ def filter_exercise_entries(
     category: str | None = None,
     primary_muscles: Iterable[str] | None = None,
     secondary_muscles: Iterable[str] | None = None,
+    equipment: Iterable[str] | None = None,
     name_query: str | None = None,
-    limit: int = 20,
+    limit: int | None = None,
 ) -> list[ExerciseCatalogEntry]:
     normalized_category = str(category or "").strip().lower() or None
     primary = {str(item).strip().lower() for item in (primary_muscles or []) if str(item or "").strip()}
     secondary = {str(item).strip().lower() for item in (secondary_muscles or []) if str(item or "").strip()}
+    equipment_filter = {str(item).strip().lower() for item in (equipment or []) if str(item or "").strip()}
     query = str(name_query or "").strip().lower() or None
-    limit_value = max(1, min(50, int(limit)))
+    limit_value = max(1, int(limit)) if limit is not None else None
 
     results: list[ExerciseCatalogEntry] = []
     for entry in entries:
@@ -27,10 +29,12 @@ def filter_exercise_entries(
             continue
         if secondary and not secondary.issubset({item.lower() for item in entry.secondary_muscles}):
             continue
+        if equipment_filter and not equipment_filter.issubset({item.lower() for item in entry.equipment}):
+            continue
         if query and not entry.matches_name(query):
             continue
         results.append(entry)
-        if len(results) >= limit_value:
+        if limit_value is not None and len(results) >= limit_value:
             break
     return results
 
@@ -40,8 +44,9 @@ def search_exercises(
     category: str | None = None,
     primary_muscles: Iterable[str] | None = None,
     secondary_muscles: Iterable[str] | None = None,
+    equipment: Iterable[str] | None = None,
     name_query: str | None = None,
-    limit: int = 20,
+    limit: int | None = None,
 ) -> list[ExerciseCatalogEntry]:
     entries = load_exercise_catalog()
     return filter_exercise_entries(
@@ -49,6 +54,7 @@ def search_exercises(
         category=category,
         primary_muscles=primary_muscles,
         secondary_muscles=secondary_muscles,
+        equipment=equipment,
         name_query=name_query,
         limit=limit,
     )

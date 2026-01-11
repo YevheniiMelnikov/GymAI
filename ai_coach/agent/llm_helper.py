@@ -225,7 +225,7 @@ class LLMHelper:
         @cls._agent.instructions  # pyrefly: ignore[no-matching-overload]
         def agent_instr(ctx: RunContext[AgentDeps]) -> str:  # pragma: no cover - runtime config
             mode = ctx.deps.mode.value if ctx.deps.mode else "ask_ai"
-            return agent_instructions(mode)
+            return agent_instructions(mode, kb_enabled=bool(settings.AI_COACH_KB_ENABLED))
 
         return cls._agent
 
@@ -267,6 +267,52 @@ class LLMHelper:
             return value
         if not issubclass(expected, BaseModel):
             raise TypeError(f"Unsupported output type: {expected!r}")
+        if isinstance(value, BaseModel):
+            return expected.model_validate(value.model_dump())
+        if isinstance(value, str):
+            raw_text = value.strip()
+            try:
+                parsed = json.loads(raw_text)
+            except json.JSONDecodeError:
+                parsed = None
+            if parsed is None:
+                try:
+                    decoder = json.JSONDecoder()
+                    parsed, _ = decoder.raw_decode(raw_text)
+                except json.JSONDecodeError as exc:
+                    logger.error(
+                        "agent.output_invalid_json expected={} raw_len={} raw_preview='{}'",
+                        expected.__name__,
+                        len(raw_text),
+                        raw_text[:400],
+                    )
+                    raise ValueError("Model output is not valid JSON.") from exc
+            if isinstance(parsed, dict) and "plan_json" in parsed and isinstance(parsed["plan_json"], str):
+                plan_json = parsed["plan_json"]
+                try:
+                    parsed = json.loads(plan_json)
+                except json.JSONDecodeError as exc:
+                    logger.error(
+                        "agent.output_invalid_json expected={} raw_len={} raw_preview='{}'",
+                        expected.__name__,
+                        len(plan_json),
+                        plan_json[:400],
+                    )
+                    raise ValueError("Model output is not valid JSON.") from exc
+            if isinstance(parsed, dict):
+                if "plan" in parsed and isinstance(parsed["plan"], dict):
+                    parsed = parsed["plan"]
+                elif "subscription" in parsed and isinstance(parsed["subscription"], dict):
+                    parsed = parsed["subscription"]
+            try:
+                return expected.model_validate(parsed)
+            except Exception:  # noqa: BLE001
+                logger.error(
+                    "agent.output_invalid_schema expected={} raw_preview='{}'",
+                    expected.__name__,
+                    raw_text[:400],
+                )
+                raise
         return expected.model_validate(value)
 
     @staticmethod

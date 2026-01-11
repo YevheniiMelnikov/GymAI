@@ -318,6 +318,95 @@ let exerciseTechniqueDialog: ExerciseDialogController | null = null;
 const EDIT_DIALOG_ID = 'exercise-edit-dialog';
 let exerciseEditDialog: ExerciseEditDialogController | null = null;
 let editSetCounter = 0;
+const isReducedMotionPreferred = (() => {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+})();
+
+function attachDetailsAnimation(details: HTMLDetailsElement, content: HTMLElement): void {
+  if (isReducedMotionPreferred) {
+    return;
+  }
+  const summary = details.querySelector('summary');
+  if (!summary) {
+    return;
+  }
+  let isAnimating = false;
+
+  const cleanup = () => {
+    content.style.height = '';
+    content.style.overflow = '';
+    content.style.transition = '';
+    isAnimating = false;
+  };
+
+  const animateOpen = () => {
+    if (isAnimating) {
+      return;
+    }
+    isAnimating = true;
+    details.open = true;
+    content.style.height = '0px';
+    content.style.overflow = 'hidden';
+    content.style.transition = 'height 0.45s ease';
+    const targetHeight = content.scrollHeight;
+    requestAnimationFrame(() => {
+      content.style.height = `${targetHeight}px`;
+    });
+    const finish = () => {
+      content.removeEventListener('transitionend', finish);
+      cleanup();
+    };
+    content.addEventListener('transitionend', finish);
+  };
+
+  const animateClose = () => {
+    if (isAnimating) {
+      return;
+    }
+    isAnimating = true;
+    if (details.classList.contains('program-day')) {
+      const nested = details.querySelectorAll<HTMLDetailsElement>('details.program-exercise-details[open]');
+      nested.forEach((item) => {
+        item.open = false;
+        const nestedContent = item.querySelector<HTMLElement>('.program-exercise-content');
+        if (nestedContent) {
+          nestedContent.style.height = '';
+          nestedContent.style.overflow = '';
+          nestedContent.style.transition = '';
+        }
+      });
+    }
+    const startHeight = content.scrollHeight;
+    content.style.height = `${startHeight}px`;
+    content.style.overflow = 'hidden';
+    content.style.transition = 'height 0.4s ease';
+    requestAnimationFrame(() => {
+      content.style.height = '0px';
+    });
+    const finish = () => {
+      content.removeEventListener('transitionend', finish);
+      details.open = false;
+      cleanup();
+    };
+    content.addEventListener('transitionend', finish);
+  };
+
+  summary.addEventListener('click', (event) => {
+    if (details.classList.contains('program-day-rest')) {
+      return;
+    }
+    event.preventDefault();
+    if (details.open) {
+      animateClose();
+    } else {
+      animateOpen();
+    }
+  });
+}
 
 function getExerciseDialog(): ReplaceExerciseDialogController {
   if (exerciseDialog) return exerciseDialog;
@@ -517,7 +606,7 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
 
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
-  closeBtn.className = 'primary-button';
+  closeBtn.className = 'primary-button exercise-dialog__close';
 
   actions.append(closeBtn);
   body.append(message, media);
@@ -1101,6 +1190,7 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
 
   content.appendChild(createExerciseActions(details, ex));
   details.appendChild(content);
+  attachDetailsAnimation(details, content);
   li.appendChild(details);
   return li;
 }
@@ -1141,6 +1231,7 @@ function renderDay(day: Day): HTMLElement {
       list.appendChild(createExerciseItem(item.exercise, item.index));
     });
     details.appendChild(list);
+    attachDetailsAnimation(details, list);
   }
 
   return details;

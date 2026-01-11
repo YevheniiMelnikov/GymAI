@@ -24,7 +24,19 @@ _AGENT_DIET: str = _load_template("agent_diet.txt")
 DIET_PLAN: str = _load_template("diet_plan.txt")
 
 
-def agent_instructions(mode: str) -> str:
+def _strip_knowledge_instructions(text: str) -> str:
+    lines: list[str] = []
+    for line in text.splitlines():
+        lowered = line.lower()
+        if "tool_search_knowledge" in lowered:
+            continue
+        if "knowledge base" in lowered:
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def agent_instructions(mode: str, *, kb_enabled: bool = True) -> str:
     mapping = {
         "program": _AGENT_PROGRAM,
         "subscription": _AGENT_SUBSCRIPTION,
@@ -33,7 +45,13 @@ def agent_instructions(mode: str) -> str:
         "diet": _AGENT_DIET,
     }
     try:
-        return f"{_AGENT_COMMON}\n{mapping[mode]}"
+        common = _AGENT_COMMON
+        mode_text = mapping[mode]
+        if not kb_enabled:
+            common = _strip_knowledge_instructions(common)
+            mode_text = _strip_knowledge_instructions(mode_text)
+            return f"{common}\n{mode_text}\nKnowledge base is disabled. Do not call tool_search_knowledge."
+        return f"{common}\n{mode_text}"
     except KeyError as e:
         raise KeyError(f"Unknown mode: {mode}") from e
 

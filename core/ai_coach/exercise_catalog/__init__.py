@@ -1,10 +1,11 @@
-from .constants import EXERCISE_CATEGORIES, MUSCLE_GROUPS
+from .constants import EQUIPMENT_TYPES, EXERCISE_CATEGORIES, MUSCLE_GROUPS
 from .loader import load_exercise_catalog
 from .models import ExerciseCatalogEntry
 from .search import filter_exercise_entries, search_exercises, suggest_replacement_exercises
 
 __all__ = [
     "EXERCISE_CATEGORIES",
+    "EQUIPMENT_TYPES",
     "MUSCLE_GROUPS",
     "ExerciseCatalogEntry",
     "filter_exercise_entries",

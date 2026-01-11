@@ -17,6 +17,7 @@ import {
 } from '../telegram';
 import type { DietPlan, DietPlanSummary, Locale } from '../api/types';
 import { useGenerationProgress } from '../hooks/useGenerationProgress';
+import { triggerFavoriteAnimation } from '../utils/animations';
 import { loadFavoriteIds, toggleFavoriteId } from '../utils/favorites';
 import { waitForLatestDietId } from '../utils/diets';
 
@@ -461,6 +462,7 @@ const DietPage: React.FC = () => {
                                                     className={`diet-row__favorite${favoriteIds.has(diet.id) ? ' is-active' : ''}`}
                                                     onClick={(event) => {
                                                         event.stopPropagation();
+                                                        triggerFavoriteAnimation(event.currentTarget);
                                                         handleToggleFavoriteId(diet.id);
                                                     }}
                                                     aria-pressed={favoriteIds.has(diet.id)}
@@ -505,7 +507,10 @@ const DietPage: React.FC = () => {
                                             <button
                                                 type="button"
                                                 className={`diet-favorite${isFavorite ? ' is-active' : ''}`}
-                                                onClick={handleToggleFavorite}
+                                                onClick={(event) => {
+                                                    triggerFavoriteAnimation(event.currentTarget);
+                                                    handleToggleFavorite();
+                                                }}
                                                 aria-pressed={isFavorite}
                                                 aria-label={t('saved_label')}
                                                 title={t('saved_label')}
