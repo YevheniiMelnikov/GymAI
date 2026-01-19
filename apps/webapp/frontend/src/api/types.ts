@@ -28,6 +28,12 @@ export type Exercise = {
   gif_url?: string | null;
 };
 
+export type ExerciseTechniqueResp = {
+  gif_key: string;
+  canonical_name: string;
+  technique_description: string[];
+};
+
 export type WorkoutDay = {
   id: string;
   index: number;

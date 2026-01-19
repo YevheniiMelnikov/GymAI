@@ -36,7 +36,7 @@ from .prompts import (
     UPDATE_WORKOUT,
 )
 from ai_coach.types import CoachMode
-from ai_coach.agent.utils import ensure_catalog_gif_keys, fill_missing_gif_keys, get_knowledge_base, ProgramAdapter
+from ai_coach.agent.utils import ProgramAdapter, ensure_catalog_gif_keys, fill_missing_gif_keys, get_knowledge_base
 from ai_coach.schemas import (
     AgentDietPlanOutput,
     AgentProgramOutput,

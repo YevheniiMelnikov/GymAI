@@ -21,8 +21,8 @@ COPY apps/webapp/scripts ./scripts
 COPY apps/webapp/static ./static
 RUN npm run build \
  && echo "== build output in ./static ==" \
- && ls -la ./static ./static/js-build-v2 || true \
- && test -f ./static/js-build-v2/index.js || (echo 'ERROR: ./static/js-build-v2/index.js not found' && exit 1)
+ && ls -la ./static ./static/js-build-v3 || true \
+ && test -f ./static/js-build-v3/index.js || (echo 'ERROR: ./static/js-build-v3/index.js not found' && exit 1)
 
 FROM py-base AS deps-app
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \

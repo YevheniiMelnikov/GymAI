@@ -672,12 +672,13 @@ h1.page-title,
   opacity: 0;
   overflow: hidden;
   transform: translateY(-4px);
-  transition: max-height .7s ease, opacity .35s ease, transform .55s ease;
-  will-change: max-height, opacity, transform;
+  transition: opacity .35s ease, transform .55s ease;
+  will-change: opacity, transform;
 }
 .program-day[open] .program-day-list{
-  max-height: 2000px;
+  max-height: none;
   opacity: 1;
+  overflow: visible;
   transform: translateY(0);
 }
 .faq-answer{
@@ -798,13 +799,14 @@ h1.page-title,
   opacity: 0;
   overflow: hidden;
   transform: translateY(-4px);
-  transition: max-height .65s ease, opacity .34s ease, transform .5s ease;
-  will-change: max-height, opacity, transform;
+  transition: opacity .34s ease, transform .5s ease;
+  will-change: opacity, transform;
   background: transparent;
 }
 .program-exercise-details[open] .program-exercise-content{
-  max-height: 2000px;
+  max-height: none;
   opacity: 1;
+  overflow: visible;
   transform: translateY(0);
 }
 .program-exercise-content--minimal{
@@ -904,6 +906,31 @@ h1.page-title,
 }
 .program-exercise-edit-btn:hover{ transform: translateY(-1px); }
 .program-exercise-edit-btn:active{
+  transform: translateY(0);
+}
+.program-exercise-technique-btn{
+  width: auto !important;
+  max-width: none !important;
+  min-height: 38px !important;
+  padding: 8px 14px !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  border-radius: 14px !important;
+  border: 1px solid color-mix(in oklab, var(--accent) 20%, var(--border)) !important;
+  background: color-mix(in oklab, var(--accent) 16%, var(--surface)) !important;
+  color: color-mix(in oklab, var(--text) 86%, var(--accent)) !important;
+  box-shadow: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  align-self: center !important;
+  transition: transform .08s ease, background .18s ease, color .18s ease, border-color .18s ease;
+}
+.program-exercise-technique-btn:hover{
+  transform: translateY(-1px);
+  background: color-mix(in oklab, var(--accent) 22%, var(--surface)) !important;
+}
+.program-exercise-technique-btn:active{
   transform: translateY(0);
 }
 .exercise-refresh-btn{
@@ -1221,6 +1248,16 @@ h1.page-title,
   border-radius: 14px;
   background: color-mix(in oklab, var(--surface) 80%, var(--bg));
   box-shadow: 0 10px 30px rgba(9, 14, 24, 0.2);
+}
+.exercise-dialog__technique{
+  margin: 14px 0 0;
+  padding: 0 0 0 18px;
+  color: color-mix(in oklab, var(--text) 82%, var(--muted));
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.exercise-dialog__technique li + li{
+  margin-top: 8px;
 }
 .exercise-dialog__actions{
   display: flex;

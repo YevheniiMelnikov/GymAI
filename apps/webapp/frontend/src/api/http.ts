@@ -14,6 +14,7 @@ import {
   SupportContactResp,
   SubscriptionResp,
   SubscriptionStatusResp,
+  ExerciseTechniqueResp,
   WorkoutPlanKind,
   WorkoutPlanOptionsResp
 } from './types';
@@ -86,6 +87,17 @@ export async function getJSON<T>(url: string, options: RequestInit = {}): Promis
     throw new HttpError(resp.status, statusToMessage(resp.status));
   }
   return (await resp.json()) as T;
+}
+
+export async function getExerciseTechnique(
+  gifKey: string,
+  locale?: Locale,
+  signal?: AbortSignal
+): Promise<ExerciseTechniqueResp> {
+  const resolvedLocale = locale ?? readLocale();
+  const url = new URL(`api/technique/${encodeURIComponent(gifKey)}/`, window.location.href);
+  url.searchParams.set('lang', resolvedLocale);
+  return await getJSON<ExerciseTechniqueResp>(url.toString(), { signal });
 }
 
 type GetProgramOpts = {

@@ -7,7 +7,7 @@ export default defineConfig({
     root: 'frontend',
     base: '/static/', // Django static url
     build: {
-        outDir: process.env.VITE_OUT_DIR ?? '../static/js-build-v2',
+        outDir: process.env.VITE_OUT_DIR ?? '../static/js-build-v3',
         emptyOutDir: true,
         manifest: true, // Generate manifest.json for Django to use if needed, or just for good measure
         rollupOptions: {

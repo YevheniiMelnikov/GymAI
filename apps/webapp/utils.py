@@ -24,6 +24,8 @@ from .schemas import AuthResult, CreditPackageInfo, SubscriptionPlanOption, Work
 
 from apps.profiles.repos import ProfileRepository
 from core.ai_coach.exercise_catalog import search_exercises
+from core.ai_coach.exercise_catalog import load_exercise_catalog
+from core.ai_coach.exercise_catalog.technique_loader import get_exercise_technique, resolve_gif_key_from_canonical_name
 from core.services.gstorage_service import ExerciseGIFStorage
 
 T = TypeVar("T")
@@ -306,6 +308,7 @@ def _bundle_signature() -> str | None:
     This allows us to bust caches even when STATIC_VERSION stays unchanged.
     """
     bundle_candidates = [
+        WEBAPP_STATIC_DIR / "js-build-v3/index.js",
         WEBAPP_STATIC_DIR / "js-build-v2/index.js",
         WEBAPP_STATIC_DIR / "css/common.css",
     ]
@@ -350,7 +353,7 @@ def _get_gif_storage() -> ExerciseGIFStorage:
     return ExerciseGIFStorage(settings.EXERCISE_GIF_BUCKET)
 
 
-def transform_days(exercises_by_day: list) -> list[dict]:
+def transform_days(exercises_by_day: list, *, language: str | None = None) -> list[dict]:
     def _normalize_int(value: object | None) -> int | None:
         if isinstance(value, bool) or value is None:
             return None
@@ -365,11 +368,15 @@ def transform_days(exercises_by_day: list) -> list[dict]:
     days = []
     storage = _get_gif_storage()
     has_bucket = storage.bucket is not None
+    catalog_entries = load_exercise_catalog()
+    catalog_gif_keys = {entry.gif_key for entry in catalog_entries} if catalog_entries else set[str]()
     total_exercises = 0
     with_gif_key = 0
+    unknown_gif_key = 0
     with_gif_url = 0
     proxy_urls = 0
     missing_url_samples: list[str] = []
+    unknown_gif_key_samples: list[str] = []
     sample_url: str | None = None
     sample_key: str | None = None
     for idx, day_data in enumerate(exercises_by_day, start=1):
@@ -388,15 +395,32 @@ def transform_days(exercises_by_day: list) -> list[dict]:
                 else:
                     weight = {"value": weight_str, "unit": ""}
 
+            raw_name = str(ex_data.get("name") or "").strip()
             gif_key = ex_data.get("gif_key")
             if not gif_key:
-                name_query = str(ex_data.get("name") or "").strip()
-                if name_query:
-                    matches = search_exercises(name_query=name_query, limit=1)
-                    if matches:
-                        gif_key = matches[0].gif_key
+                gif_key = resolve_gif_key_from_canonical_name(raw_name, language)
+                if gif_key:
+                    logger.info(f"webapp_gif_key_resolved source=technique_yaml name={raw_name} gif_key={gif_key}")
+            if not gif_key and raw_name:
+                matches = search_exercises(name_query=raw_name, limit=1)
+                if matches:
+                    gif_key = matches[0].gif_key
+                    logger.info(f"webapp_gif_key_resolved source=exercise_search name={raw_name} gif_key={gif_key}")
+
+            gif_key_str = str(gif_key) if gif_key else ""
+            if gif_key_str and catalog_gif_keys and gif_key_str not in catalog_gif_keys:
+                unknown_gif_key += 1
+                if len(unknown_gif_key_samples) < 3:
+                    unknown_gif_key_samples.append(gif_key_str)
+
             if gif_key:
                 with_gif_key += 1
+
+            canonical_name: str | None = None
+            if gif_key:
+                technique = get_exercise_technique(str(gif_key), language)
+                if technique and technique.canonical_name:
+                    canonical_name = technique.canonical_name
             gif_url = None
             if gif_key and has_bucket:
                 gif_url = f"/api/gif/{quote(str(gif_key))}"
@@ -413,7 +437,7 @@ def transform_days(exercises_by_day: list) -> list[dict]:
                 {
                     "id": str(set_id or f"ex-{idx}-{ex_idx}"),
                     "set_id": set_id,
-                    "name": ex_data.get("name", ""),
+                    "name": canonical_name or raw_name,
                     "sets": ex_data.get("sets"),
                     "reps": ex_data.get("reps"),
                     "weight": weight,
@@ -438,13 +462,16 @@ def transform_days(exercises_by_day: list) -> list[dict]:
             }
         )
     logger.info(
-        "webapp_gif_urls total_exercises={} with_gif_key={} with_gif_url={} has_bucket={} proxy={} missing_samples={}",
+        "webapp_gif_urls total_exercises={} with_gif_key={} with_gif_url={} has_bucket={} proxy={} "
+        "unknown_gif_key={} missing_samples={} unknown_samples={}",
         total_exercises,
         with_gif_key,
         with_gif_url,
         has_bucket,
         proxy_urls,
+        unknown_gif_key,
         ",".join(missing_url_samples) or "none",
+        ",".join(unknown_gif_key_samples) or "none",
     )
     if sample_url:
         logger.info(

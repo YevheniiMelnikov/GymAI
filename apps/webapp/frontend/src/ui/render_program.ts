@@ -1,6 +1,7 @@
 import {
   getReplaceExerciseStatus,
   getReplaceSubscriptionExerciseStatus,
+  getExerciseTechnique,
   HttpError,
   replaceExercise,
   replaceSubscriptionExercise,
@@ -284,7 +285,7 @@ export function openExerciseEditDialog(exercise: Exercise, options?: ExerciseEdi
 }
 
 type ExerciseDialogController = {
-  open: (gifUrl?: string | null, exerciseName?: string) => void;
+  open: (gifUrl?: string | null, exerciseName?: string, gifKey?: string | null) => void;
   close: () => void;
 };
 
@@ -608,6 +609,10 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
   media.loading = 'lazy';
   media.hidden = true;
 
+  const techniqueList = document.createElement('ol');
+  techniqueList.className = 'exercise-dialog__technique';
+  techniqueList.hidden = true;
+
   const actions = document.createElement('div');
   actions.className = 'exercise-dialog__actions';
 
@@ -616,12 +621,18 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
   closeBtn.className = 'primary-button exercise-dialog__close';
 
   actions.append(closeBtn);
-  body.append(message, media);
+  body.append(message, media, techniqueList);
   panel.append(title, body, actions);
   root.appendChild(panel);
   document.body.appendChild(root);
 
+  let techniqueAbort: AbortController | null = null;
+  let activeTechniqueKey: string | null = null;
+
   const close = () => {
+    techniqueAbort?.abort();
+    techniqueAbort = null;
+    activeTechniqueKey = null;
     root.dataset.state = 'closed';
     root.setAttribute('aria-hidden', 'true');
     document.removeEventListener('keydown', handleKeydown);
@@ -635,12 +646,17 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
     }
   };
 
-  const open = (gifUrl?: string | null, exerciseName?: string) => {
+  const open = (gifUrl?: string | null, exerciseName?: string, gifKey?: string | null) => {
     const hasGif = Boolean(gifUrl);
     title.textContent = hasGif ? '' : t('program.exercise.technique.title');
     title.hidden = hasGif;
     message.textContent = t('program.exercise.technique.body');
     closeBtn.textContent = t('program.exercise.technique.close');
+    techniqueList.innerHTML = '';
+    techniqueList.hidden = true;
+    techniqueAbort?.abort();
+    techniqueAbort = null;
+    activeTechniqueKey = gifKey ? String(gifKey) : null;
     if (gifUrl) {
       media.src = gifUrl;
       media.alt = exerciseName || t('program.exercise.technique.title');
@@ -659,6 +675,37 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
     window.requestAnimationFrame(() => {
       panel.focus();
     });
+
+    if (!gifUrl || !activeTechniqueKey) {
+      return;
+    }
+
+    const abort = new AbortController();
+    techniqueAbort = abort;
+    getExerciseTechnique(activeTechniqueKey, undefined, abort.signal)
+      .then((data) => {
+        if (abort.signal.aborted) return;
+        if (root.dataset.state !== 'open') return;
+        if (activeTechniqueKey !== data.gif_key) return;
+        if (data.canonical_name) {
+          media.alt = data.canonical_name;
+        }
+        if (Array.isArray(data.technique_description) && data.technique_description.length > 0) {
+          const items = data.technique_description
+            .map((step) => String(step || '').trim())
+            .filter((step) => step.length > 0);
+          if (items.length > 0) {
+            items.forEach((step) => {
+              const li = document.createElement('li');
+              li.textContent = step;
+              techniqueList.appendChild(li);
+            });
+            techniqueList.hidden = false;
+          }
+        }
+      })
+      .catch(() => {
+      });
   };
 
   const onBackdropClick = (event: MouseEvent) => {
@@ -676,6 +723,8 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
     media.removeAttribute('src');
     media.hidden = true;
     message.hidden = false;
+    techniqueList.innerHTML = '';
+    techniqueList.hidden = true;
   });
   root.addEventListener('click', onBackdropClick);
 
@@ -1030,9 +1079,30 @@ function getExerciseEditDialog(): ExerciseEditDialogController {
   return exerciseEditDialog;
 }
 
-function createExerciseActions(details: HTMLDetailsElement, exercise: Exercise): HTMLDivElement {
+function createExerciseActions(details: HTMLDetailsElement, exercise: Exercise, exerciseTitle: string): HTMLDivElement {
   const actions = document.createElement('div');
   actions.className = 'program-exercise-actions';
+
+  const techniqueButton = document.createElement('button');
+  techniqueButton.type = 'button';
+  techniqueButton.className = 'program-exercise-technique-btn';
+  techniqueButton.textContent = t('program.exercise.technique.button');
+
+  const techniqueDialog = getExerciseTechniqueDialog();
+  const openTechniqueDialog = () => {
+    const resolvedGifUrl =
+      exercise.gif_url ||
+      (exercise.gif_key ? `/api/gif/${encodeURIComponent(exercise.gif_key)}` : null);
+    if (!details.open) {
+      details.open = true;
+    }
+    techniqueDialog.open(resolvedGifUrl, exerciseTitle, exercise.gif_key ?? null);
+  };
+  techniqueButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openTechniqueDialog();
+  });
 
   const editButton = document.createElement('button');
   editButton.type = 'button';
@@ -1049,7 +1119,7 @@ function createExerciseActions(details: HTMLDetailsElement, exercise: Exercise):
     editDialog.open(exercise, details);
   });
 
-  actions.append(editButton);
+  actions.append(techniqueButton, editButton);
   return actions;
 }
 
@@ -1107,34 +1177,6 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
     flags.appendChild(dropTag);
     content.appendChild(flags);
   }
-
-  const techniqueLink = document.createElement('span');
-  techniqueLink.className = 'exercise-sets-link';
-  techniqueLink.textContent = t('program.exercise.technique.button');
-  techniqueLink.setAttribute('role', 'button');
-  techniqueLink.tabIndex = 0;
-  const techniqueDialog = getExerciseTechniqueDialog();
-  const openTechniqueDialog = () => {
-    const resolvedGifUrl =
-      ex.gif_url ||
-      (ex.gif_key ? `/api/gif/${encodeURIComponent(ex.gif_key)}` : null);
-    if (!details.open) {
-      details.open = true;
-    }
-    techniqueDialog.open(resolvedGifUrl, title);
-  };
-  techniqueLink.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    openTechniqueDialog();
-  });
-  techniqueLink.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      openTechniqueDialog();
-    }
-  });
-  content.appendChild(techniqueLink);
 
   const sets = buildDisplaySets(ex);
   if (sets.length > 0) {
@@ -1195,7 +1237,7 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
     content.classList.add('program-exercise-content--minimal');
   }
 
-  content.appendChild(createExerciseActions(details, ex));
+  content.appendChild(createExerciseActions(details, ex, title));
   details.appendChild(content);
   attachDetailsAnimation(details, content);
   li.appendChild(details);

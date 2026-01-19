@@ -106,6 +106,11 @@ urlpatterns = [
         views.exercise_gif,
         name="webapp-exercise-gif",
     ),
+    path(  # pyrefly: ignore[no-matching-overload]
+        "api/technique/<path:gif_key>/",
+        views.exercise_technique,
+        name="webapp-exercise-technique",
+    ),
     path("", views.index, name="webapp"),
     path("__ping__", views.ping, name="webapp-ping"),
     re_path(r"^(?!api/).*$", views.index),

@@ -35,6 +35,7 @@ from core.enums import WorkoutLocation, PaymentStatus, WorkoutPlanType
 from core.schemas import Program as ProgramSchema, Subscription
 from django.core.cache import cache
 from core.ai_coach.exercise_catalog import load_exercise_catalog
+from core.ai_coach.exercise_catalog.technique_loader import get_exercise_technique
 from core.services.gstorage_service import ExerciseGIFStorage
 from core.tasks.ai_coach.replace_exercise import (
     enqueue_exercise_replace_task,
@@ -128,7 +129,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         if subscription_obj is None:
             return JsonResponse({"error": "not_found"}, status=404)
 
-        days = transform_days(subscription_obj.exercises)
+        days = transform_days(subscription_obj.exercises, language=profile.language)
         return JsonResponse({"days": days, "id": str(subscription_obj.id), "language": profile.language})
 
     program_obj = await fetch_program(profile.id, program_id)
@@ -146,7 +147,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
     program_id_value = getattr(program_obj, "id", None)
     if isinstance(program_obj.exercises_by_day, list):
         days_payload = build_days_payload(program_obj.exercises_by_day)
-        transformed = transform_days(days_payload)
+        transformed = transform_days(days_payload, language=profile.language)
         data["days"] = transformed
         data["program"] = transformed
         if program_id_value is not None:
@@ -189,6 +190,31 @@ def exercise_gif(request: HttpRequest, gif_key: str) -> HttpResponse:
     response = HttpResponse(content, content_type=blob.content_type or "image/gif")
     response["Cache-Control"] = "public, max-age=3600"
     return response
+
+
+@require_GET  # type: ignore[misc]
+def exercise_technique(request: HttpRequest, gif_key: str) -> JsonResponse:
+    safe_key = str(gif_key or "").strip().lstrip("/")
+    if not safe_key:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    entries = load_exercise_catalog()
+    if entries and safe_key not in {entry.gif_key for entry in entries}:
+        logger.warning(f"exercise_technique_rejected gif_key={safe_key}")
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    lang = request.GET.get("lang") or request.GET.get("locale")
+    technique = get_exercise_technique(safe_key, str(lang) if lang is not None else None)
+    if technique is None:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    return JsonResponse(
+        {
+            "gif_key": safe_key,
+            "canonical_name": technique.canonical_name,
+            "technique_description": list(technique.technique_description),
+        }
+    )
 
 
 # type checking of async views with require_GET is not supported by stubs
@@ -280,7 +306,7 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "not_found"}, status=404)
 
     subscription_id = getattr(subscription, "id", None)
-    days = transform_days(exercises)
+    days = transform_days(exercises, language=profile.language)
     response: dict[str, object] = {
         "days": days,
         "language": profile.language,

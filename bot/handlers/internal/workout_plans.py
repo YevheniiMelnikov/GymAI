@@ -17,6 +17,8 @@ from core.cache import Cache
 from core.enums import SubscriptionPeriod, WorkoutPlanType
 from core.exceptions import SubscriptionNotFoundError
 from core.schemas import DayExercises, Profile, Subscription
+from core.ai_coach.exercise_catalog import load_exercise_catalog, search_exercises
+from core.ai_coach.exercise_catalog.technique_loader import resolve_gif_key_from_canonical_name
 from core.services import APIService
 from core.utils.billing import next_payment_date
 
@@ -69,6 +71,51 @@ def _sanitize_exercises_payload(exercises: list[dict[str, Any]]) -> list[dict[st
     return sanitized
 
 
+def _normalize_exercise_gif_keys(exercises_by_day: list[DayExercises], *, language: str) -> None:
+    catalog = load_exercise_catalog()
+    catalog_keys = {entry.gif_key for entry in catalog}
+    missing = 0
+    unknown = 0
+    resolved_from_yaml = 0
+    resolved_from_search = 0
+    missing_samples: list[str] = []
+    unknown_samples: list[str] = []
+    for day in exercises_by_day:
+        for exercise in day.exercises:
+            gif_key = str(getattr(exercise, "gif_key", "") or "").strip()
+            name = str(getattr(exercise, "name", "") or "").strip()
+            if gif_key and gif_key not in catalog_keys:
+                unknown += 1
+                if len(unknown_samples) < 3:
+                    unknown_samples.append(gif_key)
+                gif_key = ""
+                exercise.gif_key = None
+            if not gif_key:
+                missing += 1
+                if len(missing_samples) < 3:
+                    missing_samples.append(name)
+                resolved = resolve_gif_key_from_canonical_name(name, language)
+                if resolved and resolved in catalog_keys:
+                    exercise.gif_key = resolved
+                    resolved_from_yaml += 1
+                    continue
+                matches = search_exercises(name_query=name, limit=1) if name else ()
+                if matches and matches[0].gif_key in catalog_keys:
+                    exercise.gif_key = matches[0].gif_key
+                    resolved_from_search += 1
+    if missing or unknown:
+        logger.warning(
+            "program_finalize_gif_keys missing={} unknown={} resolved_yaml={} resolved_search={} "
+            "missing_samples={} unknown_samples={}",
+            missing,
+            unknown,
+            resolved_from_yaml,
+            resolved_from_search,
+            missing_samples,
+            unknown_samples,
+        )
+
+
 def _resolve_subscription_period(payload_period: str | None, current_period: str | None) -> str:
     if current_period:
         return str(current_period)
@@ -103,6 +150,14 @@ class ProgramPlanFinalizer(PlanFinalizer):
                 f"profile_id={context.resolved_profile_id} request_id={context.request_id} err={exc}"
             )
             return
+
+        try:
+            _normalize_exercise_gif_keys(exercises_by_day, language=str(context.profile.language or ""))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "program_finalize_gif_keys_failed "
+                f"profile_id={context.resolved_profile_id} request_id={context.request_id} err={exc!s}"
+            )
 
         split_number = context.plan_payload_raw.get("split_number")
         try:

@@ -11,9 +11,10 @@ Rules:
 Instructions:
 - Produce a single JSON object matching the ProgramPayload schema with no surrounding text.
 - Include estimated working weight (kg) for each weighted exercise.
-- You MUST produce all output strictly in the language code "{language}" (examples: "ua", "ru", "en"). Do not switch languages.
+- You MUST produce all output strictly in the language code "{language}" (examples: "uk", "ua", "ru", "en"). Do not switch languages.
 - Keep every exercise name exactly as generated in "{language}"; do not translate or replace them with English equivalents.
 - If any tool returns English text, rewrite it into "{language}" before presenting the final answer.
+- Treat "Wishes" as HARD constraints. If there's any conflict, Wishes override all other heuristics. Before returning the final JSON, verify the plan fully complies with Wishes; if not, regenerate and re-check.
 
 Program field guide:
 - exercises_by_day: list of DayExercises; each has day label and exercises with name/sets/reps.

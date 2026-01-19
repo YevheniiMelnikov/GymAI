@@ -130,6 +130,11 @@ urlpatterns = [
         name="webapp-exercise-gif-direct",
     ),
     path(
+        "api/technique/<path:gif_key>/",
+        cast(WebappView, webapp_views.exercise_technique),
+        name="webapp-exercise-technique-direct",
+    ),
+    path(
         "api/generation-status/",
         cast(WebappView, webapp_views.generation_status),
         name="webapp-generation-status-direct",

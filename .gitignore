@@ -172,6 +172,8 @@ staticfiles/
 apps/webapp/static/js/
 apps/webapp/static/js-build/
 apps/webapp/static/js-build-v2/
+apps/webapp/static/js-build-v3/
+apps/webapp/static/js-build-v3.root-owned.*/
 apps/webapp/static/admin/
 apps/webapp/static/rest_framework/
 apps/webapp/static/unfold/

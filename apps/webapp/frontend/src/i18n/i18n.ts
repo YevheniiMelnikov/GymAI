@@ -46,7 +46,7 @@ export const fallbackEn = {
   'program.exercise.replace_dialog.cancel': 'Cancel',
   'program.exercise.replace_limit': 'Exercise replacement limit reached.',
   'program.exercise.edit_dialog.close': 'Close',
-  'program.exercise.technique.button': 'Show technique',
+  'program.exercise.technique.button': 'Exercise technique',
   'program.exercise.technique.title': 'Technique not available',
   'program.exercise.technique.body': 'No videos yet. We will add them soon.',
   'program.exercise.technique.close': 'Close',
