@@ -60,6 +60,7 @@ class Exercise(BaseModel):
     sets: str | int
     reps: str | int
     weight: str | None = None
+    kind: str | None = None
     set_id: int | None = None
     gif_key: str | None = None
     drop_set: bool = False

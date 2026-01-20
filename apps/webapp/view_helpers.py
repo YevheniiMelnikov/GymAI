@@ -3,6 +3,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, TypedDict, cast
 
 import httpx
+from django.db.models import F
 from django.http import HttpRequest, JsonResponse
 from django.utils import timezone
 from loguru import logger
@@ -65,6 +66,29 @@ async def resolve_profile(
     if auth_ctx.profile is None:
         return JsonResponse({"error": "not_found"}, status=404)
     return auth_ctx.profile
+
+
+def parse_bool(value: object | None) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"true", "1", "yes", "y", "on"}:
+            return True
+        if text in {"false", "0", "no", "n", "off", ""}:
+            return False
+    return False
+
+
+def atomic_debit_credits(profile_id: int, amount: int) -> bool:
+    if amount <= 0:
+        return True
+    updated = Profile.objects.filter(id=profile_id, credits__gte=amount).update(credits=F("credits") - amount)
+    return updated == 1
 
 
 def normalize_support_contact(raw: str | None) -> str | None:

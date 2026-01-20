@@ -45,6 +45,9 @@ export const fallbackEn = {
   'program.exercise.replace_dialog.confirm': 'Yes',
   'program.exercise.replace_dialog.cancel': 'Cancel',
   'program.exercise.replace_limit': 'Exercise replacement limit reached.',
+  'program.exercise.replace_paid.body':
+    'Free replacement limit reached. Replace this exercise for {price} credits? (Balance: {balance})',
+  not_enough_credits: 'Not enough credits. Please top up your balance.',
   'program.exercise.edit_dialog.close': 'Close',
   'program.exercise.technique.button': 'Exercise technique',
   'program.exercise.technique.title': 'Technique not available',

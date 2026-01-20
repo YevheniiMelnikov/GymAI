@@ -3,7 +3,7 @@ import logging
 import hashlib
 import io
 from pathlib import Path
-from typing import Any, Callable, Final, cast
+from typing import Any, Callable, Final, Mapping, cast
 
 from google.oauth2.service_account import Credentials  # pyrefly: ignore[import-error]
 from googleapiclient.discovery import build  # pyrefly: ignore[import-error]
@@ -28,6 +28,10 @@ def _read_txt(data: bytes) -> str:
         return data.decode("latin-1", errors="ignore")
 
 
+def _read_md(data: bytes) -> str:
+    return _read_txt(data)
+
+
 def _read_docx(data: bytes) -> str:
     f = io.BytesIO(data)
     doc = Document(f)
@@ -47,6 +51,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
     folder_id: str | None = settings.KNOWLEDGE_BASE_FOLDER_ID
     credentials_path: str | Path = settings.GOOGLE_APPLICATION_CREDENTIALS
     _files_service: Any | None = None
+    _FOLDER_MIME_TYPE: Final[str] = "application/vnd.google-apps.folder"
 
     def __init__(self, knowledge_base: KnowledgeBase) -> None:
         self._kb = knowledge_base
@@ -84,9 +89,67 @@ class GDriveDocumentLoader(KnowledgeLoader):
 
     _PARSERS: dict[str, Callable[[bytes], str]] = {
         ".txt": _read_txt,
+        ".md": _read_md,
         ".docx": _read_docx,
         ".pdf": _read_pdf,
     }
+
+    def _is_folder(self, item: Mapping[str, Any]) -> bool:
+        return (item.get("mimeType") or "").strip().lower() == self._FOLDER_MIME_TYPE
+
+    def _join_path(self, parent: str, name: str) -> str:
+        clean_parent = parent.strip().strip("/")
+        clean_name = name.strip().strip("/")
+        if not clean_parent:
+            return clean_name
+        if not clean_name:
+            return clean_parent
+        return f"{clean_parent}/{clean_name}"
+
+    def _list_drive_items(self, folder_id: str) -> list[dict[str, Any]]:
+        service = self._get_drive_files_service()
+        q = f"'{folder_id}' in parents and trashed = false"
+        items: list[dict[str, Any]] = []
+        page_token: str | None = None
+        while True:
+            request = service.list(
+                q=q,
+                fields="nextPageToken, files(id, name, size, mimeType, modifiedTime)",
+                pageToken=page_token,
+                pageSize=1000,
+            )
+            resp = request.execute()
+            batch = cast(list[dict[str, Any]], resp.get("files", []))
+            items.extend(batch)
+            page_token = cast(str | None, resp.get("nextPageToken"))
+            if not page_token:
+                break
+        return items
+
+    def _scan_drive_tree(self, root_folder_id: str) -> list[dict[str, Any]]:
+        pending: list[tuple[str, str]] = [(root_folder_id, "")]
+        collected: list[dict[str, Any]] = []
+        visited: set[str] = set()
+        while pending:
+            folder_id, prefix = pending.pop()
+            if folder_id in visited:
+                continue
+            visited.add(folder_id)
+            for item in self._list_drive_items(folder_id):
+                name = str(item.get("name") or "").strip()
+                if not name:
+                    continue
+                if self._is_folder(item):
+                    child_id = str(item.get("id") or "").strip()
+                    if not child_id:
+                        continue
+                    pending.append((child_id, self._join_path(prefix, name)))
+                    continue
+                enriched = dict(item)
+                enriched["kb_path"] = self._join_path(prefix, name)
+                enriched["kb_folder_path"] = prefix
+                collected.append(enriched)
+        return collected
 
     async def load(self, force_ingest: bool = False) -> None:
         if not self.folder_id:
@@ -98,10 +161,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
                 logger.info("kb_gdrive.skip reason=lock_held")
                 return
 
-        service = self._get_drive_files_service()
-        q = f"'{self.folder_id}' in parents and trashed = false"
-        resp = service.list(q=q, fields="files(id, name, size, mimeType, modifiedTime)").execute()
-        files = cast(list[dict[str, Any]], resp.get("files", []))
+        files = self._scan_drive_tree(self.folder_id)
         logger.debug(f"kb_gdrive.scan start folder_id={self.folder_id} dataset={self._dataset_name} files={len(files)}")
         processed = 0
         skipped = 0
@@ -133,12 +193,13 @@ class GDriveDocumentLoader(KnowledgeLoader):
             file_id = f.get("id")
             size = int(f.get("size") or 0)
             ext = Path(name).suffix.lower()
+            kb_path = str(f.get("kb_path") or name)
 
             if ext not in self._PARSERS:
                 logger.debug(
                     "kb_gdrive.file_decision dataset={} file={} decision=skip reason=unsupported_extension",
                     dataset_alias,
-                    name,
+                    kb_path,
                 )
                 skipped += 1
                 continue
@@ -146,7 +207,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
                 logger.debug(
                     "kb_gdrive.file_decision dataset={} file={} decision=skip reason=file_too_large size_mb={:.1f}",
                     dataset_alias,
-                    name,
+                    kb_path,
                     size / 1_048_576,
                 )
                 skipped += 1
@@ -155,7 +216,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
                 logger.warning(
                     "kb_gdrive.file_decision dataset={} file={} decision=skip reason=missing_file_id",
                     dataset_alias,
-                    name,
+                    kb_path,
                 )
                 skipped += 1
                 continue
@@ -185,6 +246,8 @@ class GDriveDocumentLoader(KnowledgeLoader):
                     "source": "gdrive",
                     "file_id": file_id,
                     "name": name,
+                    "path": kb_path,
+                    "folder_path": f.get("kb_folder_path") or "",
                     "mime_type": f.get("mimeType"),
                     "size": size,
                 }
@@ -212,7 +275,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
                             "reason=duplicate_digest digest={} ident={}"
                         ),
                         dataset_alias,
-                        name,
+                        kb_path,
                         digest_sha[:12],
                         ident,
                     )
@@ -227,7 +290,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
                             "reason=duplicate_digest digest={} ident={}"
                         ),
                         dataset_alias,
-                        name,
+                        kb_path,
                         digest_sha[:12],
                         ident,
                     )
@@ -235,7 +298,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
                     logger.debug(
                         "kb_gdrive.file_decision dataset={} file={} decision=process reason=new_content",
                         dataset_alias,
-                        name,
+                        kb_path,
                     )
 
                 try:
@@ -268,7 +331,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
                     digest_sha[:12],
                 )
             except Exception:
-                logger.exception(f"Failed to process {name} (id={file_id})")
+                logger.exception(f"Failed to process {kb_path} (id={file_id})")
                 errors += 1
         logger.debug(
             "kb_gdrive.summary dataset={} files_total={} processed={} skipped={} errors={}",

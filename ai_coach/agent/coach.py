@@ -36,7 +36,13 @@ from .prompts import (
     UPDATE_WORKOUT,
 )
 from ai_coach.types import CoachMode
-from ai_coach.agent.utils import ProgramAdapter, ensure_catalog_gif_keys, fill_missing_gif_keys, get_knowledge_base
+from ai_coach.agent.utils import (
+    ProgramAdapter,
+    apply_workout_aux_rules,
+    ensure_catalog_gif_keys,
+    fill_missing_gif_keys,
+    get_knowledge_base,
+)
 from ai_coach.schemas import (
     AgentDietPlanOutput,
     AgentProgramOutput,
@@ -168,11 +174,33 @@ class CoachAgent(metaclass=CoachAgentMeta):
         try:
             if output_type is Program:
                 agent_output = cls._normalize_output(raw_result, AgentProgramOutput)
-                program_payload = ProgramPayload.model_validate(agent_output.model_dump())
+                payload_data = agent_output.model_dump()
+                exercises_by_day = payload_data.get("exercises_by_day")
+                if isinstance(exercises_by_day, list):
+                    apply_workout_aux_rules(
+                        exercises_by_day,
+                        language=cls._lang(deps),
+                        workout_location=getattr(workout_location, "value", None) if workout_location else None,
+                        wishes=str(payload_data.get("wishes") or wishes or ""),
+                        prompt=prompt,
+                        profile_context=profile_context,
+                    )
+                program_payload = ProgramPayload.model_validate(payload_data)
                 normalized = ProgramAdapter.to_domain(program_payload)
             else:
                 agent_output = cls._normalize_output(raw_result, AgentSubscriptionOutput)
-                normalized = Subscription.model_validate(agent_output.model_dump())
+                payload_data = agent_output.model_dump()
+                exercises = payload_data.get("exercises")
+                if isinstance(exercises, list):
+                    apply_workout_aux_rules(
+                        exercises,
+                        language=cls._lang(deps),
+                        workout_location=getattr(workout_location, "value", None) if workout_location else None,
+                        wishes=str(payload_data.get("wishes") or wishes or ""),
+                        prompt=prompt,
+                        profile_context=profile_context,
+                    )
+                normalized = Subscription.model_validate(payload_data)
         except ValidationError as exc:
             raise ModelRetry(
                 "Model output must match the Program schema with required fields "
@@ -335,7 +363,18 @@ class CoachAgent(metaclass=CoachAgentMeta):
         if output_type is Program:
             try:
                 agent_output = cls._normalize_output(raw_result, AgentProgramOutput)
-                program_payload = ProgramPayload.model_validate(agent_output.model_dump())
+                payload_data = agent_output.model_dump()
+                exercises_by_day = payload_data.get("exercises_by_day")
+                if isinstance(exercises_by_day, list):
+                    apply_workout_aux_rules(
+                        exercises_by_day,
+                        language=cls._lang(deps),
+                        workout_location=getattr(workout_location, "value", None) if workout_location else None,
+                        wishes=str(payload_data.get("wishes") or ""),
+                        prompt=prompt,
+                        profile_context=profile_context,
+                    )
+                program_payload = ProgramPayload.model_validate(payload_data)
                 normalized = ProgramAdapter.to_domain(program_payload)
             except ValidationError as exc:
                 raise ModelRetry(
@@ -354,7 +393,18 @@ class CoachAgent(metaclass=CoachAgentMeta):
             return normalized
         try:
             agent_output = cls._normalize_output(raw_result, AgentSubscriptionOutput)
-            normalized = Subscription.model_validate(agent_output.model_dump())
+            payload_data = agent_output.model_dump()
+            exercises = payload_data.get("exercises")
+            if isinstance(exercises, list):
+                apply_workout_aux_rules(
+                    exercises,
+                    language=cls._lang(deps),
+                    workout_location=getattr(workout_location, "value", None) if workout_location else None,
+                    wishes=str(payload_data.get("wishes") or ""),
+                    prompt=prompt,
+                    profile_context=profile_context,
+                )
+            normalized = Subscription.model_validate(payload_data)
         except ValidationError as exc:
             raise ModelRetry("Model output must match the Subscription schema. Return a single JSON object.") from exc
         exercises = [day.model_dump() for day in normalized.exercises]

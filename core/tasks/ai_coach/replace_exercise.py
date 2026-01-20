@@ -15,6 +15,7 @@ from apps.webapp.exercise_replace import (
     ReplaceExerciseResponse,
     extract_json_payload,
     format_range,
+    is_aux_exercise_entry,
     resolve_exercise_entry,
     resolve_profile_payload,
 )
@@ -231,6 +232,8 @@ def _replace_exercise_impl(profile_id: int, program_id: int, exercise_id: str, t
     exercise_entry = resolve_exercise_entry(exercises_by_day, exercise_id)
     if exercise_entry is None:
         raise ValueError("exercise_not_found")
+    if is_aux_exercise_entry(exercise_entry):
+        raise ValueError("exercise_not_replaceable")
 
     replacement = _request_replacement(
         profile_id=profile_id,
@@ -273,6 +276,8 @@ def _replace_subscription_exercise_impl(
     exercise_entry = resolve_exercise_entry(exercises_by_day, exercise_id)
     if exercise_entry is None:
         raise ValueError("exercise_not_found")
+    if is_aux_exercise_entry(exercise_entry):
+        raise ValueError("exercise_not_replaceable")
 
     replacement = _request_replacement(
         profile_id=profile_id,

@@ -4,10 +4,12 @@ import path from 'path';
 
 export default defineConfig({
     plugins: [react()],
-    root: 'frontend',
+    root: path.resolve(__dirname, 'frontend'),
     base: '/static/', // Django static url
     build: {
-        outDir: process.env.VITE_OUT_DIR ?? '../static/js-build-v3',
+        outDir: process.env.VITE_OUT_DIR
+            ? path.resolve(__dirname, process.env.VITE_OUT_DIR)
+            : path.resolve(__dirname, 'static/js-build-v3'),
         emptyOutDir: true,
         manifest: true, // Generate manifest.json for Django to use if needed, or just for good measure
         rollupOptions: {

@@ -3,6 +3,7 @@ import {
   getReplaceSubscriptionExerciseStatus,
   getExerciseTechnique,
   HttpError,
+  PaymentRequiredError,
   replaceExercise,
   replaceSubscriptionExercise,
   ReplaceExerciseStatus,
@@ -536,42 +537,73 @@ function getExerciseDialog(): ReplaceExerciseDialogController {
   });
   confirmBtn.addEventListener('click', (event) => {
     event.preventDefault();
-    if (!replaceContext || isLoading) return;
-    if (!programContext.programId) {
-      window.alert(t('program.action_error'));
-      close();
-      return;
-    }
-    try {
-      (window as any).Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('medium');
-    } catch {
-    }
-    setLoading(true);
-    const editDialog = getExerciseEditDialog();
-    editDialog.close();
-    replaceContext.details.open = false;
-    replaceContext.details.classList.add('program-exercise-details--loading');
-    close();
-    const initData = readInitData();
-    const isSubscription = programContext.source === 'subscription';
-    const replaceAction = isSubscription ? replaceSubscriptionExercise : replaceExercise;
-    const statusLoader = isSubscription ? getReplaceSubscriptionExerciseStatus : getReplaceExerciseStatus;
-    replaceAction(programContext.programId, replaceContext.exercise.id, initData)
-      .then((taskId) => waitForReplace(taskId, statusLoader))
-      .then(() => {
-        replaceContext?.details.classList.remove('program-exercise-details--loading');
+    void (async () => {
+      const ctx = replaceContext;
+      if (!ctx || isLoading) return;
+      if (!programContext.programId) {
+        window.alert(t('program.action_error'));
+        close();
+        return;
+      }
+      try {
+        (window as any).Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('medium');
+      } catch {
+      }
+
+      const initData = readInitData();
+      const isSubscription = programContext.source === 'subscription';
+      const replaceAction = isSubscription ? replaceSubscriptionExercise : replaceExercise;
+      const statusLoader = isSubscription ? getReplaceSubscriptionExerciseStatus : getReplaceExerciseStatus;
+
+      const runReplace = async (useCredits: boolean) => {
+        setLoading(true);
+        const editDialog = getExerciseEditDialog();
+        editDialog.close();
+        ctx.details.open = false;
+        ctx.details.classList.add('program-exercise-details--loading');
+        close();
+        const taskId = await replaceAction(programContext.programId!, ctx.exercise.id, initData, useCredits);
+        await waitForReplace(taskId, statusLoader);
+        ctx.details.classList.remove('program-exercise-details--loading');
         window.dispatchEvent(new CustomEvent(EXERCISE_EDIT_SAVED_EVENT));
         close();
-      })
-      .catch((err) => {
+      };
+
+      try {
+        await runReplace(false);
+      } catch (err) {
         replaceContext?.details.classList.remove('program-exercise-details--loading');
+        if (err instanceof PaymentRequiredError) {
+          if (!err.canAfford) {
+            window.alert(t('not_enough_credits'));
+            setLoading(false);
+            return;
+          }
+          const confirmed = window.confirm(
+            t('program.exercise.replace_paid.body', { price: err.price, balance: err.balance })
+          );
+          if (!confirmed) {
+            setLoading(false);
+            return;
+          }
+          try {
+            await runReplace(true);
+          } catch (paidErr) {
+            const messageKey =
+              paidErr instanceof HttpError && paidErr.message === 'not_enough_credits' ? 'not_enough_credits' : 'program.action_error';
+            window.alert(t(messageKey as any));
+            setLoading(false);
+          }
+          return;
+        }
         const message =
-          err instanceof HttpError && err.status === 429
+          err instanceof HttpError && (err.status === 429 || err.message === 'limit_reached')
             ? t('program.exercise.replace_limit')
             : t('program.action_error');
         window.alert(message);
         setLoading(false);
-      });
+      }
+    })();
   });
   root.addEventListener('click', onBackdropClick);
 

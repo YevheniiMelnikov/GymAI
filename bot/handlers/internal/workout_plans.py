@@ -82,6 +82,10 @@ def _normalize_exercise_gif_keys(exercises_by_day: list[DayExercises], *, langua
     unknown_samples: list[str] = []
     for day in exercises_by_day:
         for exercise in day.exercises:
+            kind = str(getattr(exercise, "kind", "") or "").strip().lower()
+            if kind in {"warmup", "cardio"}:
+                exercise.gif_key = None
+                continue
             gif_key = str(getattr(exercise, "gif_key", "") or "").strip()
             name = str(getattr(exercise, "name", "") or "").strip()
             if gif_key and gif_key not in catalog_keys:

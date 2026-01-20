@@ -28,6 +28,8 @@
   "program.exercise.replace_dialog.confirm": "Да",
   "program.exercise.replace_dialog.cancel": "Отмена",
   "program.exercise.replace_limit": "Лимит замен упражнений исчерпан.",
+  "program.exercise.replace_paid.body": "Лимит бесплатных замен исчерпан. Заменить упражнение за {price} кредитов? (Баланс: {balance})",
+  "not_enough_credits": "Недостаточно кредитов. Пополните баланс.",
   "program.exercise.edit_dialog.close": "Закрыть",
   "program.exercise.technique.button": "Техника упражнения",
   "program.exercise.technique.title": "Техника пока недоступна",

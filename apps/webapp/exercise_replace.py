@@ -218,7 +218,13 @@ def resolve_exercise_entry(exercises_by_day: list[dict[str, Any]], exercise_id: 
             entry_id = exercise_entry.get("set_id")
             if entry_id is not None and str(entry_id) == exercise_id:
                 return exercise_entry if isinstance(exercise_entry, dict) else None
-    return None
+
+
+def is_aux_exercise_entry(exercise_entry: dict[str, Any] | None) -> bool:
+    if not exercise_entry:
+        return False
+    kind = str(exercise_entry.get("kind") or "").strip().lower()
+    return kind in {"warmup", "cardio"}
 
 
 def extract_json_payload(raw_text: str) -> dict[str, Any]:

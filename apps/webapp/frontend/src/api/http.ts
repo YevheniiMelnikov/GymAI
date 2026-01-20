@@ -42,6 +42,20 @@ export class HttpError extends Error {
   }
 }
 
+export class PaymentRequiredError extends Error {
+  readonly status: number = 402;
+  readonly price: number;
+  readonly balance: number;
+  readonly canAfford: boolean;
+
+  constructor(opts: { price: number; balance: number; canAfford: boolean }) {
+    super('payment_required');
+    this.price = opts.price;
+    this.balance = opts.balance;
+    this.canAfford = opts.canAfford;
+  }
+}
+
 export function statusToMessage(status: number): string {
   switch (status) {
     case 400:
@@ -49,8 +63,12 @@ export function statusToMessage(status: number): string {
     case 401:
     case 403:
       return 'unauthorized';
+    case 402:
+      return 'payment_required';
     case 404:
       return 'not_found';
+    case 429:
+      return 'limit_reached';
     case 500:
       return 'server_error';
     default:
@@ -566,7 +584,8 @@ export async function saveSubscriptionExerciseSets(
 export async function replaceExercise(
   programId: string,
   exerciseId: string,
-  initData: string
+  initData: string,
+  useCredits: boolean = false
 ): Promise<string> {
   const url = new URL('api/program/exercise/replace/', window.location.href);
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -577,12 +596,30 @@ export async function replaceExercise(
     headers,
     body: JSON.stringify({
       program_id: programId,
-      exercise_id: exerciseId
+      exercise_id: exerciseId,
+      use_credits: useCredits
     })
   });
 
   if (!resp.ok) {
-    throw new HttpError(resp.status, statusToMessage(resp.status));
+    const body =
+      resp.headers.get('content-type')?.includes('application/json') === true
+        ? ((await resp.json()) as { error?: string | null })
+        : null;
+    if (resp.status === 402) {
+      const data = (body ?? {}) as {
+        error?: string | null;
+        price?: number | null;
+        balance?: number | null;
+        can_afford?: boolean | null;
+      };
+      throw new PaymentRequiredError({
+        price: Math.max(0, Number(data.price ?? 0)),
+        balance: Math.max(0, Number(data.balance ?? 0)),
+        canAfford: Boolean(data.can_afford)
+      });
+    }
+    throw new HttpError(resp.status, typeof body?.error === 'string' ? body.error : statusToMessage(resp.status));
   }
   const data = (await resp.json()) as { task_id?: string | null };
   if (!data.task_id) {
@@ -594,7 +631,8 @@ export async function replaceExercise(
 export async function replaceSubscriptionExercise(
   subscriptionId: string,
   exerciseId: string,
-  initData: string
+  initData: string,
+  useCredits: boolean = false
 ): Promise<string> {
   const url = new URL('api/subscription/exercise/replace/', window.location.href);
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -605,12 +643,30 @@ export async function replaceSubscriptionExercise(
     headers,
     body: JSON.stringify({
       subscription_id: subscriptionId,
-      exercise_id: exerciseId
+      exercise_id: exerciseId,
+      use_credits: useCredits
     })
   });
 
   if (!resp.ok) {
-    throw new HttpError(resp.status, statusToMessage(resp.status));
+    const body =
+      resp.headers.get('content-type')?.includes('application/json') === true
+        ? ((await resp.json()) as { error?: string | null })
+        : null;
+    if (resp.status === 402) {
+      const data = (body ?? {}) as {
+        error?: string | null;
+        price?: number | null;
+        balance?: number | null;
+        can_afford?: boolean | null;
+      };
+      throw new PaymentRequiredError({
+        price: Math.max(0, Number(data.price ?? 0)),
+        balance: Math.max(0, Number(data.balance ?? 0)),
+        canAfford: Boolean(data.can_afford)
+      });
+    }
+    throw new HttpError(resp.status, typeof body?.error === 'string' ? body.error : statusToMessage(resp.status));
   }
   const data = (await resp.json()) as { task_id?: string | null };
   if (!data.task_id) {

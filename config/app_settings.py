@@ -233,6 +233,7 @@ class Settings(BaseSettings):
     LARGE_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("4750"), description="Price in credits for a 1 year AI coach subscription.")
     ASK_AI_PRICE: Annotated[int, Field(default=25, description="Price in credits for a single 'Ask AI' question.")]
     DIET_PLAN_PRICE: Annotated[int, Field(default=50, description="Price in credits for generating a nutrition plan.")]
+    EXERCISE_REPLACE_PRICE: Annotated[int, Field(default=25, description="Price in credits for replacing one exercise after free limit is reached.")]
 
     # --- Payments ---
     PAYMENT_PRIVATE_KEY: Annotated[str, Field(default="", description="Private key for the payment provider API.")]

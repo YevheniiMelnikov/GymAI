@@ -33,6 +33,8 @@
   "program.exercise.replace_dialog.confirm": "Так",
   "program.exercise.replace_dialog.cancel": "Скасувати",
   "program.exercise.replace_limit": "Ліміт замін вправ вичерпано.",
+  "program.exercise.replace_paid.body": "Ліміт безкоштовних замін вичерпано. Замінити вправу за {price} кредитів? (Баланс: {balance})",
+  "not_enough_credits": "Недостатньо кредитів. Поповніть баланс.",
   "program.exercise.edit_dialog.close": "Закрити",
   "program.exercise.technique.button": "Техніка вправи",
   "program.exercise.technique.title": "Техніка поки недоступна",

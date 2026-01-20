@@ -161,9 +161,9 @@ profile_deleted:
   ua: "Ваш профіль було видалено\nПри бажанні можна створити новий, для цього скористайтеся командою /start"
 
 contract_info_message:
-  eng: "Familiarize yourself with the <a href='{public_offer}'>public offer agreement</a> and with the <a href='{privacy_policy}'>privacy policy</a> 📄"
-  ru: "Ознакомьтесь с <a href='{public_offer}'>договором публичной оферты</a> и с <a href='{privacy_policy}'>политикой конфиденциальности</a> 📄"
-  ua: "Ознайомтеся з <a href='{public_offer}'>договором публічної оферти</a> та з <a href='{privacy_policy}'>політикою конфіденційності</a> 📄"
+  eng: "Familiarize yourself with the <a href='{public_offer}'>public offer agreement</a> and with the <a href='{privacy_policy}'>privacy policy</a> 📄\n\n<blockquote>* This step is a required condition of the payment service</blockquote>"
+  ru: "Ознакомьтесь с <a href='{public_offer}'>договором публичной оферты</a> и с <a href='{privacy_policy}'>политикой конфиденциальности</a> 📄\n\n<blockquote>* Данный шаг является необходимым условием платежного сервиса</blockquote>"
+  ua: "Ознайомтеся з <a href='{public_offer}'>договором публічної оферти</a> та з <a href='{privacy_policy}'>політикою конфіденційності</a> 📄\n\n<blockquote>* Цей крок є необхідною умовою платіжного сервісу</blockquote>"
 
 accept_policy:
   eng: "I accept the terms of service and privacy policy"

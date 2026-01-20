@@ -107,6 +107,7 @@ class AgentExerciseOutput(BaseModel):
     sets: str | int
     reps: str | int
     weight: str | None
+    kind: str | None = None
     set_id: int | None
     gif_key: str | None
     drop_set: bool

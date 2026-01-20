@@ -15,6 +15,8 @@ Instructions:
 - Keep every exercise name exactly as generated in "{language}"; do not translate or replace them with English equivalents.
 - If any tool returns English text, rewrite it into "{language}" before presenting the final answer.
 - Treat "Wishes" as HARD constraints. If there's any conflict, Wishes override all other heuristics. Before returning the final JSON, verify the plan fully complies with Wishes; if not, regenerate and re-check.
+- Warm-up: do NOT use the exercise catalog. Always include a first text-only entry with `kind="warmup"` and put the warm-up steps as a plain bullet list inside its `name`. Use `sets="—"`, `reps="—"`, omit `gif_key`.
+- Cardio: if you decide to add cardio, add it as the LAST entry with `kind="cardio"` and describe only type + duration + intensity as plain text in `name` (no catalog, no gifs, no sets/reps tracking).
 
 Program field guide:
 - exercises_by_day: list of DayExercises; each has day label and exercises with name/sets/reps.

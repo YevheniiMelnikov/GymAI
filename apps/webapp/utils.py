@@ -396,7 +396,31 @@ def transform_days(exercises_by_day: list, *, language: str | None = None) -> li
                     weight = {"value": weight_str, "unit": ""}
 
             raw_name = str(ex_data.get("name") or "").strip()
+            kind = str(ex_data.get("kind") or "").strip().lower()
             gif_key = ex_data.get("gif_key")
+            if kind in {"warmup", "cardio"}:
+                gif_key = None
+                canonical_name = None
+                gif_url = None
+                exercises.append(
+                    {
+                        "id": str(set_id or f"ex-{idx}-{ex_idx}"),
+                        "set_id": set_id,
+                        "name": raw_name,
+                        "sets": ex_data.get("sets"),
+                        "reps": ex_data.get("reps"),
+                        "weight": None,
+                        "sets_detail": None,
+                        "equipment": None,
+                        "notes": None,
+                        "drop_set": False,
+                        "superset_id": None,
+                        "superset_order": None,
+                        "gif_key": None,
+                        "gif_url": None,
+                    }
+                )
+                continue
             if not gif_key:
                 gif_key = resolve_gif_key_from_canonical_name(raw_name, language)
                 if gif_key:

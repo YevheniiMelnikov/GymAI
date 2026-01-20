@@ -48,6 +48,7 @@ from apps.webapp.exercise_replace import (
     apply_sets_update,
     consume_program_replace_limit,
     consume_subscription_replace_limit,
+    is_aux_exercise_entry,
     parse_sets_payload,
     resolve_exercise_entry,
 )
@@ -64,6 +65,7 @@ from .utils import (
     workout_plan_pricing,
 )
 from .view_helpers import (
+    atomic_debit_credits,
     build_days_payload,
     build_profile_payload,
     build_support_contact_payload,
@@ -71,6 +73,7 @@ from .view_helpers import (
     build_workout_plan_options_payload,
     create_subscription_record,
     fetch_program,
+    parse_bool,
     parse_profile_updates,
     parse_timestamp,
     post_internal_request,
@@ -1217,6 +1220,8 @@ async def update_exercise_sets(request: HttpRequest) -> JsonResponse:
     entry = resolve_exercise_entry(exercises_by_day, exercise_id_raw)
     if entry is None:
         return JsonResponse({"error": "not_found"}, status=404)
+    if is_aux_exercise_entry(entry):
+        return JsonResponse({"error": "bad_request"}, status=400)
 
     apply_sets_update(entry, payload)
 
@@ -1285,6 +1290,8 @@ async def update_subscription_exercise_sets(request: HttpRequest) -> JsonRespons
     entry = resolve_exercise_entry(exercises_by_day, exercise_id_raw)
     if entry is None:
         return JsonResponse({"error": "not_found"}, status=404)
+    if is_aux_exercise_entry(entry):
+        return JsonResponse({"error": "bad_request"}, status=400)
 
     apply_sets_update(entry, payload)
 
@@ -1315,6 +1322,8 @@ async def replace_exercise(request: HttpRequest) -> JsonResponse:
 
     exercise_id_raw = payload_raw.get("exercise_id")
     program_id_raw = payload_raw.get("program_id")
+    use_credits_raw = payload_raw.get("use_credits")
+    use_credits = parse_bool(use_credits_raw)
     if not exercise_id_raw or not isinstance(exercise_id_raw, str):
         return JsonResponse({"error": "bad_request"}, status=400)
     try:
@@ -1324,9 +1333,56 @@ async def replace_exercise(request: HttpRequest) -> JsonResponse:
     if not program_id:
         return JsonResponse({"error": "bad_request"}, status=400)
 
-    if not consume_program_replace_limit(program_id):
-        logger.info(f"exercise_replace_limit_reached profile_id={profile.id} program_id={program_id}")
-        return JsonResponse({"error": "limit_reached"}, status=429)
+    program = await call_repo(ProgramRepository.get_by_id, profile.id, program_id)
+    if program is None:
+        return JsonResponse({"error": "not_found"}, status=404)
+    exercises_by_day = getattr(program, "exercises_by_day", None)
+    if not isinstance(exercises_by_day, list):
+        return JsonResponse({"error": "server_error"}, status=500)
+    entry = resolve_exercise_entry(exercises_by_day, exercise_id_raw)
+    if is_aux_exercise_entry(entry):
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    free_available = consume_program_replace_limit(program_id)
+    if not free_available:
+        required = int(settings.EXERCISE_REPLACE_PRICE)
+        credits = int(getattr(profile, "credits", 0) or 0)
+        if not use_credits:
+            return JsonResponse(
+                {
+                    "error": "payment_required",
+                    "price": required,
+                    "balance": credits,
+                    "can_afford": credits >= required,
+                },
+                status=402,
+            )
+        if not atomic_debit_credits(profile.id, required):
+            refreshed_credits = int(
+                await call_repo(Profile.objects.filter(id=profile.id).values_list("credits", flat=True).first)
+                or credits
+            )
+            return JsonResponse(
+                {
+                    "error": "payment_required",
+                    "price": required,
+                    "balance": refreshed_credits,
+                    "can_afford": refreshed_credits >= required,
+                },
+                status=402,
+            )
+        await call_repo(ProfileRepository.invalidate_cache, profile.id, getattr(profile, "tg_id", None))
+        refreshed_credits = int(
+            await call_repo(Profile.objects.filter(id=profile.id).values_list("credits", flat=True).first) or 0
+        )
+        await Cache.profile.update_record(profile.id, {"credits": refreshed_credits})
+        logger.info(
+            "exercise_replace_charged profile_id={} program_id={} credits_spent={} credits_left={}",
+            profile.id,
+            program_id,
+            required,
+            refreshed_credits,
+        )
 
     task_id = enqueue_exercise_replace_task(profile.id, program_id, exercise_id_raw)
     if not task_id:
@@ -1357,6 +1413,8 @@ async def replace_subscription_exercise(request: HttpRequest) -> JsonResponse:
 
     exercise_id_raw = payload_raw.get("exercise_id")
     subscription_id_raw = payload_raw.get("subscription_id")
+    use_credits_raw = payload_raw.get("use_credits")
+    use_credits = parse_bool(use_credits_raw)
     if not exercise_id_raw or not isinstance(exercise_id_raw, str):
         return JsonResponse({"error": "bad_request"}, status=400)
     try:
@@ -1378,12 +1436,53 @@ async def replace_subscription_exercise(request: HttpRequest) -> JsonResponse:
     if subscription is None:
         return JsonResponse({"error": "not_found"}, status=404)
 
-    if not consume_subscription_replace_limit(subscription.id, period=str(subscription.period)):
-        logger.info(
-            f"exercise_replace_limit_reached profile_id={profile.id} subscription_id={subscription.id} "
-            f"period={subscription.period}"
+    exercises_by_day = getattr(subscription, "exercises", None)
+    if not isinstance(exercises_by_day, list):
+        return JsonResponse({"error": "server_error"}, status=500)
+    entry = resolve_exercise_entry(exercises_by_day, exercise_id_raw)
+    if is_aux_exercise_entry(entry):
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    free_available = consume_subscription_replace_limit(subscription.id, period=str(subscription.period))
+    if not free_available:
+        required = int(settings.EXERCISE_REPLACE_PRICE)
+        credits = int(getattr(profile, "credits", 0) or 0)
+        if not use_credits:
+            return JsonResponse(
+                {
+                    "error": "payment_required",
+                    "price": required,
+                    "balance": credits,
+                    "can_afford": credits >= required,
+                },
+                status=402,
+            )
+        if not atomic_debit_credits(profile.id, required):
+            refreshed_credits = int(
+                await call_repo(Profile.objects.filter(id=profile.id).values_list("credits", flat=True).first)
+                or credits
+            )
+            return JsonResponse(
+                {
+                    "error": "payment_required",
+                    "price": required,
+                    "balance": refreshed_credits,
+                    "can_afford": refreshed_credits >= required,
+                },
+                status=402,
+            )
+        await call_repo(ProfileRepository.invalidate_cache, profile.id, getattr(profile, "tg_id", None))
+        refreshed_credits = int(
+            await call_repo(Profile.objects.filter(id=profile.id).values_list("credits", flat=True).first) or 0
         )
-        return JsonResponse({"error": "limit_reached"}, status=429)
+        await Cache.profile.update_record(profile.id, {"credits": refreshed_credits})
+        logger.info(
+            "exercise_replace_charged profile_id={} subscription_id={} credits_spent={} credits_left={}",
+            profile.id,
+            subscription.id,
+            required,
+            refreshed_credits,
+        )
 
     task_id = enqueue_subscription_exercise_replace_task(profile.id, subscription.id, exercise_id_raw)
     if not task_id:
