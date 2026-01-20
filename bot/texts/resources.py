@@ -78,7 +78,6 @@ class MessageText(AutoName):
     payment_failure = auto()
     payment_in_progress = auto()
     contract_info_message = auto()
-    follow_link = auto()
     main_menu = auto()
     start = auto()
     saved = auto()
