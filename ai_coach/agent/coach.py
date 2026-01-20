@@ -140,7 +140,10 @@ class CoachAgent(metaclass=CoachAgentMeta):
         )
         user_prompt = f"MODE: {mode}\n{formatted}"
         history_started = monotonic()
-        history = await cls._load_history_messages(deps.profile_id)
+        kb = get_knowledge_base()
+        raw_history = await kb.get_message_history(deps.profile_id)
+        deps.cached_history = list(raw_history)
+        history = cls.llm_helper._build_history_messages(raw_history)
         _log_agent_stage(
             "history_load",
             int((monotonic() - history_started) * 1000),
@@ -256,7 +259,10 @@ class CoachAgent(metaclass=CoachAgentMeta):
             formatted = f"{formatted}\n\nRules:\n{rules}"
         user_prompt = f"MODE: diet\n{formatted}"
         history_started = monotonic()
-        history = await cls._load_history_messages(deps.profile_id)
+        kb = get_knowledge_base()
+        raw_history = await kb.get_message_history(deps.profile_id)
+        deps.cached_history = list(raw_history)
+        history = cls.llm_helper._build_history_messages(raw_history)
         _log_agent_stage(
             "history_load",
             int((monotonic() - history_started) * 1000),
@@ -329,7 +335,10 @@ class CoachAgent(metaclass=CoachAgentMeta):
         rules = "\n".join(filter(None, [COACH_INSTRUCTIONS, instructions]))
         user_prompt = f"MODE: update\n{formatted}\nRules:\n{rules}"
         history_started = monotonic()
-        history = await cls._load_history_messages(deps.profile_id)
+        kb = get_knowledge_base()
+        raw_history = await kb.get_message_history(deps.profile_id)
+        deps.cached_history = list(raw_history)
+        history = cls.llm_helper._build_history_messages(raw_history)
         _log_agent_stage(
             "history_load",
             int((monotonic() - history_started) * 1000),

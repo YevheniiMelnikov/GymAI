@@ -3,6 +3,7 @@ from binascii import Error as BinasciiError
 from hashlib import sha1
 import asyncio
 import os
+from datetime import datetime
 from time import monotonic
 from typing import Any, cast, Iterable
 from uuid import uuid4
@@ -192,9 +193,23 @@ def _format_plan_days(days: list[DayExercises], *, max_exercises: int = 8) -> li
     return lines
 
 
-def _format_program_label(program: Program) -> str:
+def _format_program_label(program: Program, *, ordinal: int | None = None) -> str:
     created_at = getattr(program, "created_at", None)
-    return f"Latest program (created_at: {created_at})"
+    label = f"Program {ordinal}" if ordinal is not None else "Program"
+    if created_at is not None:
+        return f"{label} (created_at: {created_at})"
+    return label
+
+
+def _format_subscription_label(subscription: Subscription, *, ordinal: int | None = None) -> str:
+    label = f"Subscription {ordinal}" if ordinal is not None else "Subscription"
+    payment_date = getattr(subscription, "payment_date", None)
+    period = getattr(subscription, "period", None)
+    parts = [f"period: {period}" if period else None, f"payment_date: {payment_date}" if payment_date else None]
+    summary = ", ".join(part for part in parts if part)
+    if summary:
+        return f"{label} ({summary})"
+    return label
 
 
 async def _build_profile_context(profile: Profile | None, *, include_plans: bool) -> str | None:
@@ -234,35 +249,62 @@ async def _build_profile_context(profile: Profile | None, *, include_plans: bool
         lines.append(f"Birth year: {born_in}")
     if include_plans:
         try:
-            latest_program = await Cache.workout.get_latest_program(profile.id)
+            programs = await Cache.workout.get_all_programs(profile.id)
         except Exception:  # noqa: BLE001
-            latest_program = None
-        if latest_program is not None:
-            try:
-                program_days = [
-                    day if isinstance(day, DayExercises) else DayExercises.model_validate(day)
-                    for day in latest_program.exercises_by_day
-                ]
-            except Exception:  # noqa: BLE001
-                program_days = []
-            if program_days:
-                lines.append(_format_program_label(latest_program))
-                lines.extend(_format_plan_days(program_days))
+            programs = []
+        if programs:
+            sorted_programs = sorted(
+                programs,
+                key=lambda program: float(getattr(program, "created_at", 0.0) or 0.0),
+                reverse=True,
+            )
+            programs_added = False
+            for index, program in enumerate(sorted_programs[:3], start=1):
+                try:
+                    program_days = [
+                        day if isinstance(day, DayExercises) else DayExercises.model_validate(day)
+                        for day in program.exercises_by_day
+                    ]
+                except Exception:  # noqa: BLE001
+                    program_days = []
+                if program_days:
+                    if not programs_added:
+                        lines.append("Recent programs:")
+                        programs_added = True
+                    lines.append(_format_program_label(program, ordinal=index))
+                    lines.extend(_format_plan_days(program_days))
         try:
-            latest_subscription = await Cache.workout.get_latest_subscription(profile.id)
+            subscriptions = await Cache.workout.get_all_subscriptions(profile.id)
         except Exception:  # noqa: BLE001
-            latest_subscription = None
-        if latest_subscription is not None:
-            try:
-                sub_days = [
-                    day if isinstance(day, DayExercises) else DayExercises.model_validate(day)
-                    for day in latest_subscription.exercises
-                ]
-            except Exception:  # noqa: BLE001
-                sub_days = []
-            if sub_days:
-                lines.append("Latest subscription plan:")
-                lines.extend(_format_plan_days(sub_days))
+            subscriptions = []
+        if subscriptions:
+
+            def _subscription_sort_key(subscription: Subscription) -> tuple[float, int]:
+                payment_date = getattr(subscription, "payment_date", None)
+                timestamp = 0.0
+                if payment_date:
+                    try:
+                        timestamp = datetime.fromisoformat(str(payment_date)).timestamp()
+                    except ValueError:
+                        timestamp = 0.0
+                return (timestamp, int(getattr(subscription, "id", 0) or 0))
+
+            sorted_subscriptions = sorted(subscriptions, key=_subscription_sort_key, reverse=True)
+            subscriptions_added = False
+            for index, subscription in enumerate(sorted_subscriptions[:3], start=1):
+                try:
+                    sub_days = [
+                        day if isinstance(day, DayExercises) else DayExercises.model_validate(day)
+                        for day in subscription.exercises
+                    ]
+                except Exception:  # noqa: BLE001
+                    sub_days = []
+                if sub_days:
+                    if not subscriptions_added:
+                        lines.append("Recent subscriptions:")
+                        subscriptions_added = True
+                    lines.append(_format_subscription_label(subscription, ordinal=index))
+                    lines.extend(_format_plan_days(sub_days))
     return "\n".join(lines) if lines else None
 
 

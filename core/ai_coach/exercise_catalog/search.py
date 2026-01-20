@@ -29,8 +29,10 @@ def filter_exercise_entries(
             continue
         if secondary and not secondary.issubset({item.lower() for item in entry.secondary_muscles}):
             continue
-        if equipment_filter and not equipment_filter.issubset({item.lower() for item in entry.equipment}):
-            continue
+        if equipment_filter:
+            entry_equipment = {item.lower() for item in entry.equipment}
+            if not entry_equipment.intersection(equipment_filter):
+                continue
         if query and not entry.matches_name(query):
             continue
         results.append(entry)

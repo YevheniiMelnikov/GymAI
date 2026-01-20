@@ -32,6 +32,11 @@ type EditedExerciseSets = {
 
 const DEFAULT_SLIDER_VALUE = 50;
 
+const isAuxExercise = (exercise: Exercise): boolean => {
+    const kind = (exercise.kind ?? '').trim().toLowerCase();
+    return kind === 'warmup' || kind === 'cardio';
+};
+
 const getSurveyDays = (days: Day[]): SurveyDay[] => {
     const weeks = [{ index: 1, days }];
     const workoutDays: SurveyDay[] = [];
@@ -41,10 +46,14 @@ const getSurveyDays = (days: Day[]): SurveyDay[] => {
                 return;
             }
             const workout = day as WorkoutDay;
+            const exercises = workout.exercises.filter((exercise) => !isAuxExercise(exercise));
+            if (exercises.length === 0) {
+                return;
+            }
             workoutDays.push({
                 id: workout.id || `week-${week.index}-day-${workout.index}`,
                 title: workout.title ?? null,
-                exercises: workout.exercises
+                exercises
             });
         });
     });
@@ -213,6 +222,9 @@ const WeeklySurveyPage: React.FC = () => {
     }, [activeIndex, handleSubmit, surveyDays.length]);
 
     const handleEditExercise = useCallback((dayId: string, exercise: Exercise) => {
+        if (isAuxExercise(exercise)) {
+            return;
+        }
         const key = buildExerciseKey(dayId, exercise.id);
         openExerciseEditDialog(exercise, {
             allowReplace: false,

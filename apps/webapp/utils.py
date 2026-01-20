@@ -354,6 +354,35 @@ def _get_gif_storage() -> ExerciseGIFStorage:
 
 
 def transform_days(exercises_by_day: list, *, language: str | None = None) -> list[dict]:
+    def _normalize_language_code(value: str | None) -> str:
+        return str(value or "").strip().lower()
+
+    def _aux_label(kind: str, lang: str | None) -> str:
+        code = _normalize_language_code(lang)
+        normalized_kind = str(kind or "").strip().lower()
+        if normalized_kind == "warmup":
+            if code in {"ru", "rus"}:
+                return "Разминка"
+            if code in {"uk", "ua"}:
+                return "Розминка"
+            return "Warm-up"
+        if normalized_kind == "cardio":
+            if code in {"ru", "rus"}:
+                return "Кардио"
+            if code in {"uk", "ua"}:
+                return "Кардіо"
+            return "Cardio"
+        return str(kind or "").strip()
+
+    def _aux_notes(raw_name: str, label: str) -> str | None:
+        lines = [line.strip() for line in str(raw_name or "").splitlines()]
+        lines = [line for line in lines if line]
+        if not lines:
+            return None
+        if lines[0].casefold() == label.casefold():
+            lines = lines[1:]
+        return "\n".join(lines) if lines else None
+
     def _normalize_int(value: object | None) -> int | None:
         if isinstance(value, bool) or value is None:
             return None
@@ -399,20 +428,21 @@ def transform_days(exercises_by_day: list, *, language: str | None = None) -> li
             kind = str(ex_data.get("kind") or "").strip().lower()
             gif_key = ex_data.get("gif_key")
             if kind in {"warmup", "cardio"}:
+                label = _aux_label(kind, language)
                 gif_key = None
-                canonical_name = None
-                gif_url = None
+                notes = _aux_notes(raw_name, label)
                 exercises.append(
                     {
                         "id": str(set_id or f"ex-{idx}-{ex_idx}"),
                         "set_id": set_id,
-                        "name": raw_name,
-                        "sets": ex_data.get("sets"),
-                        "reps": ex_data.get("reps"),
+                        "kind": kind,
+                        "name": label,
+                        "sets": None,
+                        "reps": None,
                         "weight": None,
                         "sets_detail": None,
                         "equipment": None,
-                        "notes": None,
+                        "notes": notes,
                         "drop_set": False,
                         "superset_id": None,
                         "superset_order": None,
@@ -461,6 +491,7 @@ def transform_days(exercises_by_day: list, *, language: str | None = None) -> li
                 {
                     "id": str(set_id or f"ex-{idx}-{ex_idx}"),
                     "set_id": set_id,
+                    "kind": kind or None,
                     "name": canonical_name or raw_name,
                     "sets": ex_data.get("sets"),
                     "reps": ex_data.get("reps"),

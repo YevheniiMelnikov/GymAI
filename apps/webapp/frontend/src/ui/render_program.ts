@@ -210,6 +210,11 @@ function buildDisplaySets(exercise: Exercise): DisplaySet[] {
   }));
 }
 
+function isAuxExercise(exercise: Exercise): boolean {
+  const kind = (exercise.kind ?? '').trim().toLowerCase();
+  return kind === 'warmup' || kind === 'cardio';
+}
+
 function groupExercises(exercises: Exercise[]): Array<IndexedExercise | SupersetGroup> {
   const groups = new Map<number, IndexedExercise[]>();
   exercises.forEach((exercise, index) => {
@@ -1162,6 +1167,7 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
   const details = document.createElement('details');
   details.className = 'program-exercise-details';
   const hasSuperset = typeof ex.superset_id === 'number';
+  const auxExercise = isAuxExercise(ex);
 
   const summary = document.createElement('summary');
   summary.className = 'program-exercise-summary';
@@ -1210,58 +1216,63 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
     content.appendChild(flags);
   }
 
-  const sets = buildDisplaySets(ex);
-  if (sets.length > 0) {
-    const table = document.createElement('div');
-    table.className = 'exercise-sets-table';
+  if (!auxExercise) {
+    const sets = buildDisplaySets(ex);
+    if (sets.length > 0) {
+      const table = document.createElement('div');
+      table.className = 'exercise-sets-table';
 
-    const header = document.createElement('div');
-    header.className = 'exercise-sets-table__row exercise-sets-table__row--header';
+      const header = document.createElement('div');
+      header.className = 'exercise-sets-table__row exercise-sets-table__row--header';
 
-    const setHeader = document.createElement('div');
-    setHeader.className = 'exercise-sets-table__cell';
-    setHeader.textContent = t('program.exercise.edit_dialog.set');
+      const setHeader = document.createElement('div');
+      setHeader.className = 'exercise-sets-table__cell';
+      setHeader.textContent = t('program.exercise.edit_dialog.set');
 
-    const repsHeader = document.createElement('div');
-    repsHeader.className = 'exercise-sets-table__cell';
-    repsHeader.textContent = t('program.exercise.edit_dialog.reps');
+      const repsHeader = document.createElement('div');
+      repsHeader.className = 'exercise-sets-table__cell';
+      repsHeader.textContent = t('program.exercise.edit_dialog.reps');
 
-    const weightHeader = document.createElement('div');
-    weightHeader.className = 'exercise-sets-table__cell';
-    weightHeader.textContent = t('program.exercise.edit_dialog.weight');
+      const weightHeader = document.createElement('div');
+      weightHeader.className = 'exercise-sets-table__cell';
+      weightHeader.textContent = t('program.exercise.edit_dialog.weight');
 
-    header.append(setHeader, repsHeader, weightHeader);
-    table.appendChild(header);
+      header.append(setHeader, repsHeader, weightHeader);
+      table.appendChild(header);
 
-    sets.forEach((set, setIndex) => {
-      const row = document.createElement('div');
-      row.className = 'exercise-sets-table__row';
+      sets.forEach((set, setIndex) => {
+        const row = document.createElement('div');
+        row.className = 'exercise-sets-table__row';
 
-      const setCell = document.createElement('div');
-      setCell.className = 'exercise-sets-table__cell';
-      setCell.textContent = String(setIndex + 1);
+        const setCell = document.createElement('div');
+        setCell.className = 'exercise-sets-table__cell';
+        setCell.textContent = String(setIndex + 1);
 
-      const repsCell = document.createElement('div');
-      repsCell.className = 'exercise-sets-table__cell';
-      repsCell.textContent = formatNumber(set.reps);
+        const repsCell = document.createElement('div');
+        repsCell.className = 'exercise-sets-table__cell';
+        repsCell.textContent = formatNumber(set.reps);
 
-      const weightCell = document.createElement('div');
-      weightCell.className = 'exercise-sets-table__cell';
-      const weightValue = formatNumber(set.weight);
-      weightCell.textContent =
-        set.weight <= 0 ? '—' : set.weightUnit ? `${weightValue} ${set.weightUnit}` : weightValue;
+        const weightCell = document.createElement('div');
+        weightCell.className = 'exercise-sets-table__cell';
+        const weightValue = formatNumber(set.weight);
+        weightCell.textContent =
+          set.weight <= 0 ? '—' : set.weightUnit ? `${weightValue} ${set.weightUnit}` : weightValue;
 
-      row.append(setCell, repsCell, weightCell);
-      table.appendChild(row);
-    });
+        row.append(setCell, repsCell, weightCell);
+        table.appendChild(row);
+      });
 
-    content.appendChild(table);
+      content.appendChild(table);
+    }
   }
 
   if (note) {
     const notes = document.createElement('p');
     notes.className = 'program-exercise-notes';
     notes.textContent = note;
+    if (auxExercise) {
+      notes.style.whiteSpace = 'pre-line';
+    }
     content.appendChild(notes);
   }
 
@@ -1269,7 +1280,9 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
     content.classList.add('program-exercise-content--minimal');
   }
 
-  content.appendChild(createExerciseActions(details, ex, title));
+  if (!auxExercise) {
+    content.appendChild(createExerciseActions(details, ex, title));
+  }
   details.appendChild(content);
   attachDetailsAnimation(details, content);
   li.appendChild(details);

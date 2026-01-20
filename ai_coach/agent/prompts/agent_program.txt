@@ -5,10 +5,11 @@ MODE: program
    - Keep the query <=120 characters. Do not include role text, instructions, or anything starting with "MODE:".
 2) Call tool_get_program_history().
 3) Call tool_search_exercises(category, primary_muscles, secondary_muscles, name_query) ONCE to fetch exercises from
-   the catalog. Use a broader query and limit up to 30 items.
+   the catalog. Use a broader query; do not set a limit.
    - Categories: conditioning, strength, health.
    - Muscle groups: chest, upper_back, lats, lower_back, front_delts, side_delts, rear_delts, biceps, triceps,
      forearms, quadriceps, hamstrings, glutes, calves, adductors, abductors, abs, obliques, core.
+   - Equipment: kettlebell, dumbbell, barbell, smith, lever, cable, band, bodyweight, weighted bodyweight.
 4) Generate a complete ProgramPayload using ONLY exercises from the catalog results. Each exercise must include
    gif_key from the catalog entry you chose.
 5) Call tool_save_program(plan) and return the resulting Program.

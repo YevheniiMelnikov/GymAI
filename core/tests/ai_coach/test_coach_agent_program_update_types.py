@@ -4,6 +4,7 @@ from typing import Any
 import pytest  # pyrefly: ignore[import-error]
 
 from ai_coach.agent import AgentDeps, CoachAgent
+from ai_coach.types import MessageRole
 from core.schemas import DayExercises, Exercise, Program, Subscription
 from core.enums import WorkoutLocation
 
@@ -31,10 +32,16 @@ def test_generate_plan_returns_program(monkeypatch: pytest.MonkeyPatch) -> None:
 
         monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
 
-        async def fake_history(cls, profile_id: int) -> list[object]:
-            return [object(), object()]
+        class DummyKB:
+            async def get_message_history(self, profile_id: int) -> list[str]:
+                return [
+                    f"{MessageRole.CLIENT.value}: hi",
+                    f"{MessageRole.AI_COACH.value}: ok",
+                ]
 
-        monkeypatch.setattr(CoachAgent, "_load_history_messages", classmethod(fake_history))
+        import ai_coach.agent.coach as coach_module
+
+        monkeypatch.setattr(coach_module, "get_knowledge_base", lambda: DummyKB())
         deps = AgentDeps(profile_id=1)
         result = await CoachAgent.generate_workout_plan(
             "hi", deps, workout_location=WorkoutLocation.HOME, output_type=Program

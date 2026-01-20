@@ -377,7 +377,7 @@ async def tool_search_knowledge(
             kb.search(
                 normalized_query,
                 profile_id,
-                k,
+                effective_k,
                 request_id=deps.request_rid,
             ),
             timeout=timeout,
@@ -510,7 +510,12 @@ async def tool_get_program_history(
         return cached_result
     try:
         history = await wait_for(APIService.workout.get_all_programs(profile_id), timeout=timeout)
-        return _cache_result(deps, tool_name, history)
+        sorted_history = sorted(
+            history,
+            key=lambda program: float(getattr(program, "created_at", 0.0) or 0.0),
+            reverse=True,
+        )
+        return _cache_result(deps, tool_name, sorted_history[:3])
     except TimeoutError:
         logger.info(f"program_history_timeout profile_id={profile_id} tool=tool_get_program_history timeout={timeout}")
         return _cache_result(deps, tool_name, [])

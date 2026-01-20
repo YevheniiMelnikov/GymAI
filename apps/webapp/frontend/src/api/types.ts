@@ -14,6 +14,7 @@ export type ExerciseSetDetail = {
 export type Exercise = {
   id: string;
   set_id?: number | null;
+  kind?: string | null;
   name: string;
   sets: number | string | null;
   reps: number | string | null;
