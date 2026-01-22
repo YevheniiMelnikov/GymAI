@@ -5,6 +5,8 @@ Requirements:
 - Keep key goals, constraints, injuries, preferences, and decisions.
 - Be concise (5-10 sentences or short bullet points).
 - Do not include personal data like phone numbers, emails, or addresses.
+- Do not add new information or assumptions beyond the provided messages.
+- Avoid Markdown headings or code blocks; if using bullets, use simple dash-prefixed lines.
 - Return only the summary text.
 
 Chat messages:

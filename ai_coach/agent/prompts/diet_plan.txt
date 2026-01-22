@@ -15,6 +15,10 @@ Requirements:
 - Base calculations on KBJU and keep numbers realistic.
 - Use common, accessible ingredients; avoid exotic or hard-to-find products.
 - Respect allergies and allowed product categories.
+- Treat the provided profile context and diet preferences as hard constraints; do not ignore them.
+- Guidance for special populations (elderly, medical conditions, rehab, pregnancy, etc.) lives in the knowledge base; do not invent it.
+- If BMI is available from tool output, use it as a screening signal only. High BMI does not always mean obesity; trained clients
+  with high experience and heavy working weights may have higher BMI due to muscle mass. This is the exception, not the rule.
 - Output must be strictly in the language code "{language}".
 - If any tool returns English, rewrite it into "{language}" before producing the final output.
 

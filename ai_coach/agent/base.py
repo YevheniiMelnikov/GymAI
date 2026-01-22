@@ -29,6 +29,7 @@ class AgentDeps:
     cached_history: list[str] | None = None
     started_at: float = field(default_factory=monotonic)
     called_tools: set[str] = field(default_factory=set)
+    tool_call_counts: dict[str, int] = field(default_factory=dict)
     tool_cache: dict[tuple[str, ...], Any] = field(default_factory=dict)
     tool_call_keys: set[tuple[str, ...]] = field(default_factory=set)
     final_result: Program | Subscription | None = None

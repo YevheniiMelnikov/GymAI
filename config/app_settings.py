@@ -111,6 +111,7 @@ class Settings(BaseSettings):
     AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin", description="Username for AI Coach knowledge base refresh endpoint.")]
     AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password", description="Password for AI Coach knowledge base refresh endpoint.")]
     AI_COACH_MAX_TOOL_CALLS: Annotated[int, Field(default=5, description="Maximum number of tool calls an AI agent can make in one turn.")]
+    AI_COACH_MAX_EXERCISE_SEARCH_CALLS: Annotated[int, Field(default=5, description="Maximum number of exercise catalog searches per run in program/subscription/update modes.")]
     AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60, description="Default timeout for requests to the AI Coach in seconds.")]
     AI_COACH_MAX_RUN_SECONDS: Annotated[float, Field(default=200.0, description="Time budget in seconds for a single AI coach agent run before aborting.")]
     AI_COACH_GLOBAL_PROJECTION_TIMEOUT: Annotated[float, Field(default=15.0, description="Timeout for global projection operations in seconds.")]
@@ -237,27 +238,6 @@ class Settings(BaseSettings):
 
     # --- Payments ---
     PAYMENT_PRIVATE_KEY: Annotated[str, Field(default="", description="Private key for the payment provider API.")]
-
-    @field_validator("LLM_API_KEY", mode="before")
-    @classmethod
-    def _populate_llm_api_key(cls, value: str | None) -> str:
-        if value:
-            return value
-        for env_name in ("EMBEDDING_API_KEY", "OPENAI_API_KEY"):
-            fallback = os.environ.get(env_name)
-            if fallback:
-                return fallback
-        return ""
-
-    def model_post_init(self, __context: Any) -> None:
-        super().model_post_init(__context)
-        if not self.LLM_API_KEY:
-            logger.warning("LLM_API_KEY is not configured; AI coach operations may fail.")
-        else:
-            os.environ.setdefault("OPENAI_API_KEY", self.LLM_API_KEY)
-            os.environ.setdefault("EMBEDDING_API_KEY", self.LLM_API_KEY)
-        os.environ.setdefault("OPENAI_API_BASE", self.EMBEDDING_ENDPOINT)
-        os.environ.setdefault("OPENAI_API_URL", self.EMBEDDING_ENDPOINT)
     PAYMENT_PUB_KEY: Annotated[str, Field(default="", description="Public key for the payment provider API.")]
     CHECKOUT_URL: Annotated[str, Field(default="", description="Base URL for the payment provider's checkout page.")]
     BOT_PAYMENT_OPTIONS: Annotated[str, Field(default="bot/images", description="Path to image assets for payment options in the bot.")]
@@ -283,6 +263,27 @@ class Settings(BaseSettings):
         "case_sensitive": True,
         "extra": "ignore",
     }
+
+    @field_validator("LLM_API_KEY", mode="before")
+    @classmethod
+    def _populate_llm_api_key(cls, value: str | None) -> str:
+        if value:
+            return value
+        for env_name in ("EMBEDDING_API_KEY", "OPENAI_API_KEY"):
+            fallback = os.environ.get(env_name)
+            if fallback:
+                return fallback
+        return ""
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if not self.LLM_API_KEY:
+            logger.warning("LLM_API_KEY is not configured; AI coach operations may fail.")
+        else:
+            os.environ.setdefault("OPENAI_API_KEY", self.LLM_API_KEY)
+            os.environ.setdefault("EMBEDDING_API_KEY", self.LLM_API_KEY)
+        os.environ.setdefault("OPENAI_API_BASE", self.EMBEDDING_ENDPOINT)
+        os.environ.setdefault("OPENAI_API_URL", self.EMBEDDING_ENDPOINT)
 
     @field_validator("ALLOWED_HOSTS", mode="before")
     @classmethod

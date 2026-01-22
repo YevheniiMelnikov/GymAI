@@ -18,6 +18,8 @@ Rules:
 - Output exercise names and notes in ${language}.
 - Replace only the target exercise. Keep the rest of the program unchanged.
 - Use the client's profile to choose a suitable alternative: goals, experience, limitations, location, equipment, and health notes.
+- Treat profile context and health notes as hard constraints.
+- Guidance for special populations (elderly, medical conditions, rehab, pregnancy, etc.) lives in the knowledge base or profile notes; do not invent it.
 - Select the replacement ONLY from the catalog list below. Use its "canonical" as the exercise name and include its "gif_key".
 - Avoid exercises already present in the program (including warm-up). Provide a distinct alternative for the same muscle group/pattern.
 - Prefer common, accessible exercises and equipment. Avoid exotic machines or rare variations.

@@ -111,6 +111,7 @@ def _prepare_tool(ctx: RunContext[AgentDeps], tool_name: str) -> AgentDeps:  # p
     deps.tool_calls += 1
     if deps.max_tool_calls > 0 and deps.tool_calls > deps.max_tool_calls:
         _raise_tool_limit(deps, tool_name)
+    deps.tool_call_counts[tool_name] = deps.tool_call_counts.get(tool_name, 0) + 1
     return deps
 
 
@@ -156,6 +157,17 @@ def _single_use_prepare(
         if allowed_modes is not None and mode is not None and mode not in allowed_modes:
             _log_tool_disabled(deps, tool_name, reason="tool_disabled_for_mode")
             return None
+        if tool_name == "tool_search_exercises" and mode in (
+            CoachMode.program,
+            CoachMode.subscription,
+            CoachMode.update,
+        ):
+            max_calls = int(settings.AI_COACH_MAX_EXERCISE_SEARCH_CALLS)
+            current_calls = deps.tool_call_counts.get(tool_name, 0)
+            if max_calls <= 0 or current_calls >= max_calls:
+                _log_tool_disabled(deps, tool_name, reason="tool_disabled_after_limit")
+                return None
+            return tool_def
         if mode in (CoachMode.program, CoachMode.subscription, CoachMode.update) and tool_name in deps.called_tools:
             _log_tool_disabled(deps, tool_name, reason="tool_disabled_after_first_call")
             return None
@@ -183,6 +195,12 @@ class ExerciseCatalogItem(TypedDict):
     primary_muscles: list[str]
     secondary_muscles: list[str]
     equipment: list[str]
+
+
+class BMIResult(TypedDict):
+    bmi: float
+    weight_kg: float
+    height_cm: float
 
 
 @toolset.tool(prepare=_single_use_prepare("tool_search_exercises"))  # pyrefly: ignore[no-matching-overload]
@@ -271,6 +289,39 @@ async def tool_search_exercises(
         if invalid_equipment:
             _log_tool_disabled(deps, tool_name, reason="invalid_equipment")
     return _cache_result(deps, tool_name, payload, cache_key=cache_key)
+
+
+@toolset.tool()  # pyrefly: ignore[no-matching-overload]
+async def tool_calculate_bmi(
+    ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
+    *,
+    weight_kg: float,
+    height_cm: float,
+) -> BMIResult:
+    """Calculate BMI from weight (kg) and height (cm)."""
+    tool_name = "tool_calculate_bmi"
+    cache_key = (tool_name, f"{weight_kg:.3f}", f"{height_cm:.3f}")
+    deps, skipped, cached = _start_tool(ctx, tool_name, cache_key=cache_key)
+    if skipped:
+        if cached is not None:
+            return cast(BMIResult, cached)
+    if weight_kg <= 0 or height_cm <= 0:
+        raise ModelRetry("BMI calculation requires positive weight_kg and height_cm values.")
+    height_m = height_cm / 100.0
+    bmi_value = weight_kg / (height_m * height_m)
+    result: BMIResult = {
+        "bmi": round(bmi_value, 1),
+        "weight_kg": round(weight_kg, 2),
+        "height_cm": round(height_cm, 1),
+    }
+    logger.debug(
+        "tool_calculate_bmi profile_id={} weight_kg={} height_cm={} bmi={}",
+        deps.profile_id,
+        weight_kg,
+        height_cm,
+        result["bmi"],
+    )
+    return _cache_result(deps, tool_name, result, cache_key=cache_key)
 
 
 @toolset.tool(prepare=_single_use_prepare("tool_search_knowledge"))  # pyrefly: ignore[no-matching-overload]

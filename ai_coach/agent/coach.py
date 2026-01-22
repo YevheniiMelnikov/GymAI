@@ -114,7 +114,11 @@ class CoachAgent(metaclass=CoachAgentMeta):
         deps.mode = CoachMode.program if output_type is Program else CoachMode.subscription
         if deps.mode in (CoachMode.program, CoachMode.subscription):
             deps.max_run_seconds = 0.0
-            deps.max_tool_calls = 8 if deps.mode is CoachMode.program else 6
+            max_exercise_calls = max(0, int(settings.AI_COACH_MAX_EXERCISE_SEARCH_CALLS))
+            if deps.mode is CoachMode.program:
+                deps.max_tool_calls = 5 + max_exercise_calls
+            else:
+                deps.max_tool_calls = 4 + max_exercise_calls
         agent = cls._get_agent()
         today = datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat()
         context_lines: list[str] = []
@@ -318,6 +322,8 @@ class CoachAgent(metaclass=CoachAgentMeta):
         agent = cls._get_agent()
         deps.mode = CoachMode.update
         deps.disabled_tools.add("tool_search_knowledge")
+        max_exercise_calls = max(0, int(settings.AI_COACH_MAX_EXERCISE_SEARCH_CALLS))
+        deps.max_tool_calls = 3 + max_exercise_calls
         today = datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat()
         context_lines: list[str] = []
         if workout_location:

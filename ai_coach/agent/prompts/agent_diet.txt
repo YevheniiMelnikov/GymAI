@@ -1,11 +1,17 @@
 MODE: diet
 1) Call tool_search_knowledge(query) (use top-6 results).
    - Build a compact query that starts with `profile:` and lists key fields (gender, birth_year, weight, height,
-     workout_goals, diet_allergies, diet_products, health_notes) plus a short cue like "diet plan".
-   - Keep the query <=120 characters. Do not include role text, instructions, or anything starting with "MODE:".
-2) Use the retrieved knowledge and the profile context to build a 1-day diet plan.
-3) Return a JSON DietPlan with meals and items; include KBJU for each item, meal totals, and daily totals.
-4) Do not include any Markdown or HTML in the JSON output.
+     workout_goals, diet_allergies, diet_products, health_notes) plus a short cue like "diet plan" and the user's goal or constraint.
+   - Keep the query <=220 characters. Do not include role text, instructions, or anything starting with "MODE:".
+2) If weight and height are available in the profile, call tool_calculate_bmi(weight_kg, height_cm) ONCE.
+   - Treat BMI as a screening signal, not a diagnosis. High BMI does not always mean obesity; trained clients with high experience
+     and heavy working weights may have higher BMI due to muscle mass. This is the exception, not the rule.
+3) Use the retrieved knowledge and the profile context to build a 1-day diet plan.
+   - Treat allergies, allowed products, and health notes as hard constraints.
+   - Guidance for special populations (elderly, medical conditions, rehab, pregnancy, etc.) lives in the knowledge base; do not invent it.
+4) Return a JSON DietPlan with meals and items; include KBJU for each item, meal totals, and daily totals.
+   - Ensure per-meal and daily totals are consistent with the listed items.
+5) Do not include any Markdown or HTML in the JSON output.
 
 DietPlan field guide:
 - meals: list of meals for one day.

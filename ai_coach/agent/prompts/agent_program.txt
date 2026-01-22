@@ -1,22 +1,31 @@
 MODE: program
 1) Call tool_search_knowledge(query).
    - Build a compact query that starts with `profile:` and lists key fields (gender, birth_year, weight, height,
-     workout_goals, workout_experience, workout_location, health_notes) plus a short cue like "workout plan".
-   - Keep the query <=120 characters. Do not include role text, instructions, or anything starting with "MODE:".
-2) Call tool_get_program_history().
-3) Call tool_search_exercises(category, primary_muscles, secondary_muscles, name_query) ONCE to fetch exercises from
-   the catalog. Use a broader query; do not set a limit.
+     workout_goals, workout_experience, workout_location, health_notes) plus a short cue like "workout plan" and the user's goal or constraint.
+   - Keep the query <=220 characters. Do not include role text, instructions, or anything starting with "MODE:".
+2) If weight and height are available in the profile, call tool_calculate_bmi(weight_kg, height_cm) ONCE.
+   - Treat BMI as a screening signal, not a diagnosis. High BMI does not always mean obesity; trained clients with high experience
+     and heavy working weights may have higher BMI due to muscle mass. This is the exception, not the rule.
+3) Call tool_get_program_history().
+4) Call tool_search_exercises(category, primary_muscles, secondary_muscles, equipment, name_query) up to the configured limit to fetch exercises from
+   the catalog. Use broad queries; do not set a limit.
+   - Each call must target a distinct movement pattern (push / pull / hinge / squat-legs / core-carry-conditioning) and include multiple muscle groups.
+   - Avoid narrow, single-muscle queries when building a full program.
+   - Include equipment filters from the profile when available.
    - Categories: conditioning, strength, health.
    - Muscle groups: chest, upper_back, lats, lower_back, front_delts, side_delts, rear_delts, biceps, triceps,
      forearms, quadriceps, hamstrings, glutes, calves, adductors, abductors, abs, obliques, core.
    - Equipment: kettlebell, dumbbell, barbell, smith, lever, cable, band, bodyweight, weighted bodyweight.
-4) Generate a complete ProgramPayload using ONLY exercises from the catalog results. Each exercise must include
+5) Generate a complete ProgramPayload using ONLY exercises from the catalog results. Each exercise must include
    gif_key from the catalog entry you chose.
-5) Call tool_save_program(plan) and return the resulting Program.
+   - Treat profile context, wishes, and health notes as hard constraints.
+   - Guidance for special populations (elderly, medical conditions, rehab, pregnancy, etc.) lives in the knowledge base; do not invent it.
+6) Call tool_save_program(plan) and return the resulting Program.
 
-You must execute tool_search_knowledge and tool_get_program_history exactly once in the listed order. You may call
-tool_search_exercises multiple times if needed. If a tool response indicates it was already executed, do not attempt
-to call it again; continue to the next step and finish the run with the saved program.
+You must execute tool_search_knowledge and tool_get_program_history exactly once in the listed order. If BMI is used,
+call tool_calculate_bmi once after tool_search_knowledge. Call tool_search_exercises up to the configured limit. If a tool
+response indicates it was already executed, do not attempt to call it again; continue to the next step and finish the
+run with the saved program.
 
 Example calls:
 - tool_search_knowledge(query="squat benefits", k=6)
@@ -27,6 +36,9 @@ PROGRAM PAYLOAD REQUIREMENTS:
 - Do not return empty or partially filled fields.
 - Label each block as "Day 1", "Day 2", etc. Do not refer to calendar weekday names, and ensure each exercise includes a name, sets, and reps.
 - If split_number is missing, set it to the number of workout days.
+- Ensure diversity of movement patterns (push, pull, hinge, squat, core; include carries when suitable) and avoid repeating the same pattern excessively unless constraints require it.
+- Include at least one compound movement per major muscle group when allowed by constraints.
+- If strict constraints reduce exercise variety, prefer safe catalog alternatives rather than minimizing program complexity.
 
 Program field guide:
 - exercises_by_day: list of DayExercises; each has day label and exercises with name/sets/reps/gif_key.
