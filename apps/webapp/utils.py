@@ -36,7 +36,7 @@ async def ensure_container_ready() -> None:
         from core.containers import get_container
 
         container = get_container()
-    except Exception:  # pragma: no cover - optional in tests
+    except Exception:
         return
     if hasattr(container, "init_resources"):
         maybe = container.init_resources()

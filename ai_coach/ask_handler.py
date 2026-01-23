@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse  # pyrefly: ignore[import-error]
 from loguru import logger  # pyrefly: ignore[import-error]
 from pydantic import ValidationError  # pyrefly: ignore[import-error]
 
-try:  # pragma: no cover - optional dependency guard
+try:
     import pydantic_ai.exceptions as _pa_exceptions  # type: ignore
 except Exception:  # noqa: BLE001
     ModelHTTPError = RuntimeError
@@ -128,7 +128,7 @@ async def _ingest_chat_prompt(
 async def _fetch_profile(profile_id: int) -> Profile | None:
     try:
         return await APIService.profile.get_profile(profile_id)
-    except Exception:  # pragma: no cover - profile service may be unavailable
+    except Exception:
         return None
 
 
@@ -734,7 +734,7 @@ async def handle_coach_request(
             inflight_error = exc
             logger.exception(f"/ask agent validation error rid={rid}: {exc}")
             raise HTTPException(status_code=422, detail="Invalid response") from exc
-        except Exception as exc:  # pragma: no cover - log unexpected errors
+        except Exception as exc:
             inflight_error = exc
             logger.exception(f"/ask agent failed rid={rid}: {exc}")
             raise HTTPException(status_code=503, detail="Service unavailable") from exc

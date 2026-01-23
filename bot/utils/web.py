@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any
 
 from config.app_settings import settings
@@ -5,7 +7,7 @@ from config.app_settings import settings
 if TYPE_CHECKING:
     from aiohttp import web
     from aiogram import Bot, Dispatcher
-else:  # pragma: no cover - runtime imports
+else:
     Bot = Dispatcher = Any
 
 

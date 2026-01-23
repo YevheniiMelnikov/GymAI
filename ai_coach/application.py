@@ -143,7 +143,7 @@ async def init_knowledge_base(kb: KnowledgeBase, knowledge_loader: KnowledgeLoad
 
     try:
         await kb.initialize(knowledge_loader)
-    except Exception as e:  # pragma: no cover - best effort
+    except Exception as e:
         logger.error(f"AI coach init failed: {e}")
         knowledge_ready_event.clear()
         raise

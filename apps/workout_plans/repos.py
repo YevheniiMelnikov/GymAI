@@ -14,6 +14,8 @@ from config.app_settings import settings
 
 
 class ProgramRepository:
+    """Provide cached access helpers for workout programs."""
+
     @staticmethod
     def _key(pk: int) -> str:
         return f"program:{pk}"
@@ -88,6 +90,8 @@ class ProgramRepository:
 
 
 class SubscriptionRepository:
+    """Provide query helpers for workout subscriptions."""
+
     @staticmethod
     def base_qs() -> QuerySet[Subscription]:  # pyrefly: ignore[bad-specialization]
         return Subscription.objects.all().select_related("profile")  # type: ignore[return-value,missing-attribute]

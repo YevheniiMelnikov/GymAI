@@ -4,6 +4,8 @@ from apps.diet_plans.models import DietPlan
 
 
 class DietPlanRepository:
+    """Provide query helpers for diet plan persistence."""
+
     @staticmethod
     def base_qs() -> QuerySet[DietPlan]:  # pyrefly: ignore[bad-specialization]
         return DietPlan.objects.all().select_related("profile")  # type: ignore[return-value,missing-attribute]

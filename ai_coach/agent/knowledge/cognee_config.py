@@ -19,6 +19,8 @@ _COGNEE_MODULE: ModuleType | None = None
 
 
 class CogneeConfig:
+    """Configure Cognee storage and provider settings from app configuration."""
+
     _STORAGE_ROOT: ClassVar[Path | None] = None
     _CACHE_PATCHED: ClassVar[bool] = False
 

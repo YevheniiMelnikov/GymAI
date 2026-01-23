@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any
 
 __all__ = ("configure_routers",)
 
 if TYPE_CHECKING:
     from aiogram import Dispatcher
-else:  # pragma: no cover - runtime imports
+else:
     Dispatcher = Any
 
 

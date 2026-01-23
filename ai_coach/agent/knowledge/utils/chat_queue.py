@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 from time import monotonic
 from typing import Any, ClassVar, TYPE_CHECKING
@@ -12,6 +14,8 @@ if TYPE_CHECKING:
 
 
 class ChatProjectionScheduler:
+    """Debounce and schedule chat dataset projections for the knowledge base."""
+
     _CHAT_PENDING: ClassVar[dict[str, int]] = {}
     _CHAT_PROJECT_TASKS: ClassVar[dict[str, asyncio.Task[Any]]] = {}
     _CHAT_LAST_PROJECT_TS: ClassVar[dict[str, float]] = {}

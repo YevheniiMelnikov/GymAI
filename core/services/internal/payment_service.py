@@ -8,6 +8,8 @@ from core.payment.providers.payment_gateway import PaymentGateway
 
 
 class PaymentService:
+    """Coordinate payment repository and gateway interactions."""
+
     def __init__(
         self,
         repository: PaymentRepository,

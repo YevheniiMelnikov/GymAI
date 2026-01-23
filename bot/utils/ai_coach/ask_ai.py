@@ -288,7 +288,7 @@ def _dispatch_ai_question_task(
             handle_ai_question_failure,
             notify_ai_answer_ready_task,
         )
-    except Exception as exc:  # pragma: no cover - import failure
+    except Exception as exc:
         logger.error(f"event=ask_ai_task_import_failed request_id={request_id} error={exc!s}")
         return None
 

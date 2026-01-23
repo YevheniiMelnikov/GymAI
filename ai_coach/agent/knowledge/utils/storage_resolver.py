@@ -5,6 +5,8 @@ from typing import ClassVar
 
 
 class StorageResolver:
+    """Resolve legacy MD5 storage filenames to SHA-based paths."""
+
     _MD5_TO_SHA: ClassVar[dict[str, str]] = {}
 
     @staticmethod

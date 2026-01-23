@@ -10,6 +10,8 @@ from config.app_settings import settings
 
 
 class GSheetsService:
+    """Write payment and metrics rows to the configured Google Sheet."""
+
     SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
     DRIVE_SCOPE = "https://www.googleapis.com/auth/drive"
     creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS

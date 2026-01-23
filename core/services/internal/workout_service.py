@@ -14,6 +14,8 @@ from core.enums import SubscriptionPeriod
 
 
 class WorkoutService(APIClient):
+    """Call workout plan endpoints on the Django API."""
+
     async def save_program(
         self, profile_id: int, exercises: list[DayExercises], split_number: int, wishes: str
     ) -> Program:

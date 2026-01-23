@@ -17,6 +17,8 @@ class PaymentStrategy(Protocol):
 
 
 class SuccessPayment:
+    """Handle successful payments by topping up credits and notifying users."""
+
     def __init__(
         self,
         cache: CacheProtocol,
@@ -41,6 +43,8 @@ class SuccessPayment:
 
 
 class FailurePayment:
+    """Handle failed payments by caching status and notifying users."""
+
     def __init__(
         self,
         cache: CacheProtocol,
@@ -66,6 +70,8 @@ class FailurePayment:
 
 
 class ClosedPayment:
+    """Handle closed payments by caching closed status."""
+
     def __init__(self, cache: CacheProtocol) -> None:
         self._cache = cache
 
@@ -79,6 +85,8 @@ class ClosedPayment:
 
 
 class PendingPayment:
+    """Ignore pending payments while keeping status untouched."""
+
     @staticmethod
-    async def handle(payment: Payment, profile: Profile) -> None:  # pragma: no cover - no action
+    async def handle(payment: Payment, profile: Profile) -> None:
         logger.debug(f"Pending payment {payment.id} ignored for client {profile.id}")

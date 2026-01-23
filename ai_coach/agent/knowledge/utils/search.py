@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 from time import monotonic
@@ -8,7 +10,7 @@ from typing import Any, Awaitable, Iterable, Mapping, Sequence, cast, Literal, O
 try:
     from cognee.modules.search.types import SearchType
     import cognee
-except ModuleNotFoundError:  # pragma: no cover - optional dependency
+except ModuleNotFoundError:
     cognee = None  # type: ignore[assignment]
 
     class SearchType(str, Enum):
@@ -57,6 +59,8 @@ def _resolve_search_type(mode: str | SearchType | None) -> SearchType:
 
 
 class SearchService:
+    """Run Cognee search queries with dataset readiness checks."""
+
     def __init__(
         self,
         dataset_service: DatasetService,

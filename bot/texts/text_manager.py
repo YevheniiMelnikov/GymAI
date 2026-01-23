@@ -10,6 +10,8 @@ TextResourceKey = MessageText | ButtonText | str
 
 
 class TextManager:
+    """Load and resolve localized bot text resources."""
+
     _TEXTS_DIR = Path(__file__).parent.parent / "texts"
     _RESOURCES = {
         "messages": _TEXTS_DIR / "messages.yml",

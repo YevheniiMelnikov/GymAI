@@ -1,5 +1,7 @@
 """Utilities for authenticated calls to internal bot endpoints."""
 
+from __future__ import annotations
+
 import hmac
 import hashlib
 import time

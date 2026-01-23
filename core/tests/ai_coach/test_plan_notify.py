@@ -9,7 +9,7 @@ from config import app_settings as app_settings_module
 
 
 class _SettingsStub(SimpleNamespace):
-    def __getattr__(self, name: str) -> Any:  # pragma: no cover - fallback for typed attrs
+    def __getattr__(self, name: str) -> Any:
         if name.endswith(("_TIMEOUT", "_TTL", "_DAYS")):
             return 0
         return "stub"

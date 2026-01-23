@@ -8,6 +8,8 @@ from config.app_settings import settings
 
 
 class ProfileRepository:
+    """Provide cached access helpers for profile records."""
+
     @staticmethod
     def get_model_by_id(profile_id: int) -> Profile:
         try:

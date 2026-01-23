@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import logging
@@ -21,6 +23,8 @@ if TYPE_CHECKING:
 
 
 class StorageService:
+    """Read and cache Cognee storage artifacts for datasets."""
+
     _STORAGE_CACHE: dict[str, str] = {}
 
     def __init__(self, dataset_service) -> None:

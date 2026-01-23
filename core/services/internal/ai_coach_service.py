@@ -21,6 +21,8 @@ from ...enums import WorkoutPlanType, WorkoutLocation
 
 
 class AiCoachService(APIClient):
+    """Call AI coach service endpoints and map responses to schemas."""
+
     def __init__(self, client: httpx.AsyncClient, settings) -> None:
         super().__init__(client, settings)
         self.base_url = settings.AI_COACH_URL

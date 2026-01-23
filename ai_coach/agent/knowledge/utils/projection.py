@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any, ClassVar, Optional, TYPE_CHECKING
@@ -16,6 +18,8 @@ Waiter = Callable[..., Awaitable[ProjectionStatus]]
 
 
 class ProjectionService:
+    """Coordinate dataset projection lifecycle and retry logic."""
+
     _MAX_REBUILD_ATTEMPTS: ClassVar[int] = 3
 
     def __init__(

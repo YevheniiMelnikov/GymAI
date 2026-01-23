@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from aiogram import Dispatcher, Router
-else:  # pragma: no cover - runtime imports
+else:
     Dispatcher = Router = Any
 
 from bot.handlers.chat_handler import chat_router

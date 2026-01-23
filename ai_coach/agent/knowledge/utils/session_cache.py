@@ -43,6 +43,8 @@ class InvokeMemify(Protocol):
 
 
 class SessionCacheService:
+    """Manage cached chat sessions and summarization flow for the coach."""
+
     def __init__(self, dataset_service: Any) -> None:
         self._dataset_service = dataset_service
 

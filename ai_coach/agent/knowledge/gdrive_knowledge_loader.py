@@ -48,6 +48,8 @@ def _read_pdf(data: bytes) -> str:
 
 
 class GDriveDocumentLoader(KnowledgeLoader):
+    """Load knowledge base documents from a configured Google Drive folder."""
+
     folder_id: str | None = settings.KNOWLEDGE_BASE_FOLDER_ID
     credentials_path: str | Path = settings.GOOGLE_APPLICATION_CREDENTIALS
     _files_service: Any | None = None

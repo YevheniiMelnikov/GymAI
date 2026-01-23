@@ -13,7 +13,6 @@ Deliver production-grade improvements to GymBot's multi-service stack (Django AP
 ## Engineering Principles
 - Target Python 3.12 with full type annotations. Define `TypedDict`/`Protocol` interfaces instead of passing `dict` or `Any`.
 - Comments and log messages stay in English; communicate with the maintainer in Russian.
-- Forbid `from __future__ import annotations` and other unnecessary compatibility shims.
 - All configuration flows through `pydantic-settings`. Represent defaults explicitly and source values from environment variables.
 - Prefer `pathlib.Path`, context managers from `contextlib`, and f-strings. Avoid ad-hoc helpers and hidden singletons; keep modules cohesive.
 - Honour asynchronous boundaries: await Django async ORM, aiogram, and aiohttp calls and push CPU-bound work into Celery tasks.

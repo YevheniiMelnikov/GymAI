@@ -19,7 +19,7 @@ from core.schemas import DayExercises, DietPlan, Program, QAResponse, Subscripti
 from ai_coach.exceptions import AgentExecutionAborted
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet
 
-try:  # pragma: no cover - compatibility guard
+try:
     import pydantic_ai.exceptions as _pa_exceptions  # type: ignore
 except Exception:  # noqa: BLE001
     BadRequestError = RuntimeError
@@ -73,6 +73,8 @@ def _log_agent_stage(
 
 
 class CoachAgentMeta(type):
+    """Expose configured LLM helper methods as class-level proxy attributes."""
+
     def __getattr__(cls, name: str) -> Any:
         helper = getattr(cls, "llm_helper", None)
         if helper is None:
@@ -87,7 +89,7 @@ class CoachAgentMeta(type):
 
 
 class CoachAgent(metaclass=CoachAgentMeta):
-    """PydanticAI wrapper for program generation."""
+    """Orchestrate coach prompts and tool calls for program, diet, and Q&A flows."""
 
     llm_helper: ClassVar[type[LLMHelperProto]] = LLMHelper
 
@@ -588,7 +590,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
         if len(content_parts) == 1:
             return prompt
         builder = getattr(ModelRequest, "user_content", None)
-        if callable(builder):  # pragma: no cover - optional API
+        if callable(builder):
             try:
                 return builder(content_parts)
             except Exception as exc:  # noqa: BLE001

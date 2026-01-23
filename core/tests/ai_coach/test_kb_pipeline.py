@@ -84,7 +84,7 @@ async def test_chat_projection_scheduler_uses_kb_user(monkeypatch):
             self._process_dataset = AsyncMock()
 
         @staticmethod
-        def _log_task_exception(task: object) -> None:  # pragma: no cover - scheduler contract
+        def _log_task_exception(task: object) -> None:
             return None
 
     ChatProjectionScheduler._CHAT_PENDING.clear()

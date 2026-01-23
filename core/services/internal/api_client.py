@@ -53,6 +53,8 @@ class APISettings(Protocol):
 
 
 class APIClient:
+    """Perform authenticated HTTP calls to internal services with retries."""
+
     def __init__(self, client: httpx.AsyncClient, settings: APISettings) -> None:
         self.client = client
         self.settings = settings
@@ -68,7 +70,7 @@ class APIClient:
     async def aclose(self) -> None:
         try:
             await self.client.aclose()
-        except Exception:  # pragma: no cover - best effort
+        except Exception:
             logger.exception("Failed to close httpx client")
 
     @staticmethod

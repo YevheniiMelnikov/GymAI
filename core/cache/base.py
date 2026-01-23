@@ -12,6 +12,8 @@ from config.app_settings import settings
 
 
 class BaseCacheManager:
+    """Base Redis cache helper with retry and JSON-safe helpers."""
+
     _redis: ClassVar[Redis | None] = None
     _socket_timeout: ClassVar[float] = 5.0
     _socket_connect_timeout: ClassVar[float] = 3.0
@@ -188,13 +190,13 @@ class BaseCacheManager:
         if raw:
             try:
                 return cls._validate_data(raw, cache_key, field)
-            except Exception:  # pragma: no cover - best effort cleanup
+            except Exception:
                 await cls.delete(cache_key, field)
 
         data = await cls._fetch_from_service(cache_key, field, use_fallback=use_fallback)
         try:
             prepared = cls._prepare_for_cache(data, cache_key, field)
             await cls.set(cache_key, field, json.dumps(prepared))
-        except Exception as e:  # pragma: no cover - caching failure shouldn't crash
+        except Exception as e:
             logger.error(f"Failed to cache {cache_key}:{field}: {e}")
         return data

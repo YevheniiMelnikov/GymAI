@@ -22,6 +22,8 @@ from bot.pricing import ServiceCatalog
 
 
 class PaymentProcessor:
+    """Orchestrate payment webhook handling and status strategies."""
+
     def __init__(
         self,
         cache: CacheProtocol,

@@ -11,6 +11,8 @@ from config.app_settings import settings
 
 
 class ExerciseGIFStorage:
+    """Resolve exercise GIF URLs with optional signed links."""
+
     def __init__(self, bucket_name: str) -> None:
         self.bucket_name = bucket_name
         self._warned_missing_client = False

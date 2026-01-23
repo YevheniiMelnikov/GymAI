@@ -9,7 +9,7 @@ class DummyProgram:
         self.exercises_by_day = exercises_by_day
         self.id = id
 
-    def save(self):  # pragma: no cover - no actual DB interaction
+    def save(self):
         pass
 
 
@@ -45,7 +45,7 @@ def test_create_or_update_creates_multiple_programs(monkeypatch):
 
 def test_create_or_update_updates_existing_program(monkeypatch):
     class DummyManager:
-        def create(self, **kwargs):  # pragma: no cover - creation should not happen
+        def create(self, **kwargs):
             raise AssertionError("should not create when updating")
 
     monkeypatch.setattr(

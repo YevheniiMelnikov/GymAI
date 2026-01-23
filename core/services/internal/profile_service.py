@@ -6,6 +6,8 @@ from core.schemas import Profile
 
 
 class ProfileService:
+    """Provide profile CRUD access with side effects on delete."""
+
     def __init__(self, repository: ProfileRepository) -> None:
         self._repository = repository
 

@@ -9,7 +9,7 @@ from .utils import ProgramAdapter
 __all__ = ["AgentDeps", "CoachAgentProtocol", "CoachAgent", "ProgramAdapter", "QAResponse"]
 
 
-def __getattr__(name: str) -> Any:  # pragma: no cover - simple lazy import
+def __getattr__(name: str) -> Any:
     # Retained for backward compatibility with older import patterns.
     if name in {"CoachAgent", "QAResponse"}:
         return globals()[name]

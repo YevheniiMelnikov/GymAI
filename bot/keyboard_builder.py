@@ -9,6 +9,8 @@ from bot.texts import ButtonText, translate
 
 
 class SafeInlineKeyboardMarkup(InlineKeyboardMarkup):  # type: ignore[misc]
+    """Guard InlineKeyboardMarkup init against signature mismatches."""
+
     def __init__(
         self,
         *args: Any,
@@ -32,6 +34,8 @@ class SafeInlineKeyboardMarkup(InlineKeyboardMarkup):  # type: ignore[misc]
 
 
 class KeyboardBuilder:
+    """Build localized inline keyboards with safe fallbacks."""
+
     def __init__(self, lang: str):
         self.lang = lang
 

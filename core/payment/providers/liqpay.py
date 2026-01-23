@@ -14,6 +14,8 @@ class ParamValidationError(Exception):
 
 
 class LiqPay:
+    """Wrap LiqPay signing and payload preparation helpers."""
+
     SUPPORTED_PARAMS = [
         "public_key",
         "amount",
@@ -100,6 +102,8 @@ class LiqPayCheckout(NamedTuple):
 
 
 class LiqPayGateway(PaymentGateway):
+    """Build LiqPay checkout payloads for payment flows."""
+
     def __init__(
         self,
         public_key: str,

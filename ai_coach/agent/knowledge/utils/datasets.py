@@ -21,6 +21,8 @@ from ai_coach.logging_config import log_once as global_log_once
 
 
 class DatasetService:
+    """Resolve, cache, and manage Cognee dataset identifiers and metadata."""
+
     _DATASET_IDS: ClassVar[dict[str, str]] = {}
     _DATASET_ALIASES: ClassVar[dict[str, str]] = {}
     _PROJECTED_DATASETS: ClassVar[set[str]] = set()

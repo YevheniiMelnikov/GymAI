@@ -95,6 +95,8 @@ class LLMHelperProto(Protocol):
 
 
 class LLMHelper:
+    """Configure and execute PydanticAI runs for coach flows."""
+
     _agent: Optional[Agent] = None
     _completion_client: ClassVar[AsyncOpenAI | None] = None
     _completion_model_name: ClassVar[str | None] = None
@@ -182,7 +184,7 @@ class LLMHelper:
         if provider_name == "openrouter":
             try:
                 from pydantic_ai.providers.openrouter import OpenRouterProvider  # pyrefly: ignore[import-error]
-            except Exception as exc:  # pragma: no cover - optional dependency
+            except Exception as exc:
                 raise RuntimeError("OpenRouter provider is not available") from exc
 
             api_key: str = settings.LLM_API_KEY
@@ -223,7 +225,7 @@ class LLMHelper:
             return f"Client's name: {client_name}\nClient's language: {lang}"
 
         @cls._agent.instructions  # pyrefly: ignore[no-matching-overload]
-        def agent_instr(ctx: RunContext[AgentDeps]) -> str:  # pragma: no cover - runtime config
+        def agent_instr(ctx: RunContext[AgentDeps]) -> str:
             mode = ctx.deps.mode.value if ctx.deps.mode else "ask_ai"
             return agent_instructions(mode, kb_enabled=bool(settings.AI_COACH_KB_ENABLED))
 
@@ -1052,7 +1054,7 @@ class LLMHelper:
         if should_parse_json:
             try:
                 payload = json.loads(text)
-            except json.JSONDecodeError as exc:  # pragma: no cover - defensive guard
+            except json.JSONDecodeError as exc:
                 logger.warning(f"agent.ask fallback invalid_json profile_id={profile_id} error={exc}")
                 should_parse_json = False
             else:

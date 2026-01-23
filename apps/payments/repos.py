@@ -10,6 +10,8 @@ from config.app_settings import settings
 
 
 class PaymentRepository:
+    """Provide cached access helpers for payment records."""
+
     @staticmethod
     def _key(pk: int) -> str:
         return f"payment:{pk}"

@@ -38,7 +38,7 @@ def test_ai_plan_tasks_notify_on_success(task_obj: Any, target_name: str, monkey
         called["coro_name"] = coro.cr_code.co_name
         try:
             coro.send(None)
-        except StopIteration as exc:  # pragma: no cover - defensive
+        except StopIteration as exc:
             return exc.value
         return None
 

@@ -9,6 +9,8 @@ from core.exceptions import PaymentNotFoundError
 
 
 class PaymentCacheManager(BaseCacheManager):
+    """Cache payment status entries with API fallback."""
+
     _PREFIX = "workout_plans:payments"
 
     @classmethod

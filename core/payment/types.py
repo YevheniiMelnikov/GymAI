@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Protocol, Type, runtime_checkable
 
 if TYPE_CHECKING:
     from core.cache.profile import ProfileCacheManager
     from core.cache.payment import PaymentCacheManager
     from core.schemas import Profile
-else:  # pragma: no cover - typing only
+else:
     ProfileCacheManager = PaymentCacheManager = object  # type: ignore[misc]
     Profile = object  # type: ignore[misc]
 

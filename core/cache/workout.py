@@ -11,6 +11,8 @@ from core.exceptions import SubscriptionNotFoundError, ProgramNotFoundError, Use
 
 
 class WorkoutCacheManager(BaseCacheManager):
+    """Cache workout programs and subscriptions with API fallback."""
+
     @classmethod
     async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Subscription | Program:
         profile_id = int(field)

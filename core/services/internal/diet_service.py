@@ -11,6 +11,8 @@ from config.app_settings import settings
 
 
 class DietService(APIClient):
+    """Call diet plan endpoints with HMAC-authenticated requests."""
+
     async def save_plan(self, profile_id: int, request_id: str, plan: dict[str, Any]) -> int | None:
         url = urljoin(self.api_url, "internal/diets/")
         logger.info(f"event=diet_save_request url={url} request_id={request_id} profile_id={profile_id}")

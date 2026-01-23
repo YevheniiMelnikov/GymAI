@@ -31,7 +31,7 @@ class HashStore:
     async def contains(cls, dataset: str, hash_value: str) -> bool:
         try:
             return bool(await cast(Awaitable[int], cls.redis.sismember(cls._key(dataset), hash_value)))
-        except Exception as e:  # pragma: no cover - best effort
+        except Exception as e:
             logger.error(f"HashStore.contains error {dataset}: {e}")
             return False
 
@@ -65,7 +65,7 @@ class HashStore:
                     cls.redis.expire(meta_key, settings.BACKUP_RETENTION_DAYS * 24 * 60 * 60),
                 )
             logger.debug(f"[hashstore_put] sha={hash_value[:12]} bytes={meta_bytes} dataset={dataset} ok")
-        except Exception as e:  # pragma: no cover - best effort
+        except Exception as e:
             logger.error(f"HashStore.add error {dataset}: {e}")
             logger.debug(f"[hashstore_put] sha={hash_value[:12]} bytes=0 dataset={dataset} err={e}")
 
@@ -74,14 +74,14 @@ class HashStore:
         try:
             await cast(Awaitable[int], cls.redis.delete(cls._key(dataset)))
             await cast(Awaitable[int], cls.redis.delete(cls._meta_key(dataset)))
-        except Exception as e:  # pragma: no cover - best effort
+        except Exception as e:
             logger.error(f"HashStore.clear error {dataset}: {e}")
 
     @classmethod
     async def metadata(cls, dataset: str, hash_value: str) -> dict[str, Any] | None:
         try:
             raw = await cast(Awaitable[str | None], cls.redis.hget(cls._meta_key(dataset), hash_value))
-        except Exception as e:  # pragma: no cover - best effort
+        except Exception as e:
             logger.error(f"HashStore.metadata error {dataset}: {e}")
             return None
         if not raw:
@@ -107,7 +107,7 @@ class HashStore:
     async def list(cls, dataset: str) -> set[str]:
         try:
             members = await cast(Awaitable[Iterable[str]], cls.redis.smembers(cls._key(dataset)))
-        except Exception as e:  # pragma: no cover - best effort
+        except Exception as e:
             logger.error(f"HashStore.list error {dataset}: {e}")
             return set()
         return {str(item) for item in members}
@@ -116,7 +116,7 @@ class HashStore:
     async def count(cls, dataset: str) -> int:
         try:
             value = await cast(Awaitable[int], cls.redis.scard(cls._key(dataset)))
-        except Exception as e:  # pragma: no cover - best effort
+        except Exception as e:
             logger.error(f"HashStore.count error {dataset}: {e}")
             return 0
         return int(value or 0)
@@ -126,6 +126,6 @@ class HashStore:
         try:
             keys = await cast(Awaitable[Iterable[str]], cls.redis.keys("cognee_hashes:*"))
             return {key.removeprefix("cognee_hashes:") for key in keys}
-        except Exception as e:  # pragma: no cover - best effort
+        except Exception as e:
             logger.error(f"HashStore.list_all_datasets error: {e}")
             return set()

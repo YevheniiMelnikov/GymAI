@@ -444,7 +444,7 @@ async def tool_search_knowledge(
             )
         )
         return await _load_fallback("timeout")
-    except Exception as e:  # pragma: no cover - forward to model
+    except Exception as e:
         message = str(e)
         if "Empty graph" in message or "EntityNotFound" in type(e).__name__:
             return await _load_fallback("empty")
@@ -540,7 +540,7 @@ async def tool_save_program(
         logger.info(f"save_program_timeout profile_id={profile_id} timeout={timeout}")
         deps.final_result = program
         return _cache_result(deps, tool_name, program)
-    except Exception as e:  # pragma: no cover - forward to model
+    except Exception as e:
         raise ModelRetry(f"Program saving failed: {e}. Ensure plan data is valid and retry.") from e
 
 
@@ -570,7 +570,7 @@ async def tool_get_program_history(
     except TimeoutError:
         logger.info(f"program_history_timeout profile_id={profile_id} tool=tool_get_program_history timeout={timeout}")
         return _cache_result(deps, tool_name, [])
-    except Exception as e:  # pragma: no cover - forward to model
+    except Exception as e:
         raise ModelRetry(f"Program history unavailable: {e}. Try calling the tool again later.") from e
 
 
@@ -650,5 +650,5 @@ async def tool_create_subscription(
         return _cache_result(deps, tool_name, subscription)
     except ModelRetry:
         raise
-    except Exception as e:  # pragma: no cover - forward to model
+    except Exception as e:
         raise ModelRetry(f"Subscription creation failed: {e}. Verify inputs and try again.") from e

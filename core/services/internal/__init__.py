@@ -4,6 +4,8 @@ from typing import Any, Callable
 
 
 class _ServiceProxy:
+    """Lazily resolve service instances and proxy async calls."""
+
     def __init__(self, factory: Callable[[], Any], *, cache_instance: bool = True) -> None:
         self._factory = factory
         self._cache_instance = cache_instance
@@ -39,6 +41,8 @@ class _ServiceProxy:
 
 
 class _APIServiceProxy:
+    """Expose lazy service proxies from a configured container provider."""
+
     def __init__(self) -> None:
         self._provider: Callable[[], Any] | None = None
         self._proxies: dict[str, _ServiceProxy] = {}

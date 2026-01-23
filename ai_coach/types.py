@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 from enum import Enum
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 from core.enums import WorkoutPlanType, WorkoutLocation
 
-if TYPE_CHECKING:  # pragma: no cover - runtime import avoidance
+if TYPE_CHECKING:
     from ai_coach.agent import AgentDeps
 
 

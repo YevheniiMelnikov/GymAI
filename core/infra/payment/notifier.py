@@ -13,6 +13,8 @@ class _TaskInvoker(Protocol):
 
 
 class TaskPaymentNotifier(PaymentNotifier):
+    """Send payment notifications through a Celery task wrapper."""
+
     def __init__(
         self,
         task: _TaskInvoker | None = None,

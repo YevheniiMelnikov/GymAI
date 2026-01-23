@@ -10,6 +10,8 @@ from core.services import APIService
 
 
 class ProfileCacheManager(BaseCacheManager):
+    """Cache profile records with API fallback and migration support."""
+
     PROFILE_DATA_KEY = "profiles"
 
     @classmethod

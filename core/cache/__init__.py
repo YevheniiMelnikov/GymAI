@@ -1,4 +1,6 @@
 class _CacheProxy:
+    """Expose cache manager classes via lazy properties."""
+
     @property
     def profile(self):
         from .profile import ProfileCacheManager
