@@ -10,13 +10,71 @@ import {
   saveExerciseSets,
   saveSubscriptionExerciseSets
 } from '../api/http';
-import { Day, Exercise, Locale, Program, Week } from '../api/types';
+import { Day, Exercise, ExerciseTechniqueResp, Locale, Program, Week } from '../api/types';
 import { t } from '../i18n/i18n';
-import { readInitData } from '../telegram';
+import { readInitData, readLocale } from '../telegram';
 
 export type RenderedProgram = {
   readonly fragment: DocumentFragment;
 };
+
+const techniqueCache = new Map<string, ExerciseTechniqueResp>();
+const pendingTechnique = new Map<string, Promise<ExerciseTechniqueResp>>();
+
+function techniqueCacheKey(gifKey: string, locale: Locale): string {
+  return `${gifKey}:${locale}`;
+}
+
+function preloadTechniqueData(program: Program): void {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  const locale = readLocale();
+  const weeks = ensureWeeks(program);
+  weeks.forEach((week) => {
+    week.days.forEach((day) => {
+      if (day.type !== 'workout') return;
+      day.exercises.forEach((exercise) => {
+        const gifKey = exercise.gif_key ? String(exercise.gif_key) : '';
+        if (!gifKey) return;
+        const cacheKey = techniqueCacheKey(gifKey, locale);
+        if (seen.has(cacheKey) || techniqueCache.has(cacheKey)) return;
+        seen.add(cacheKey);
+        keys.push(gifKey);
+      });
+    });
+  });
+
+  if (keys.length === 0) return;
+
+  const preload = () => {
+    keys.forEach((gifKey) => {
+      const cacheKey = techniqueCacheKey(gifKey, locale);
+      if (techniqueCache.has(cacheKey)) return;
+      if (!pendingTechnique.has(cacheKey)) {
+        const promise = getExerciseTechnique(gifKey, locale)
+          .then((data) => {
+            techniqueCache.set(cacheKey, data);
+            return data;
+          })
+          .finally(() => {
+            pendingTechnique.delete(cacheKey);
+          });
+        pendingTechnique.set(cacheKey, promise);
+      }
+    });
+  };
+
+  const idleCallback = (
+    globalThis as unknown as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+    }
+  ).requestIdleCallback;
+  if (idleCallback) {
+    idleCallback(() => preload(), { timeout: 1500 });
+  } else {
+    globalThis.setTimeout(preload, 300);
+  }
+}
 
 function preloadTechniqueGifs(program: Program): void {
   const urls: string[] = [];
@@ -343,6 +401,7 @@ function attachDetailsAnimation(details: HTMLDetailsElement, content: HTMLElemen
   }
   let isAnimating = false;
   let animationTimer: number | null = null;
+  let nestedResizeTimer: number | null = null;
 
   const cleanup = () => {
     content.style.height = '';
@@ -352,6 +411,10 @@ function attachDetailsAnimation(details: HTMLDetailsElement, content: HTMLElemen
     if (animationTimer !== null) {
       window.clearTimeout(animationTimer);
       animationTimer = null;
+    }
+    if (nestedResizeTimer !== null) {
+      window.clearTimeout(nestedResizeTimer);
+      nestedResizeTimer = null;
     }
   };
 
@@ -408,6 +471,30 @@ function attachDetailsAnimation(details: HTMLDetailsElement, content: HTMLElemen
     content.addEventListener('transitionend', finish);
     animationTimer = window.setTimeout(finish, 460);
   };
+
+  if (details.classList.contains('program-day')) {
+    content.addEventListener('toggle', (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target || !target.classList.contains('program-exercise-details')) {
+        return;
+      }
+      if (!details.open) {
+        return;
+      }
+      if (content.style.height) {
+        content.style.height = `${content.scrollHeight}px`;
+        content.style.overflow = 'hidden';
+        if (nestedResizeTimer !== null) {
+          window.clearTimeout(nestedResizeTimer);
+        }
+        nestedResizeTimer = window.setTimeout(() => {
+          content.style.height = '';
+          content.style.overflow = '';
+          content.style.transition = '';
+        }, 320);
+      }
+    });
+  }
 
   summary.addEventListener('click', (event) => {
     if (details.classList.contains('program-day-rest')) {
@@ -665,11 +752,13 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
 
   let techniqueAbort: AbortController | null = null;
   let activeTechniqueKey: string | null = null;
+  let activeLocale: Locale | null = null;
 
   const close = () => {
     techniqueAbort?.abort();
     techniqueAbort = null;
     activeTechniqueKey = null;
+    activeLocale = null;
     root.dataset.state = 'closed';
     root.setAttribute('aria-hidden', 'true');
     document.removeEventListener('keydown', handleKeydown);
@@ -694,6 +783,7 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
     techniqueAbort?.abort();
     techniqueAbort = null;
     activeTechniqueKey = gifKey ? String(gifKey) : null;
+    activeLocale = readLocale();
     if (gifUrl) {
       media.src = gifUrl;
       media.alt = exerciseName || t('program.exercise.technique.title');
@@ -713,17 +803,54 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
       panel.focus();
     });
 
-    if (!gifUrl || !activeTechniqueKey) {
+    if (!gifUrl || !activeTechniqueKey || !activeLocale) {
+      return;
+    }
+
+    const cacheKey = techniqueCacheKey(activeTechniqueKey, activeLocale);
+    const cached = techniqueCache.get(cacheKey);
+    if (cached) {
+      if (cached.canonical_name) {
+        media.alt = cached.canonical_name;
+      }
+      if (Array.isArray(cached.technique_description) && cached.technique_description.length > 0) {
+        const items = cached.technique_description
+          .map((step) => String(step || '').trim())
+          .filter((step) => step.length > 0);
+        if (items.length > 0) {
+          items.forEach((step) => {
+            const li = document.createElement('li');
+            li.textContent = step;
+            techniqueList.appendChild(li);
+          });
+          techniqueList.hidden = false;
+        }
+      }
       return;
     }
 
     const abort = new AbortController();
     techniqueAbort = abort;
-    getExerciseTechnique(activeTechniqueKey, undefined, abort.signal)
+    const pending = pendingTechnique.get(cacheKey);
+    const request = pending ?? getExerciseTechnique(activeTechniqueKey, activeLocale, abort.signal);
+    if (!pending) {
+      pendingTechnique.set(
+        cacheKey,
+        Promise.resolve(request)
+          .then((data) => {
+            techniqueCache.set(cacheKey, data);
+            return data;
+          })
+          .finally(() => {
+            pendingTechnique.delete(cacheKey);
+          })
+      );
+    }
+    Promise.resolve(request)
       .then((data) => {
         if (abort.signal.aborted) return;
         if (root.dataset.state !== 'open') return;
-        if (activeTechniqueKey !== data.gif_key) return;
+        if (activeTechniqueKey !== data.gif_key || activeLocale === null) return;
         if (data.canonical_name) {
           media.alt = data.canonical_name;
         }
@@ -1216,6 +1343,7 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
     content.appendChild(flags);
   }
 
+  let setsTable: HTMLDivElement | null = null;
   if (!auxExercise) {
     const sets = buildDisplaySets(ex);
     if (sets.length > 0) {
@@ -1262,7 +1390,7 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
         table.appendChild(row);
       });
 
-      content.appendChild(table);
+      setsTable = table;
     }
   }
 
@@ -1281,7 +1409,17 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
   }
 
   if (!auxExercise) {
-    content.appendChild(createExerciseActions(details, ex, title));
+    const actions = createExerciseActions(details, ex, title);
+    content.appendChild(actions);
+    if (setsTable) {
+      content.appendChild(setsTable);
+      const editButton = actions.querySelector<HTMLButtonElement>('.program-exercise-edit-btn');
+      if (editButton) {
+        content.appendChild(editButton);
+      }
+    }
+  } else if (setsTable) {
+    content.appendChild(setsTable);
   }
   details.appendChild(content);
   attachDetailsAnimation(details, content);
@@ -1344,6 +1482,7 @@ export function renderProgramDays(program: Program): RenderedProgram {
     fragment.appendChild(wrap);
   });
   preloadTechniqueGifs(program);
+  preloadTechniqueData(program);
   return { fragment };
 }
 
