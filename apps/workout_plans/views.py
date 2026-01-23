@@ -1,6 +1,5 @@
 from typing import Any, Optional
 
-from django.core.cache import cache
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, serializers
 from rest_framework.response import Response
@@ -41,14 +40,6 @@ class ProgramViewSet(ModelViewSet):
         profile_id = int(profile_raw)
         program = ProgramRepository.create_or_update(profile_id, exercises)
 
-        cache.delete_many(
-            [
-                "program:list",
-                f"program:list:{profile_id}",
-                f"program:{program.id}",  # type: ignore[attr-defined]
-            ]
-        )
-
         status_code = (
             status.HTTP_201_CREATED
             if getattr(program, "created_at", None) == getattr(program, "updated_at", None)
@@ -66,14 +57,6 @@ class ProgramViewSet(ModelViewSet):
         profile_id = int(profile_raw)
         exercises = serializer.validated_data.get("exercises_by_day", instance.exercises_by_day)
         program = ProgramRepository.create_or_update(profile_id, exercises, instance=instance)
-
-        cache.delete_many(
-            [
-                "program:list",
-                f"program:list:{profile_id}",
-                f"program:{program.id}",  # type: ignore[attr-defined]
-            ]
-        )
         return Response(self.get_serializer(program).data, status=status.HTTP_200_OK)
 
 
@@ -91,29 +74,10 @@ class SubscriptionViewSet(ModelViewSet):
         return SubscriptionRepository.filter_by_profile(qs, profile_id)
 
     def perform_create(self, serializer: serializers.BaseSerializer) -> None:  # pyrefly: ignore[bad-override]
-        sub = serializer.save()
-        cache.delete_many(
-            [
-                "subscriptions:list",
-                f"subscriptions:list:profile:{sub.profile_id}",  # pyrefly: ignore[missing-attribute]
-            ]
-        )
+        serializer.save()
 
     def perform_update(self, serializer: serializers.BaseSerializer) -> None:  # pyrefly: ignore[bad-override]
-        sub = serializer.save()
-        cache.delete_many(
-            [
-                "subscriptions:list",
-                f"subscriptions:list:profile:{sub.profile_id}",  # pyrefly: ignore[missing-attribute]
-            ]
-        )
+        serializer.save()
 
     def perform_destroy(self, instance: Subscription) -> None:  # pyrefly: ignore[bad-override]
-        profile_id = instance.profile_id  # pyrefly: ignore[missing-attribute]
         super().perform_destroy(instance)
-        cache.delete_many(
-            [
-                "subscriptions:list",
-                f"subscriptions:list:profile:{profile_id}",
-            ]
-        )

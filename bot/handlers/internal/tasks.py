@@ -47,11 +47,9 @@ async def _resolve_profile(profile_id: int, profile_hint: int | None) -> Profile
         return profile
 
     if profile_hint is not None and profile_hint != profile_id:
-        profile = await _fetch_from_cache(profile_hint)
-        if profile is None:
-            profile = await _fetch_from_service(profile_hint)
-        if profile is not None:
-            return profile
+        logger.warning(
+            f"profile_hint_mismatch profile_id={profile_id} profile_hint={profile_hint}; ignoring profile_hint"
+        )
 
     profile = await _fetch_from_cache(profile_id)
     if profile is None:
@@ -77,6 +75,7 @@ async def _process_ai_plan_ready(
     state_tracker = AiPlanState.create()
     bot: Bot = request.app["bot"]
     dispatcher = request.app.get("dp")
+    resolved_profile_id: int | None = None
     logger.info(
         "ai_plan_ready_start action={} status={} plan_type={} profile_id={} request_id={}",
         action,
@@ -197,9 +196,10 @@ async def _process_ai_plan_ready(
         logger.error(f"Profile fetch failed profile_id={profile_id} request_id={request_id}: not found")
     except Exception as exc:  # noqa: BLE001
         await state_tracker.mark_failed(request_id, f"handler_exception:{exc!s}")
+        resolved_id = resolved_profile_id if resolved_profile_id is not None else profile_id
         logger.exception(
             "AI coach plan callback processing failed "
-            f"plan_type={plan_type.value} profile_id={resolved_profile_id} request_id={request_id} error={exc!s}"
+            f"plan_type={plan_type.value} profile_id={resolved_id} request_id={request_id} error={exc!s}"
         )
 
 

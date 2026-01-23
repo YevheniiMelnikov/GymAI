@@ -115,7 +115,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
     ) -> Program | Subscription:
         deps.mode = CoachMode.program if output_type is Program else CoachMode.subscription
         if deps.mode in (CoachMode.program, CoachMode.subscription):
-            deps.max_run_seconds = 0.0
+            deps.max_run_seconds = max(600.0, float(settings.AI_COACH_GENERATION_TIMEOUT))
             max_exercise_calls = max(0, int(settings.AI_COACH_MAX_EXERCISE_SEARCH_CALLS))
             if deps.mode is CoachMode.program:
                 deps.max_tool_calls = 5 + max_exercise_calls

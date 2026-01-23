@@ -1,4 +1,4 @@
-# GymBot
+# GymAI
 
 GymBot is a Dockerized platform that includes a Telegram bot (aiogram), API (Django) and AI coach (FastAPI). The project relies on Uvicorn, Redis, and PostgreSQL and uses `uv` and `Taskfile` for dependency management and common tasks.
 

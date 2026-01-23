@@ -98,6 +98,7 @@ celery_config = {
     "task_acks_late": True,
     "worker_max_tasks_per_child": 100,
     "worker_prefetch_multiplier": 1,
+    "task_soft_time_limit": 600,
     "task_time_limit": 600,
     "worker_pool": "threads",
     "broker_connection_retry_on_startup": True,

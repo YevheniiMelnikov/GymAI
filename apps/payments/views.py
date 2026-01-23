@@ -52,8 +52,6 @@ class PaymentWebhookView(APIView):
                 return JsonResponse({"detail": "Invalid payload format"}, status=status.HTTP_400_BAD_REQUEST)
 
             order_id = payment_info.get("order_id")
-            if order_id:
-                cache.delete(f"payment:{order_id}")
 
             logger.info(
                 "payment_webhook_received "
@@ -96,7 +94,6 @@ class PaymentDetailView(generics.RetrieveUpdateAPIView):
     def perform_update(self, serializer: serializers.BaseSerializer) -> None:  # pyrefly: ignore[bad-override]
         instance: Payment = serializer.save()
         cache.delete(f"payment:{instance.id}")  # type: ignore[attr-defined]
-        cache.delete_many(["payments:list"])
 
 
 class PaymentCreateView(generics.CreateAPIView):
@@ -108,5 +105,4 @@ class PaymentCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer: serializers.BaseSerializer) -> None:  # pyrefly: ignore[bad-override]
         payment: Payment = serializer.save()
-        cache.delete_many(["payments:list"])
-        logger.debug(f"Payment id={payment.id} created → list cache flushed")  # type: ignore[attr-defined]
+        logger.debug(f"Payment id={payment.id} created")  # type: ignore[attr-defined]

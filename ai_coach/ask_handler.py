@@ -518,6 +518,16 @@ async def handle_coach_request(
     inflight_owner = False
     inflight_error: Exception | None = None
     attachments, attachments_bytes = _normalize_attachments(data.attachments)
+    max_attachment_bytes = int(settings.AI_QA_IMAGE_MAX_BYTES)
+    if attachments_bytes > max_attachment_bytes > 0:
+        logger.warning(
+            "ask.attachments_rejected profile_id={} request_id={} bytes={} limit={}",
+            data.profile_id,
+            data.request_id,
+            attachments_bytes,
+            max_attachment_bytes,
+        )
+        raise HTTPException(status_code=413, detail="Attachments too large")
     dedupe_key = _compute_dedupe_key(data.prompt, data.profile_id, mode, attachments=attachments)
 
     if dedupe_key and dedupe_key in dedupe_cache:

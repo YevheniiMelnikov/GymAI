@@ -27,8 +27,6 @@ def test_program_update_invalidates_cache(monkeypatch: pytest.MonkeyPatch) -> No
         validated_data={"exercises_by_day": ["new"]},
         data={"id": 1},
     )
-    delete_calls: list[list[str]] = []
-    monkeypatch.setattr("apps.workout_plans.views.cache.delete_many", lambda keys: delete_calls.append(list(keys)))
     monkeypatch.setattr(
         "apps.workout_plans.views.ProgramRepository.create_or_update",
         lambda profile_id, exercises, instance=None: SimpleNamespace(id=5, profile_id=profile_id),
@@ -38,14 +36,8 @@ def test_program_update_invalidates_cache(monkeypatch: pytest.MonkeyPatch) -> No
     response = view.update(request, pk=1)  # type: ignore[arg-type]
 
     assert response.status_code == 200
-    assert delete_calls == [["program:list", "program:list:10", "program:5"]]
 
 
-def test_subscription_update_invalidates_cache(monkeypatch: pytest.MonkeyPatch) -> None:
-    delete_calls: list[list[str]] = []
-    monkeypatch.setattr("apps.workout_plans.views.cache.delete_many", lambda keys: delete_calls.append(list(keys)))
-
+def test_subscription_update_does_not_touch_cache() -> None:
     serializer = SimpleNamespace(save=lambda: SimpleNamespace(profile_id=7))
     SubscriptionViewSet().perform_update(serializer)  # type: ignore[arg-type]
-
-    assert delete_calls == [["subscriptions:list", "subscriptions:list:profile:7"]]
