@@ -300,8 +300,8 @@ class ProjectionService:
                         min_interval=30.0,
                     )
             raise
-        except Exception as exc:
-            logger.warning(f"knowledge_dataset_cognify_failed dataset={dataset} detail={exc}")
+        except Exception:
+            logger.exception(f"knowledge_dataset_cognify_failed dataset={dataset}")
             raise
         try:
             counts = await self.dataset_service.get_counts(alias, user)
