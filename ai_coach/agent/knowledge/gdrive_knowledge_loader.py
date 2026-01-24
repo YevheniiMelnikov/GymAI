@@ -2,11 +2,13 @@ import asyncio
 import logging
 import hashlib
 import io
+import ssl
 from pathlib import Path
 from typing import Any, Callable, Final, Mapping, cast
 
 from google.oauth2.service_account import Credentials  # pyrefly: ignore[import-error]
 from googleapiclient.discovery import build  # pyrefly: ignore[import-error]
+from googleapiclient.errors import HttpError  # pyrefly: ignore[import-error]
 from googleapiclient.http import MediaIoBaseDownload  # pyrefly: ignore[import-error]
 from loguru import logger
 from docx import Document  # pyrefly: ignore[import-error]
@@ -68,26 +70,57 @@ class GDriveDocumentLoader(KnowledgeLoader):
             self._files_service = build("drive", "v3", credentials=creds).files()
         return self._files_service
 
+    @staticmethod
+    def _is_retryable_download_error(exc: Exception) -> bool:
+        if isinstance(exc, (TimeoutError, BrokenPipeError, ssl.SSLError, ConnectionError, OSError)):
+            return True
+        if isinstance(exc, HttpError):
+            status = getattr(getattr(exc, "resp", None), "status", None)
+            return status in {429, 500, 502, 503, 504}
+        return False
+
+    @staticmethod
+    def _retry_delay_s(attempt: int) -> float:
+        base = settings.GDRIVE_DOWNLOAD_INITIAL_DELAY
+        factor = settings.GDRIVE_DOWNLOAD_BACKOFF_FACTOR
+        delay = base * (factor ** max(attempt - 1, 0))
+        return min(delay, settings.GDRIVE_DOWNLOAD_MAX_DELAY)
+
     async def _download_file(self, file_id: str) -> bytes:
         service = self._get_drive_files_service()
-        request = service.get_media(fileId=file_id)
-        fh = io.BytesIO()
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        attempts = 0
-        while not done:
+        max_attempts = max(1, settings.GDRIVE_DOWNLOAD_MAX_RETRIES)
+        chunk_retries = max(0, settings.GDRIVE_DOWNLOAD_CHUNK_RETRIES)
+        last_exc: Exception | None = None
+
+        for attempt in range(1, max_attempts + 1):
+            request = service.get_media(fileId=file_id)
+            fh = io.BytesIO()
+            downloader = MediaIoBaseDownload(fh, request)
+            done = False
             try:
-                status, done = downloader.next_chunk()
-            except TimeoutError:
-                attempts += 1
-                if attempts >= 3:
+                while not done:
+                    status, done = downloader.next_chunk(num_retries=chunk_retries)
+                    if status:
+                        await asyncio.sleep(0)
+                return fh.getvalue()
+            except Exception as exc:
+                last_exc = exc
+                if not self._is_retryable_download_error(exc) or attempt >= max_attempts:
                     raise
-                logger.warning(f"kb_gdrive.download_timeout file_id={file_id} attempt={attempts}")
-                await asyncio.sleep(1)
+                delay = self._retry_delay_s(attempt)
+                logger.warning(
+                    "kb_gdrive.download_retry file_id={} attempt={} delay_s={} error={}",
+                    file_id,
+                    attempt,
+                    f"{delay:.2f}",
+                    type(exc).__name__,
+                )
+                await asyncio.sleep(delay)
                 continue
-            if status:
-                await asyncio.sleep(0)
-        return fh.getvalue()
+
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError(f"kb_gdrive.download_failed file_id={file_id}")
 
     _PARSERS: dict[str, Callable[[bytes], str]] = {
         ".txt": _read_txt,
@@ -266,6 +299,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
                     node_set=[f"gdrive:{file_id}"],
                     metadata=metadata,
                     force_ingest=force_ingest,
+                    trigger_projection=False,
                 )
                 is_duplicate = not created
                 if is_duplicate and not force_ingest:
@@ -303,27 +337,6 @@ class GDriveDocumentLoader(KnowledgeLoader):
                         kb_path,
                     )
 
-                try:
-                    await self._kb.projection_service.project_dataset(
-                        resolved_dataset, user, allow_rebuild=force_ingest
-                    )
-                    await self._kb._wait_for_projection(resolved_dataset, user, timeout_s=15.0)
-                    counts = await self._kb.dataset_service.get_counts(dataset_alias, user)
-                    logger.debug(
-                        (
-                            "projection:ready dataset_alias={} ident={} text_rows={} "
-                            "chunk_rows={} graph_nodes={} graph_edges={}"
-                        ),
-                        dataset_alias,
-                        resolved_dataset,
-                        counts.get("text_rows"),
-                        counts.get("chunk_rows"),
-                        counts.get("graph_nodes"),
-                        counts.get("graph_edges"),
-                    )
-                except Exception as exc:
-                    logger.debug(f"kb_gdrive.projection_skip dataset={resolved_dataset} detail={exc}")
-
                 logger.debug(
                     "kb_gdrive.ingested dataset_alias={} ident={} file_id={} bytes={} digest={}",
                     dataset_alias,
@@ -343,6 +356,21 @@ class GDriveDocumentLoader(KnowledgeLoader):
             skipped,
             errors,
         )
+        if processed > 0 or force_ingest:
+            try:
+                await self._kb.projection_service.project_dataset(dataset_alias, user, allow_rebuild=force_ingest)
+                await self._kb._wait_for_projection(dataset_alias, user, timeout_s=30.0)
+                counts = await self._kb.dataset_service.get_counts(dataset_alias, user)
+                logger.debug(
+                    ("projection:ready dataset_alias={} text_rows={} chunk_rows={} graph_nodes={} graph_edges={}"),
+                    dataset_alias,
+                    counts.get("text_rows"),
+                    counts.get("chunk_rows"),
+                    counts.get("graph_nodes"),
+                    counts.get("graph_edges"),
+                )
+            except Exception as exc:
+                logger.debug(f"kb_gdrive.projection_skip dataset={dataset_alias} detail={exc}")
         try:
             cache_key = f"ai_coach:gdrive:folder:{self.folder_id}:fingerprint"
             client = get_redis_client()

@@ -182,6 +182,11 @@ class Settings(BaseSettings):
     COGNEE_ENABLE_AGGRESSIVE_REBUILD: Annotated[bool, Field(default=False, description="If True, aggressively rebuild knowledge base on changes.")]
     KB_BOOTSTRAP_ALWAYS: Annotated[bool, Field(default=False, description="If True, always run the knowledge base bootstrap process on startup.")]
     KNOWLEDGE_BASE_FOLDER_ID: Annotated[str, Field(default="", description="Google Drive folder ID for knowledge base documents.")]
+    GDRIVE_DOWNLOAD_MAX_RETRIES: Annotated[int, Field(default=5, description="Maximum number of retries for Google Drive downloads.")]
+    GDRIVE_DOWNLOAD_CHUNK_RETRIES: Annotated[int, Field(default=2, description="Retries per Google Drive download chunk request.")]
+    GDRIVE_DOWNLOAD_INITIAL_DELAY: Annotated[float, Field(default=1.0, description="Initial delay in seconds before retrying a Google Drive download.")]
+    GDRIVE_DOWNLOAD_BACKOFF_FACTOR: Annotated[float, Field(default=2.0, description="Backoff multiplier for Google Drive download retries.")]
+    GDRIVE_DOWNLOAD_MAX_DELAY: Annotated[float, Field(default=10.0, description="Maximum delay in seconds between Google Drive download retries.")]
     KNOWLEDGE_REFRESH_INTERVAL: int = Field(default=60 * 60, description="Interval in seconds to refresh the knowledge base from the source.")
     KNOWLEDGE_REFRESH_START_DELAY: int = Field(default=180, description="Delay in seconds before starting the first knowledge base refresh.")
     COGNEE_SEARCH_MODE: Annotated[str, Field(default="GRAPH_COMPLETION_CONTEXT_EXTENSION", description="Search type for Cognee queries (e.g., 'GRAPH_COMPLETION_CONTEXT_EXTENSION').")]
