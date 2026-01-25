@@ -1,4 +1,5 @@
 from typing import Any, Optional, cast, List
+import datetime
 
 """Repositories for workout plan models."""
 
@@ -9,7 +10,8 @@ from django.db.models import QuerySet
 from django.core.cache import cache
 from rest_framework.exceptions import NotFound
 
-from apps.workout_plans.models import Program, Subscription
+from apps.workout_plans.models import Program, Subscription, SubscriptionProgressSnapshot
+from apps.workout_plans.progress_types import ProgressSnapshotPayload
 from config.app_settings import settings
 
 
@@ -122,3 +124,49 @@ class SubscriptionRepository:
         Subscription.objects.filter(id=instance.id, profile_id=profile_id).update(exercises=exercises)
         instance.exercises = exercises  # type: ignore[attr-defined]
         return cast(Subscription, instance)
+
+
+class SubscriptionProgressSnapshotRepository:
+    """Persist weekly subscription progress snapshots."""
+
+    @staticmethod
+    def upsert_week_snapshot(
+        *,
+        profile_id: int,
+        subscription_id: int,
+        week_start: datetime.date,
+        payload: ProgressSnapshotPayload,
+    ) -> SubscriptionProgressSnapshot:
+        snapshot, _ = SubscriptionProgressSnapshot.objects.update_or_create(
+            subscription_id=subscription_id,
+            week_start=week_start,
+            defaults={
+                "profile_id": profile_id,
+                "payload": payload,
+            },
+        )
+        return snapshot
+
+    @staticmethod
+    def get_recent_payloads(subscription_id: int, limit: int) -> list[ProgressSnapshotPayload]:
+        snapshots = (
+            SubscriptionProgressSnapshot.objects.filter(subscription_id=subscription_id)
+            .order_by("-week_start")
+            .values_list("payload", flat=True)[:limit]
+        )
+        return cast(list[ProgressSnapshotPayload], list(snapshots))
+
+    @staticmethod
+    def trim_old(subscription_id: int, keep_weeks: int) -> int:
+        if keep_weeks <= 0:
+            deleted, _ = SubscriptionProgressSnapshot.objects.filter(subscription_id=subscription_id).delete()
+            return deleted
+        ids = list(
+            SubscriptionProgressSnapshot.objects.filter(subscription_id=subscription_id)
+            .order_by("-week_start")
+            .values_list("id", flat=True)[keep_weeks:]
+        )
+        if not ids:
+            return 0
+        deleted, _ = SubscriptionProgressSnapshot.objects.filter(id__in=ids).delete()
+        return deleted

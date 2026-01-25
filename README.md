@@ -114,7 +114,8 @@ Internal endpoints rely on HMAC headers (`INTERNAL_KEY_ID`/`INTERNAL_API_KEY`). 
 
 ## Redis
 
-Redis keeps acting as the cache layer and Celery result backend. The production Docker Compose stack enables AOF persistence and mounts a volume so scheduled `redis_backup` jobs can export real data snapshots. The local stack still runs an in-memory Redis instance for convenience.
+Redis keeps acting as the cache layer and Celery result backend. The production Docker Compose stack enables AOF persistence and mounts a volume so scheduled `redis_backup` jobs can export real data snapshots. The local stack also enables Redis persistence to keep Cognee hash-store state between restarts (avoid re-ingesting knowledge); use `docker compose down -v` if you need a clean slate.
+If you need a softer reset during development, `redis-cli FLUSHDB` inside the Redis container clears the current DB without removing volumes.
 
 ---
 
@@ -185,11 +186,26 @@ For supersets, at least two exercises must share the same `superset_id`, and the
 * `AI_COACH_LOG_PAYLOADS` – set to `1` to log AI coach answer payloads/sources in DEBUG (default: `0`)
 * `AI_COACH_KB_ENABLED` – set to `0` to disable Cognee knowledge base usage globally (default: `1`)
 * `AI_COACH_GENERATION_SEARCH_TIMEOUT` – search timeout cap (seconds) for workout and diet generation modes
+* `AI_COACH_MAX_EXERCISE_SEARCH_CALLS` – max number of exercise catalog searches per run (default: `15`)
+* `AI_COACH_EXERCISE_SEARCH_LIMIT` – default max exercises returned per catalog search if no limit provided
 * `AI_COACH_CHAT_SUMMARY_PAIR_LIMIT` – number of client/coach message pairs before summarizing cached chat
 * `AI_COACH_CHAT_SUMMARY_MAX_TOKENS` – max tokens for the chat summary LLM request
 * `AI_COACH_REDIS_CHAT_DB` – Redis DB index for Cognee session cache (default: `2`)
 * `AI_COACH_REDIS_STATE_DB` – Redis DB index for AI coach idempotency state (default: `3`)
 * `AI_COACH_COGNEE_SESSION_TTL` – session TTL in seconds for Cognee cache (default: `0` disables expiry)
+* `COGNEE_PROJECTION_MAX_CONCURRENCY` – max concurrent Cognee projections
+* `COGNEE_PROJECTION_RETRY_MAX_ATTEMPTS` – maximum projection retry attempts
+* `COGNEE_PROJECTION_RETRY_INITIAL_DELAY` – initial delay (seconds) before projection retry
+* `COGNEE_PROJECTION_RETRY_BACKOFF_FACTOR` – backoff multiplier for projection retries
+* `COGNEE_PROJECTION_RETRY_MAX_DELAY` – max delay (seconds) between projection retries
+* `COGNEE_PROJECTION_DEBOUNCE_S` – minimum seconds between projection starts per dataset
+* `COGNEE_PROJECTION_BATCH_WINDOW_S` – batch window before projection runs (default: `60`, set `0` to disable)
+* `COGNEE_PROJECTION_MAX_DURATION_S` – max projection duration before pausing (default: `900`)
+* `COGNEE_PROJECTION_STALL_LIMIT` – number of projection runs without progress before stalling (default: `2`, set `0` to disable)
+* `COGNEE_PROJECTION_STALL_COOLDOWN_S` – cooldown seconds after stall detection (default: `900`)
+* `COGNEE_PROJECTION_DEGRADED_COOLDOWN_S` – cooldown seconds after storage errors (default: `300`)
+* `COGNEE_GDRIVE_SUMMARY_TTL_DAYS` – days to keep GDrive ingest summary in Redis (default: `7`, `0` disables expiry)
+* `WEEKLY_SURVEY_PROGRESS_WEEKS` – weeks of subscription progress history retained for weekly survey updates (default: `12`)
 * `ENABLE_KB_BACKUPS` – enable scheduled Neo4j/Qdrant backups (default: `false`)
 * `DIET_PLAN_PRICE` – credits charged for a 1-day nutrition plan generation
 

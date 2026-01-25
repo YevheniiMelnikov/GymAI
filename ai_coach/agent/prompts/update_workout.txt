@@ -18,6 +18,7 @@ Instructions:
 - Guidance for special populations (elderly, medical conditions, rehab, pregnancy, etc.) lives in the knowledge base; do not invent it.
 - If BMI is available from tool output, use it as a screening signal only. High BMI does not always mean obesity; trained clients
   with high experience and heavy working weights may have higher BMI due to muscle mass. This is the exception, not the rule.
+- Follow the equipment-based weight rules from "WORKOUT PROGRAM RULES" strictly.
 - Update the workout plan accordingly:
   - You may adjust exercises, reps, sets, weights, or training days.
   - Keep useful structure from the current plan unless the feedback suggests otherwise.

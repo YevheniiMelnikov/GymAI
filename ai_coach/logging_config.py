@@ -149,6 +149,26 @@ class ExternalNoiseFilter(logging.Filter):
         return True
 
 
+class TransientNoiseSamplingFilter(logging.Filter):
+    """Add sampling keys for known transient storage errors."""
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: D401
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 - fallback best-effort
+            return True
+        lowered = message.lower()
+        if "data processing failed for data item" in lowered:
+            record.sampling_key = "cognee:data_item_failed"
+        elif "error uploading data points to qdrant" in lowered:
+            record.sampling_key = "cognee:qdrant_upload_error"
+        elif "deadlockdetected" in lowered and "neo4j" in lowered:
+            record.sampling_key = "cognee:neo4j_deadlock"
+        elif "unexpected response: 408" in lowered or "request timeout" in lowered:
+            record.sampling_key = "cognee:request_timeout"
+        return True
+
+
 _CONFIGURED = False
 _LOG_ONCE_STATE: dict[str, dict[str, float | int]] = {}
 
@@ -160,6 +180,7 @@ def configure_logging() -> None:
         return
 
     sampling_filter = SamplingFilter(ttl=30.0)
+    transient_sampling_filter = TransientNoiseSamplingFilter()
 
     verbose = os.getenv("AI_COACH_VERBOSE_KB", "").strip() == "1"
     telemetry_enabled = (
@@ -185,6 +206,7 @@ def configure_logging() -> None:
     )
 
     intercept_handler = InterceptHandler()
+    intercept_handler.addFilter(transient_sampling_filter)
     intercept_handler.addFilter(sampling_filter)
     intercept_handler.addFilter(CogneeTelemetryFilter(telemetry_enabled))
     intercept_handler.addFilter(AiohttpSessionFilter())

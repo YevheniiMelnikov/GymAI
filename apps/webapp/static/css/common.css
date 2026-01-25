@@ -668,18 +668,17 @@ h1.page-title,
   display: flex;
   flex-direction: column;
   gap: clamp(10px, 1.6vw, 16px);
-  max-height: 0;
   opacity: 0;
-  overflow: hidden;
-  transform: translateY(-4px);
-  transition: opacity .35s ease, transform .55s ease;
+  transform: translateY(-3px);
+  transition: opacity .2s ease, transform .25s ease;
   will-change: opacity, transform;
 }
 .program-day[open] .program-day-list{
-  max-height: none;
   opacity: 1;
-  overflow: visible;
   transform: translateY(0);
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible;
 }
 .faq-answer{
   font-size: clamp(12px, 1.9vw, 14px);
@@ -795,19 +794,18 @@ h1.page-title,
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 0;
   opacity: 0;
-  overflow: hidden;
-  transform: translateY(-4px);
-  transition: opacity .34s ease, transform .5s ease;
+  transform: translateY(-3px);
+  transition: opacity .2s ease, transform .25s ease;
   will-change: opacity, transform;
   background: transparent;
 }
 .program-exercise-details[open] .program-exercise-content{
-  max-height: none;
   opacity: 1;
-  overflow: visible;
   transform: translateY(0);
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible;
 }
 .program-exercise-content--minimal{
   padding-top: clamp(4px, 1vw, 8px);
@@ -816,18 +814,31 @@ h1.page-title,
 .program-exercise-notes{ margin: 0; line-height: 1.4; }
 .exercise-sets-table{
   display: grid;
-  gap: 6px;
+  gap: 0;
+  border-radius: 12px;
+  overflow: hidden;
 }
 .exercise-sets-table__row{
   display: grid;
   grid-template-columns: minmax(48px, .6fr) repeat(2, minmax(96px, 1fr));
   gap: 12px;
   padding: 10px 14px;
-  border-radius: 12px;
+  border-radius: 0;
   background: color-mix(in oklab, var(--surface) 96%, var(--bg));
   color: var(--text);
   font-weight: 600;
   font-size: 13px;
+}
+.exercise-sets-table__row + .exercise-sets-table__row{
+  border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+.exercise-sets-table__row:first-child{
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+.exercise-sets-table__row:last-child{
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
 .exercise-sets-table__row--header{
   background: color-mix(in oklab, var(--surface) 88%, var(--bg));
@@ -1012,18 +1023,21 @@ h1.page-title,
 .history-page .history-panel .diet-flow{
   width: 100%;
 }
+.history-page .diet-flow[data-view="detail"] .diet-pane--list,
+.history-page .diet-flow[data-view="list"] .diet-pane--detail{
+  height: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
 .history-page .diet-list,
 .history-page .history-detail__content{
-  max-width: 720px;
   width: 100%;
-  margin-left: auto;
-  margin-right: auto;
 }
 .history-page .history-detail__content .week{
   margin-top: 6px;
-}
-.history-page .history-detail .diet-date{
-  text-align: center;
 }
 .program-panel{
   width: 100%;

@@ -4,10 +4,11 @@ MODE: update
      and heavy working weights may have higher BMI due to muscle mass. This is the exception, not the rule.
 2) Call tool_search_exercises(category, primary_muscles, secondary_muscles, equipment, name_query) up to the configured limit to fetch exercises from
    the catalog. Use broad queries; do not set a limit.
-   - Each call must target a distinct movement pattern (push / pull / hinge / squat-legs / core-carry-conditioning) and include multiple muscle groups.
-   - Avoid narrow, single-muscle queries when building a full program.
-   - Include equipment filters from the profile when available.
-   - Categories: conditioning, strength, health.
+   - Each call must target one distinct movement pattern (push / pull / hinge / squat-legs / core).
+   - Categories: strength (default), conditioning, health.
+   - If you need conditioning/health, search by category only (no extra filters).
+   - For strength: provide at most ONE primary muscle group. Do NOT pass secondary muscles.
+   - Equipment filter is optional; if used, pass at most ONE equipment type from the list below, otherwise omit it.
    - Muscle groups: chest, upper_back, lats, lower_back, front_delts, side_delts, rear_delts, biceps, triceps,
      forearms, quadriceps, hamstrings, glutes, calves, adductors, abductors, abs, obliques, core.
    - Equipment: kettlebell, dumbbell, barbell, smith, lever, cable, band, bodyweight, weighted bodyweight.

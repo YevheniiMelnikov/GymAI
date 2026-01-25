@@ -314,6 +314,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        kb = getattr(app.state, "kb", None)
+        if kb is not None and hasattr(kb, "shutdown"):
+            await kb.shutdown()
         shutdown_resources = container.shutdown_resources()
         if shutdown_resources is not None:
             await shutdown_resources

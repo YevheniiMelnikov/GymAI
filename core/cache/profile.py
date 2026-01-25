@@ -108,7 +108,19 @@ class ProfileCacheManager(BaseCacheManager):
     @classmethod
     async def update_record(cls, profile_id: int, updates: dict[str, Any]) -> None:
         try:
-            await cls.update_json(cls.PROFILE_DATA_KEY, str(profile_id), updates)
+            existing = await cls.get_json(cls.PROFILE_DATA_KEY, str(profile_id))
+            if not existing or any(key not in existing for key in ("id", "tg_id", "language")):
+                profile = await APIService.profile.get_profile(profile_id)
+                if profile is None:
+                    logger.warning(f"Cannot update profile cache - profile not found for id={profile_id}")
+                    return
+                payload = profile.model_dump(mode="json")
+                payload.update(updates)
+                await cls._cache_profile_data(profile.id, payload)
+                logger.debug(f"Profile record refreshed profile_id={profile_id} with {updates}")
+                return
+            existing.update(updates)
+            await cls._cache_profile_data(profile_id, existing)
             logger.debug(f"Profile record updated profile_id={profile_id} with {updates}")
         except Exception as exc:
             logger.error(f"Failed to update profile record profile_id={profile_id}: {exc}")

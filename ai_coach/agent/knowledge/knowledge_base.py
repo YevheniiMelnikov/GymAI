@@ -69,6 +69,9 @@ class KnowledgeBase:
     def __init__(self) -> None:
         type(self).GLOBAL_DATASET = settings.COGNEE_GLOBAL_DATASET
         self._projection_health: dict[str, tuple[ProjectionStatus, str]] = {}
+        self._last_loader_result: dict[str, dict[str, Any]] = {}
+        self._degraded_until: float = 0.0
+        self._degraded_reason: str | None = None
         self.dataset_service = DatasetService()
         self.storage_service = StorageService(self.dataset_service)
         self.dataset_service.set_storage_service(self.storage_service)  # Wire it up
@@ -235,10 +238,19 @@ class KnowledgeBase:
             logger.info("knowledge_startup_skip_projection dataset={} reason=graph_ready", self.GLOBAL_DATASET)
             return
 
-        try:
-            await self.rebuild_dataset(self.GLOBAL_DATASET, self._user, sha_only=True)
-        except Exception as exc:
-            logger.warning(f"kb_global_rebuild_failed detail={exc}")
+        restored_hash_store = False
+        if not settings.COGNEE_ENABLE_AGGRESSIVE_REBUILD:
+            try:
+                restored_hash_store = await self._restore_hash_store_if_needed()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"kb_hashstore_restore_failed detail={exc}")
+        if not restored_hash_store:
+            try:
+                await self.rebuild_dataset(self.GLOBAL_DATASET, self._user, sha_only=True)
+            except Exception as exc:
+                logger.warning(f"kb_global_rebuild_failed detail={exc}")
+        else:
+            logger.info("kb_hashstore_restore_done dataset={} reason=startup_skip_rebuild", self.GLOBAL_DATASET)
         try:
             await self.refresh()
         except Exception as e:
@@ -265,6 +277,43 @@ class KnowledgeBase:
         nodes, edges = await self.dataset_service.get_graph_counts(alias, self._user)
         return (nodes + edges) > 0
 
+    async def _restore_hash_store_if_needed(self) -> bool:
+        alias = self.dataset_service.alias_for_dataset(self.GLOBAL_DATASET)
+        try:
+            from ai_coach.agent.knowledge.utils.hash_store import HashStore  # noqa: PLC0415
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("kb_hashstore_restore_unavailable detail={}", exc)
+            return False
+        try:
+            hash_count = await HashStore.count(alias)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"kb_hashstore_restore_count_failed dataset={alias} detail={exc}")
+            return False
+        if hash_count > 0:
+            return False
+        user_ctx = self.dataset_service.to_user_ctx_or_default(self._user)
+        try:
+            entries = await self.dataset_service.list_dataset_entries(alias, user_ctx)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"kb_hashstore_restore_list_failed dataset={alias} detail={exc}")
+            return False
+        if not entries:
+            return False
+        missing, healed = await self.storage_service.heal_dataset_storage(
+            alias,
+            user_ctx,
+            entries=entries,
+            reason="startup_hashstore_restore",
+        )
+        logger.info(
+            "kb_hashstore_restored dataset={} entries={} missing_storage={} healed_storage={}",
+            alias,
+            len(entries),
+            missing,
+            healed,
+        )
+        return True
+
     async def refresh(self, force: bool = False) -> None:
         from cognee.modules.data.exceptions import DatasetNotFoundError
         from cognee.modules.users.exceptions.exceptions import PermissionDeniedError
@@ -284,6 +333,22 @@ class KnowledgeBase:
         self.dataset_service._PROJECTED_DATASETS.discard(ds)
         if self._loader:
             await self._loader.refresh(force=force)
+        loader_result = self._last_loader_result.get(ds)
+        if loader_result and loader_result.get("projection_requested") and not force:
+            logger.info(
+                f"knowledge_refresh_projection_skipped dataset={ds} reason=loader_projection_done "
+                f"processed={loader_result.get('processed', 0)} "
+                f"skipped={loader_result.get('skipped', 0)} "
+                f"errors={loader_result.get('errors', 0)}"
+            )
+            counts = await self.dataset_service.get_counts(ds, user_ctx)
+            logger.debug(
+                f"knowledge_refresh_done dataset={ds} force={force} "
+                f"text_rows={counts.get('text_rows')} chunk_rows={counts.get('chunk_rows')} "
+                f"graph_nodes={counts.get('graph_nodes')} graph_edges={counts.get('graph_edges')}"
+            )
+            await self._memify_global_dataset(user_ctx)
+            return
         try:
             await cognee.cognify(datasets=[ds], user=user_ctx)
         except (PermissionDeniedError, DatasetNotFoundError) as e:
@@ -308,6 +373,65 @@ class KnowledgeBase:
             f"graph_nodes={counts.get('graph_nodes')} graph_edges={counts.get('graph_edges')}"
         )
         await self._memify_global_dataset(user_ctx)
+
+    def mark_degraded(self, *, reason: str, cooldown_s: float) -> None:
+        if cooldown_s <= 0:
+            return
+        until = monotonic() + cooldown_s
+        if until <= self._degraded_until:
+            return
+        self._degraded_until = until
+        self._degraded_reason = reason
+        logger.warning(f"knowledge_degraded reason={reason} cooldown_s={cooldown_s:.0f}")
+
+    def is_degraded(self) -> bool:
+        return self._degraded_until > monotonic()
+
+    def degraded_info(self) -> dict[str, Any]:
+        remaining = max(self._degraded_until - monotonic(), 0.0)
+        return {
+            "active": self.is_degraded(),
+            "reason": self._degraded_reason,
+            "remaining_s": round(remaining, 1),
+        }
+
+    def clear_degraded(self) -> None:
+        self._degraded_until = 0.0
+        self._degraded_reason = None
+
+    def resume_projections(self, dataset: str | None = None) -> dict[str, Any]:
+        if dataset:
+            alias = self.dataset_service.resolve_dataset_alias(dataset)
+        else:
+            alias = self.dataset_service.alias_for_dataset(self.GLOBAL_DATASET)
+        self.projection_service.clear_stall(alias)
+        self.clear_degraded()
+        return {"status": "ok", "dataset": alias}
+
+    async def shutdown(self) -> None:
+        if self._loader is not None:
+            try:
+                await self._loader.shutdown()
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(f"knowledge_loader_shutdown_failed detail={exc}")
+        await self.projection_service.shutdown()
+
+    def record_loader_result(
+        self,
+        dataset_alias: str,
+        *,
+        processed: int,
+        skipped: int,
+        errors: int,
+        projection_requested: bool,
+    ) -> None:
+        alias = self.dataset_service.resolve_dataset_alias(dataset_alias)
+        self._last_loader_result[alias] = {
+            "processed": processed,
+            "skipped": skipped,
+            "errors": errors,
+            "projection_requested": projection_requested,
+        }
 
     async def _memify_global_dataset(self, user_ctx: Any | None) -> None:
         env = str(getattr(settings, "ENVIRONMENT", "development")).lower()
@@ -742,21 +866,22 @@ class KnowledgeBase:
                     logging.DEBUG, "projection:requested", dataset=resolved_alias, reason="ingest"
                 )
                 await self.projection_service.project_dataset(resolved_alias, actor, allow_rebuild=False)
-                await self._wait_for_projection(resolved_alias, actor, timeout_s=15.0)
-                counts = await self.dataset_service.get_counts(resolved_alias, actor)
-                logger.debug(
-                    (
-                        f"projection:ready dataset={resolved_alias} text_rows={counts.get('text_rows')} "
-                        f"chunk_rows={counts.get('chunk_rows')} graph_nodes={counts.get('graph_nodes')} "
-                        f"graph_edges={counts.get('graph_edges')}"
+                if not self.projection_service.is_batching_enabled():
+                    await self._wait_for_projection(resolved_alias, actor, timeout_s=15.0)
+                    counts = await self.dataset_service.get_counts(resolved_alias, actor)
+                    logger.debug(
+                        (
+                            f"projection:ready dataset={resolved_alias} text_rows={counts.get('text_rows')} "
+                            f"chunk_rows={counts.get('chunk_rows')} graph_nodes={counts.get('graph_nodes')} "
+                            f"graph_edges={counts.get('graph_edges')}"
+                        )
                     )
-                )
-                if (counts.get("text_rows", 0) or 0) > 0 and (counts.get("chunk_rows", 0) or 0) == 0:
-                    preview = (normalized_text or "")[:400]
-                    logger.error(
-                        f"projection:empty_after_text dataset={resolved_alias} "
-                        f"digest={digest_sha[:12]} preview={preview}"
-                    )
+                    if (counts.get("text_rows", 0) or 0) > 0 and (counts.get("chunk_rows", 0) or 0) == 0:
+                        preview = (normalized_text or "")[:400]
+                        logger.error(
+                            f"projection:empty_after_text dataset={resolved_alias} "
+                            f"digest={digest_sha[:12]} preview={preview}"
+                        )
             except Exception as exc:
                 logger.debug(f"projection:post_ingest_diag_skipped dataset={resolved_alias} detail={exc}")
         return resolved, True

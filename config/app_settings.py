@@ -111,7 +111,8 @@ class Settings(BaseSettings):
     AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin", description="Username for AI Coach knowledge base refresh endpoint.")]
     AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password", description="Password for AI Coach knowledge base refresh endpoint.")]
     AI_COACH_MAX_TOOL_CALLS: Annotated[int, Field(default=5, description="Maximum number of tool calls an AI agent can make in one turn.")]
-    AI_COACH_MAX_EXERCISE_SEARCH_CALLS: Annotated[int, Field(default=5, description="Maximum number of exercise catalog searches per run in program/subscription/update modes.")]
+    AI_COACH_MAX_EXERCISE_SEARCH_CALLS: Annotated[int, Field(default=15, description="Maximum number of exercise catalog searches per run in program/subscription/update modes.")]
+    AI_COACH_EXERCISE_SEARCH_LIMIT: Annotated[int, Field(default=120, description="Maximum number of exercises returned per tool_search_exercises call when no explicit limit is provided.")]
     AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60, description="Default timeout for requests to the AI Coach in seconds.")]
     AI_COACH_MAX_RUN_SECONDS: Annotated[float, Field(default=200.0, description="Time budget in seconds for a single AI coach agent run before aborting.")]
     AI_COACH_GLOBAL_PROJECTION_TIMEOUT: Annotated[float, Field(default=15.0, description="Timeout for global projection operations in seconds.")]
@@ -180,6 +181,17 @@ class Settings(BaseSettings):
     COGNEE_STORAGE_SHA_PRIMARY: Annotated[bool, Field(default=True, description="Use SHA-based primary keys in Cognee storage.")]
     COGNEE_GLOBAL_DATASET: Annotated[str, Field(default="kb_global", description="Name of the global dataset in the knowledge base.")]
     COGNEE_ENABLE_AGGRESSIVE_REBUILD: Annotated[bool, Field(default=False, description="If True, aggressively rebuild knowledge base on changes.")]
+    COGNEE_PROJECTION_MAX_CONCURRENCY: Annotated[int, Field(default=1, description="Maximum number of concurrent Cognee projection runs.")]
+    COGNEE_PROJECTION_RETRY_MAX_ATTEMPTS: Annotated[int, Field(default=4, description="Maximum number of retry attempts for failed Cognee projection runs.")]
+    COGNEE_PROJECTION_RETRY_INITIAL_DELAY: Annotated[float, Field(default=1.0, description="Initial delay in seconds before retrying a failed Cognee projection run.")]
+    COGNEE_PROJECTION_RETRY_BACKOFF_FACTOR: Annotated[float, Field(default=2.0, description="Backoff multiplier for Cognee projection retries.")]
+    COGNEE_PROJECTION_RETRY_MAX_DELAY: Annotated[float, Field(default=15.0, description="Maximum delay in seconds between Cognee projection retries.")]
+    COGNEE_PROJECTION_DEBOUNCE_S: Annotated[float, Field(default=30.0, description="Minimum seconds between projection starts for the same dataset alias.")]
+    COGNEE_PROJECTION_BATCH_WINDOW_S: Annotated[float, Field(default=60.0, description="Batch window in seconds before running a scheduled projection; 0 disables batching.")]
+    COGNEE_PROJECTION_MAX_DURATION_S: Annotated[float, Field(default=900.0, description="Maximum duration in seconds for a projection run before pausing further projections.")]
+    COGNEE_PROJECTION_STALL_LIMIT: Annotated[int, Field(default=2, description="Number of consecutive projections without progress before stalling further projections; 0 disables.")]
+    COGNEE_PROJECTION_STALL_COOLDOWN_S: Annotated[float, Field(default=900.0, description="Cooldown in seconds for projection after stall detection.")]
+    COGNEE_PROJECTION_DEGRADED_COOLDOWN_S: Annotated[float, Field(default=300.0, description="Cooldown in seconds for degraded knowledge searches after storage errors.")]
     KB_BOOTSTRAP_ALWAYS: Annotated[bool, Field(default=False, description="If True, always run the knowledge base bootstrap process on startup.")]
     KNOWLEDGE_BASE_FOLDER_ID: Annotated[str, Field(default="", description="Google Drive folder ID for knowledge base documents.")]
     GDRIVE_DOWNLOAD_MAX_RETRIES: Annotated[int, Field(default=5, description="Maximum number of retries for Google Drive downloads.")]
@@ -200,6 +212,7 @@ class Settings(BaseSettings):
     AI_PLAN_NOTIFY_TIMEOUT: Annotated[int, Field(default=900, description="Timeout in seconds for sending workout plan notifications.")]
     AI_PLAN_NOTIFY_POLL_INTERVAL: Annotated[int, Field(default=30, description="Polling interval in seconds for workout plan notification status.")]
     AI_PLAN_NOTIFY_FAILURE_TTL: Annotated[int, Field(default=86400, description="TTL in seconds for storing workout plan notification failures.")]
+    WEEKLY_SURVEY_PROGRESS_WEEKS: Annotated[int, Field(default=12, description="Number of weeks of subscription progress history retained for weekly survey updates.")]
 
     # --- Exercise Replacement Limits ---
     EXERCISE_REPLACE_PROGRAM_LIMIT: Annotated[int, Field(default=3, description="Maximum number of exercise replacements per program.")]
@@ -258,6 +271,7 @@ class Settings(BaseSettings):
     EMAIL: Annotated[str, Field(default="", description="Contact email address.")]
     BACKUP_RETENTION_DAYS: int = Field(default=30, description="Number of days to retain database and storage backups.")
     ENABLE_KB_BACKUPS: bool = Field(default=False, description="Enable scheduled backups for Neo4j and Qdrant.")
+    COGNEE_GDRIVE_SUMMARY_TTL_DAYS: int = Field(default=7, description="Days to retain Google Drive ingestion summary in Redis; 0 disables expiry.")
 
     # --- Admin Credentials ---
     DJANGO_ADMIN: Annotated[str, Field(default="admin", description="Username for the Django admin panel superuser.")]

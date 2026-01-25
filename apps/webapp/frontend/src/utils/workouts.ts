@@ -1,4 +1,5 @@
-import type { HistoryItem, Locale } from '../api/types';
+import type { Exercise, HistoryItem, Locale } from '../api/types';
+import type { ExerciseSetPayload } from '../api/http';
 
 type WorkoutKind = 'program' | 'subscription';
 
@@ -58,4 +59,49 @@ export const waitForLatestWorkoutId = async (
         }
     }
     return null;
+};
+
+type ExerciseSetsPayload = {
+    sets: ExerciseSetPayload[];
+    weightUnit: string;
+};
+
+const parseNumericRange = (value: number | string | null | undefined, fallback: number): number => {
+    if (value === null || value === undefined || value === '') return fallback;
+    if (typeof value === 'number') return value;
+    const matches = value.match(/\d+(?:[.,]\d+)?/g);
+    if (!matches) return fallback;
+    const numbers = matches
+        .map((item) => Number(item.replace(',', '.')))
+        .filter((item) => !Number.isNaN(item));
+    if (numbers.length === 0) return fallback;
+    return Math.min(...numbers);
+};
+
+const resolveWeightUnit = (_exercise: Exercise): string => {
+    return 'kg';
+};
+
+export const buildExerciseSetsPayload = (exercise: Exercise): ExerciseSetsPayload => {
+    const weightUnit = resolveWeightUnit(exercise);
+    if (exercise.sets_detail && exercise.sets_detail.length > 0) {
+        return {
+            weightUnit,
+            sets: exercise.sets_detail.map((detail) => ({
+                reps: Math.max(1, Math.floor(parseNumericRange(detail.reps, 1))),
+                weight: Math.max(0, parseNumericRange(detail.weight, 0))
+            }))
+        };
+    }
+
+    const setsCount = Math.max(1, Math.floor(parseNumericRange(exercise.sets, 1)));
+    const reps = Math.max(1, Math.floor(parseNumericRange(exercise.reps, 1)));
+    const weight = Math.max(0, parseNumericRange(exercise.weight?.value ?? null, 0));
+    return {
+        weightUnit,
+        sets: Array.from({ length: setsCount }, () => ({
+            reps,
+            weight
+        }))
+    };
 };

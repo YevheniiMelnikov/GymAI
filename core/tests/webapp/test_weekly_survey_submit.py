@@ -1,9 +1,10 @@
 import asyncio
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from importlib import import_module
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from django.http import HttpRequest, JsonResponse
@@ -22,6 +23,8 @@ def test_weekly_survey_submit_updates_sets(monkeypatch: pytest.MonkeyPatch) -> N
     async def runner() -> None:
         updated_payload: dict[str, object] = {}
         updated_cache: dict[str, object] = {}
+        captured_feedback: dict[str, str] = {}
+        stored_snapshots: list[dict[str, object]] = []
 
         async def noop_ready() -> None:
             return None
@@ -84,7 +87,27 @@ def test_weekly_survey_submit_updates_sets(monkeypatch: pytest.MonkeyPatch) -> N
 
         monkeypatch.setattr(views.SubscriptionRepository, "update_exercises", fake_update_exercises)
         monkeypatch.setattr(views.Cache.workout, "update_subscription", fake_cache_update)
-        monkeypatch.setattr(views, "enqueue_subscription_update", lambda **_kwargs: True)
+        monkeypatch.setattr(
+            views,
+            "enqueue_subscription_update",
+            lambda **kwargs: captured_feedback.update({"feedback": str(kwargs.get("feedback", ""))}) or True,
+        )
+        monkeypatch.setattr(views, "resolve_progress_week_start", lambda: date(2025, 1, 6))
+        monkeypatch.setattr(
+            views.SubscriptionProgressSnapshotRepository,
+            "upsert_week_snapshot",
+            lambda **kwargs: stored_snapshots.append(cast(dict[str, object], kwargs.get("payload", {}))),
+        )
+        monkeypatch.setattr(
+            views.SubscriptionProgressSnapshotRepository,
+            "get_recent_payloads",
+            lambda *_args, **_kwargs: list(stored_snapshots),
+        )
+        monkeypatch.setattr(
+            views.SubscriptionProgressSnapshotRepository,
+            "trim_old",
+            lambda *_args, **_kwargs: 0,
+        )
         monkeypatch.setattr(
             views, "build_internal_hmac_auth_headers", lambda **_kwargs: (_ for _ in ()).throw(Exception("skip"))
         )
@@ -126,5 +149,7 @@ def test_weekly_survey_submit_updates_sets(monkeypatch: pytest.MonkeyPatch) -> N
         assert updated_payload["exercises"][0]["exercises"][0]["reps"] == "10-12"
         assert updated_payload["exercises"][0]["exercises"][0]["weight"] == "50-55 kg"
         assert "exercises" in updated_cache
+        assert "Progress history" in captured_feedback.get("feedback", "")
+        assert "Squat" in captured_feedback.get("feedback", "")
 
     asyncio.run(runner())

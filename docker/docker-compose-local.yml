@@ -115,7 +115,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: redis
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -422,6 +424,7 @@ volumes:
   qdrant_data:
   data_storage:
   rabbitmqdata:
+  redisdata:
 
   neo4j_logs:
   neo4j_config:

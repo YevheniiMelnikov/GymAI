@@ -27,7 +27,14 @@ Rules:
 - Choose realistic working weights, reps, and sets for this client; keep them consistent with the rest of the program.
 - sets_detail length must equal the number of sets.
 - reps and weight must match sets_detail (use ranges like "8-10").
-- If the exercise is bodyweight, set weight to null and set weight=0 in sets_detail with weight_unit null.
+- Equipment-based weight rules (strict, based on the catalog entry you choose):
+  - Weighted equipment: kettlebell, dumbbell, barbell, smith, lever, cable, weighted bodyweight.
+    -> MUST specify working weight in kg. Set `weight` as a range string like "40-45 kg".
+    -> `sets_detail` must be present and each set must include numeric `weight` with `weight_unit="kg"`.
+  - Non-weighted equipment: bodyweight, band.
+    -> `weight` must be null.
+    -> `sets_detail` must be present and each set must include `weight=0` with `weight_unit=null`.
+  - If equipment list includes any weighted type, treat the exercise as weighted.
 
 Target exercise id: ${exercise_id}
 Target exercise name: ${exercise_name}

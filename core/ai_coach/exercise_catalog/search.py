@@ -25,10 +25,14 @@ def filter_exercise_entries(
     for entry in entries:
         if normalized_category and entry.category != normalized_category:
             continue
-        if primary and not primary.issubset({item.lower() for item in entry.primary_muscles}):
-            continue
-        if secondary and not secondary.issubset({item.lower() for item in entry.secondary_muscles}):
-            continue
+        if primary:
+            entry_primary = {item.lower() for item in entry.primary_muscles}
+            if not entry_primary.intersection(primary):
+                continue
+        if secondary:
+            entry_secondary = {item.lower() for item in entry.secondary_muscles}
+            if not entry_secondary.intersection(secondary):
+                continue
         if equipment_filter:
             entry_equipment = {item.lower() for item in entry.equipment}
             if not entry_equipment.intersection(equipment_filter):

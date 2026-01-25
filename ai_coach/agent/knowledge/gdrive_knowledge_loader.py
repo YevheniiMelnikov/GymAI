@@ -3,8 +3,10 @@ import logging
 import hashlib
 import io
 import ssl
+import json
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Final, Mapping, cast
+from typing import Any, Callable, Final, Mapping, cast, Literal, TypedDict
 
 from google.oauth2.service_account import Credentials  # pyrefly: ignore[import-error]
 from googleapiclient.discovery import build  # pyrefly: ignore[import-error]
@@ -21,6 +23,29 @@ from .knowledge_base import KnowledgeBase
 from .utils.helpers import sanitize_text
 
 SCOPES: Final = ["https://www.googleapis.com/auth/drive.readonly"]
+GDriveSummaryStatus = Literal["running", "skipped", "done", "partial", "error"]
+
+
+class GDriveLoadSummary(TypedDict):
+    status: GDriveSummaryStatus
+    dataset: str
+    dataset_alias: str
+    folder_id: str
+    files_total: int
+    processed: int
+    skipped: int
+    errors: int
+    current: str | None
+    started_at: str
+    updated_at: str
+    finished_at: str | None
+    reason: str | None
+    fingerprint: str | None
+    duration_s: float | None
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def _read_txt(data: bytes) -> str:
@@ -186,6 +211,22 @@ class GDriveDocumentLoader(KnowledgeLoader):
                 collected.append(enriched)
         return collected
 
+    def _summary_cache_key(self) -> str:
+        return f"ai_coach:gdrive:folder:{self.folder_id}:summary"
+
+    async def _store_summary(self, summary: GDriveLoadSummary) -> None:
+        try:
+            client = get_redis_client()
+            payload = json.dumps(summary)
+            ttl_days = int(settings.COGNEE_GDRIVE_SUMMARY_TTL_DAYS)
+            if ttl_days > 0:
+                ttl_s = ttl_days * 24 * 60 * 60
+                await client.set(self._summary_cache_key(), payload, ex=ttl_s)
+            else:
+                await client.set(self._summary_cache_key(), payload)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"kb_gdrive.summary_store_failed detail={exc}")
+
     async def load(self, force_ingest: bool = False) -> None:
         if not self.folder_id:
             logger.info("No GDRIVE_FOLDER_ID set; skip load")
@@ -196,187 +237,293 @@ class GDriveDocumentLoader(KnowledgeLoader):
                 logger.info("kb_gdrive.skip reason=lock_held")
                 return
 
-        files = self._scan_drive_tree(self.folder_id)
-        logger.debug(f"kb_gdrive.scan start folder_id={self.folder_id} dataset={self._dataset_name} files={len(files)}")
+        dataset_alias = self._kb.dataset_service.alias_for_dataset(self._dataset_name)
+        started_at = _utc_now()
+        started_monotonic = asyncio.get_running_loop().time()
+        summary: GDriveLoadSummary = {
+            "status": "running",
+            "dataset": self._dataset_name,
+            "dataset_alias": dataset_alias,
+            "folder_id": self.folder_id,
+            "files_total": 0,
+            "processed": 0,
+            "skipped": 0,
+            "errors": 0,
+            "current": None,
+            "started_at": started_at,
+            "updated_at": started_at,
+            "finished_at": None,
+            "reason": None,
+            "fingerprint": None,
+            "duration_s": None,
+        }
+        await self._store_summary(summary)
         processed = 0
         skipped = 0
         errors = 0
-        user = getattr(self._kb, "_user", None)
-        if user is None:
-            user = await self._kb.dataset_service.get_cognee_user()
-        if user is None:
-            logger.warning("kb_gdrive.skip reason=missing_user")
-            return
-        dataset_alias = self._kb.dataset_service.alias_for_dataset(self._dataset_name)
-        fingerprint_items = [
-            f"{item.get('id', '')}:{item.get('modifiedTime', '')}:{item.get('size', '')}" for item in files
-        ]
-        fingerprint = hashlib.sha256("|".join(sorted(fingerprint_items)).encode("utf-8")).hexdigest()
-        if not force_ingest:
-            cache_key = f"ai_coach:gdrive:folder:{self.folder_id}:fingerprint"
-            try:
-                client = get_redis_client()
-                cached = await client.get(cache_key)
-                if cached == fingerprint:
-                    logger.info("kb_gdrive.skip reason=fingerprint_match dataset={}", dataset_alias)
-                    return
-            except Exception as exc:  # noqa: BLE001
-                logger.debug(f"kb_gdrive.fingerprint_check_failed detail={exc}")
-
-        for f in files:
-            name = f.get("name") or ""
-            file_id = f.get("id")
-            size = int(f.get("size") or 0)
-            ext = Path(name).suffix.lower()
-            kb_path = str(f.get("kb_path") or name)
-
-            if ext not in self._PARSERS:
-                logger.debug(
-                    "kb_gdrive.file_decision dataset={} file={} decision=skip reason=unsupported_extension",
-                    dataset_alias,
-                    kb_path,
-                )
-                skipped += 1
-                continue
-            if (size or 0) > settings.MAX_FILE_SIZE_MB * (1024 * 1024):
-                logger.debug(
-                    "kb_gdrive.file_decision dataset={} file={} decision=skip reason=file_too_large size_mb={:.1f}",
-                    dataset_alias,
-                    kb_path,
-                    size / 1_048_576,
-                )
-                skipped += 1
-                continue
-            if not file_id:
-                logger.warning(
-                    "kb_gdrive.file_decision dataset={} file={} decision=skip reason=missing_file_id",
-                    dataset_alias,
-                    kb_path,
-                )
-                skipped += 1
-                continue
-
-            try:
-                data = await self._download_file(file_id)
-                parser = self._PARSERS[ext]
-                text = await asyncio.to_thread(parser, data) if ext != ".txt" else parser(data)
-                text = sanitize_text(text)
-
-                normalized = self._kb.dataset_service._normalize_text(text)
-                if not normalized.strip():
-                    self._kb.dataset_service.log_once(
-                        logging.INFO,
-                        "kb_gdrive.empty_document",
-                        dataset=dataset_alias,
-                        file_id=file_id,
-                        name=name,
-                        source="gdrive",
-                        min_interval=120.0,
-                    )
-                    skipped += 1
-                    continue
-
-                metadata = {
-                    "dataset": dataset_alias,
-                    "source": "gdrive",
-                    "file_id": file_id,
-                    "name": name,
-                    "path": kb_path,
-                    "folder_path": f.get("kb_folder_path") or "",
-                    "mime_type": f.get("mimeType"),
-                    "size": size,
-                }
-                modified_ts = f.get("modifiedTime") or f.get("modified_time")
-                if modified_ts:
-                    metadata["modified_ts"] = modified_ts
-
-                payload_bytes = normalized.encode("utf-8")
-                digest_sha = hashlib.sha256(payload_bytes).hexdigest()
-                resolved_dataset, created = await self._kb.update_dataset(
-                    normalized,
-                    self._dataset_name,
-                    user,
-                    node_set=[f"gdrive:{file_id}"],
-                    metadata=metadata,
-                    force_ingest=force_ingest,
-                    trigger_projection=False,
-                )
-                is_duplicate = not created
-                if is_duplicate and not force_ingest:
-                    skipped += 1
-                    ident = self._kb.dataset_service.get_registered_identifier(dataset_alias)
-                    logger.debug(
-                        (
-                            "kb_gdrive.file_decision dataset={} file={} decision=skip "
-                            "reason=duplicate_digest digest={} ident={}"
-                        ),
-                        dataset_alias,
-                        kb_path,
-                        digest_sha[:12],
-                        ident,
-                    )
-                    continue
-
-                processed += 1
-                if is_duplicate:
-                    ident = self._kb.dataset_service.get_registered_identifier(dataset_alias) or ""
-                    logger.debug(
-                        (
-                            "kb_gdrive.file_decision dataset={} file={} decision=force_ingest "
-                            "reason=duplicate_digest digest={} ident={}"
-                        ),
-                        dataset_alias,
-                        kb_path,
-                        digest_sha[:12],
-                        ident,
-                    )
-                else:
-                    logger.debug(
-                        "kb_gdrive.file_decision dataset={} file={} decision=process reason=new_content",
-                        dataset_alias,
-                        kb_path,
-                    )
-
-                logger.debug(
-                    "kb_gdrive.ingested dataset_alias={} ident={} file_id={} bytes={} digest={}",
-                    dataset_alias,
-                    resolved_dataset,
-                    file_id,
-                    len(payload_bytes),
-                    digest_sha[:12],
-                )
-            except Exception:
-                logger.exception(f"Failed to process {kb_path} (id={file_id})")
-                errors += 1
-        logger.debug(
-            "kb_gdrive.summary dataset={} files_total={} processed={} skipped={} errors={}",
-            self._dataset_name,
-            len(files),
-            processed,
-            skipped,
-            errors,
-        )
-        if processed > 0 or force_ingest:
-            try:
-                await self._kb.projection_service.project_dataset(dataset_alias, user, allow_rebuild=force_ingest)
-                await self._kb._wait_for_projection(dataset_alias, user, timeout_s=30.0)
-                counts = await self._kb.dataset_service.get_counts(dataset_alias, user)
-                logger.debug(
-                    ("projection:ready dataset_alias={} text_rows={} chunk_rows={} graph_nodes={} graph_edges={}"),
-                    dataset_alias,
-                    counts.get("text_rows"),
-                    counts.get("chunk_rows"),
-                    counts.get("graph_nodes"),
-                    counts.get("graph_edges"),
-                )
-            except Exception as exc:
-                logger.debug(f"kb_gdrive.projection_skip dataset={dataset_alias} detail={exc}")
         try:
-            cache_key = f"ai_coach:gdrive:folder:{self.folder_id}:fingerprint"
-            client = get_redis_client()
-            await client.set(cache_key, fingerprint)
+            files = self._scan_drive_tree(self.folder_id)
+            total_files = len(files)
+            progress_every = max(1, total_files // 20)
+            summary["files_total"] = total_files
+            summary["updated_at"] = _utc_now()
+            await self._store_summary(summary)
+            logger.info(
+                f"kb_gdrive.scan start folder_id={self.folder_id} dataset={self._dataset_name} files={total_files}"
+            )
+
+            user = getattr(self._kb, "_user", None)
+            if user is None:
+                user = await self._kb.dataset_service.get_cognee_user()
+            if user is None:
+                logger.warning("kb_gdrive.skip reason=missing_user")
+                finished_at = _utc_now()
+                summary["status"] = "skipped"
+                summary["reason"] = "missing_user"
+                summary["updated_at"] = finished_at
+                summary["finished_at"] = finished_at
+                summary["duration_s"] = asyncio.get_running_loop().time() - started_monotonic
+                await self._store_summary(summary)
+                return
+
+            fingerprint_items = [
+                f"{item.get('id', '')}:{item.get('modifiedTime', '')}:{item.get('size', '')}" for item in files
+            ]
+            fingerprint = hashlib.sha256("|".join(sorted(fingerprint_items)).encode("utf-8")).hexdigest()
+            summary["fingerprint"] = fingerprint
+            summary["updated_at"] = _utc_now()
+            await self._store_summary(summary)
+            if not force_ingest:
+                cache_key = f"ai_coach:gdrive:folder:{self.folder_id}:fingerprint"
+                try:
+                    client = get_redis_client()
+                    cached = await client.get(cache_key)
+                    if cached == fingerprint:
+                        logger.info("kb_gdrive.skip reason=fingerprint_match dataset={}", dataset_alias)
+                        finished_at = _utc_now()
+                        summary["status"] = "skipped"
+                        summary["reason"] = "fingerprint_match"
+                        summary["updated_at"] = finished_at
+                        summary["finished_at"] = finished_at
+                        summary["duration_s"] = asyncio.get_running_loop().time() - started_monotonic
+                        await self._store_summary(summary)
+                        return
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug(f"kb_gdrive.fingerprint_check_failed detail={exc}")
+
+            for index, f in enumerate(files, start=1):
+                name = str(f.get("name") or "").strip()
+                file_id = f.get("id")
+                size = int(f.get("size") or 0)
+                ext = Path(name).suffix.lower()
+                kb_path = str(f.get("kb_path") or name)
+
+                should_log_progress = total_files > 0 and (
+                    index == 1 or index % progress_every == 0 or index == total_files
+                )
+                logger.debug(
+                    f"kb_gdrive.file_start dataset={dataset_alias} index={index}/{total_files} "
+                    f"file={kb_path} size={size}"
+                )
+
+                try:
+                    if ext not in self._PARSERS:
+                        logger.debug(
+                            "kb_gdrive.file_decision dataset={} file={} decision=skip reason=unsupported_extension",
+                            dataset_alias,
+                            kb_path,
+                        )
+                        skipped += 1
+                        continue
+                    if (size or 0) > settings.MAX_FILE_SIZE_MB * (1024 * 1024):
+                        logger.debug(
+                            f"kb_gdrive.file_decision dataset={dataset_alias} file={kb_path} "
+                            f"decision=skip reason=file_too_large size_mb={size / 1_048_576:.1f}"
+                        )
+                        skipped += 1
+                        continue
+                    if not file_id:
+                        logger.warning(
+                            "kb_gdrive.file_decision dataset={} file={} decision=skip reason=missing_file_id",
+                            dataset_alias,
+                            kb_path,
+                        )
+                        skipped += 1
+                        continue
+
+                    data = await self._download_file(file_id)
+                    parser = self._PARSERS[ext]
+                    text = await asyncio.to_thread(parser, data) if ext != ".txt" else parser(data)
+                    text = sanitize_text(text)
+
+                    normalized = self._kb.dataset_service._normalize_text(text)
+                    if not normalized.strip():
+                        self._kb.dataset_service.log_once(
+                            logging.INFO,
+                            "kb_gdrive.empty_document",
+                            dataset=dataset_alias,
+                            file_id=file_id,
+                            name=name,
+                            source="gdrive",
+                            min_interval=120.0,
+                        )
+                        skipped += 1
+                        continue
+
+                    metadata = {
+                        "dataset": dataset_alias,
+                        "source": "gdrive",
+                        "file_id": file_id,
+                        "name": name,
+                        "path": kb_path,
+                        "folder_path": f.get("kb_folder_path") or "",
+                        "mime_type": f.get("mimeType"),
+                        "size": size,
+                    }
+                    modified_ts = f.get("modifiedTime") or f.get("modified_time")
+                    if modified_ts:
+                        metadata["modified_ts"] = modified_ts
+
+                    payload_bytes = normalized.encode("utf-8")
+                    digest_sha = hashlib.sha256(payload_bytes).hexdigest()
+                    resolved_dataset, created = await self._kb.update_dataset(
+                        normalized,
+                        self._dataset_name,
+                        user,
+                        node_set=[f"gdrive:{file_id}"],
+                        metadata=metadata,
+                        force_ingest=force_ingest,
+                        trigger_projection=False,
+                    )
+                    is_duplicate = not created
+                    if is_duplicate and not force_ingest:
+                        skipped += 1
+                        ident = self._kb.dataset_service.get_registered_identifier(dataset_alias)
+                        logger.debug(
+                            (
+                                "kb_gdrive.file_decision dataset={} file={} decision=skip "
+                                "reason=duplicate_digest digest={} ident={}"
+                            ),
+                            dataset_alias,
+                            kb_path,
+                            digest_sha[:12],
+                            ident,
+                        )
+                        continue
+
+                    processed += 1
+                    if is_duplicate:
+                        ident = self._kb.dataset_service.get_registered_identifier(dataset_alias) or ""
+                        logger.debug(
+                            (
+                                "kb_gdrive.file_decision dataset={} file={} decision=force_ingest "
+                                "reason=duplicate_digest digest={} ident={}"
+                            ),
+                            dataset_alias,
+                            kb_path,
+                            digest_sha[:12],
+                            ident,
+                        )
+                    else:
+                        logger.debug(
+                            "kb_gdrive.file_decision dataset={} file={} decision=process reason=new_content",
+                            dataset_alias,
+                            kb_path,
+                        )
+
+                    logger.debug(
+                        "kb_gdrive.ingested dataset_alias={} ident={} file_id={} bytes={} digest={}",
+                        dataset_alias,
+                        resolved_dataset,
+                        file_id,
+                        len(payload_bytes),
+                        digest_sha[:12],
+                    )
+                except Exception:
+                    logger.exception(f"Failed to process {kb_path} (id={file_id})")
+                    errors += 1
+                finally:
+                    if should_log_progress:
+                        remaining = total_files - index
+                        logger.info(
+                            f"kb_gdrive.progress dataset={dataset_alias} index={index}/{total_files} "
+                            f"processed={processed} skipped={skipped} errors={errors} remaining={remaining} "
+                            f"current={kb_path}"
+                        )
+                        summary["processed"] = processed
+                        summary["skipped"] = skipped
+                        summary["errors"] = errors
+                        summary["current"] = kb_path
+                        summary["updated_at"] = _utc_now()
+                        await self._store_summary(summary)
+            logger.info(
+                f"kb_gdrive.summary dataset={self._dataset_name} files_total={total_files} "
+                f"processed={processed} skipped={skipped} errors={errors}"
+            )
+            finished_at = _utc_now()
+            summary["processed"] = processed
+            summary["skipped"] = skipped
+            summary["errors"] = errors
+            summary["current"] = None
+            summary["finished_at"] = finished_at
+            summary["updated_at"] = finished_at
+            summary["duration_s"] = asyncio.get_running_loop().time() - started_monotonic
+            summary["status"] = "done" if errors == 0 else "partial"
+            await self._store_summary(summary)
+            projection_requested = False
+            if processed > 0 or force_ingest:
+                try:
+                    await self._kb.projection_service.project_dataset_now(
+                        dataset_alias,
+                        user,
+                        allow_rebuild=force_ingest,
+                    )
+                    await self._kb._wait_for_projection(dataset_alias, user, timeout_s=30.0)
+                    counts = await self._kb.dataset_service.get_counts(dataset_alias, user)
+                    logger.debug(
+                        ("projection:ready dataset_alias={} text_rows={} chunk_rows={} graph_nodes={} graph_edges={}"),
+                        dataset_alias,
+                        counts.get("text_rows"),
+                        counts.get("chunk_rows"),
+                        counts.get("graph_nodes"),
+                        counts.get("graph_edges"),
+                    )
+                    projection_requested = True
+                except Exception as exc:
+                    logger.debug(f"kb_gdrive.projection_skip dataset={dataset_alias} detail={exc}")
+            self._kb.record_loader_result(
+                dataset_alias,
+                processed=processed,
+                skipped=skipped,
+                errors=errors,
+                projection_requested=projection_requested,
+            )
+            if errors == 0:
+                try:
+                    cache_key = f"ai_coach:gdrive:folder:{self.folder_id}:fingerprint"
+                    client = get_redis_client()
+                    await client.set(cache_key, fingerprint)
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug(f"kb_gdrive.fingerprint_set_failed detail={exc}")
+            else:
+                logger.warning(
+                    "kb_gdrive.fingerprint_skipped dataset={} errors={} reason=ingest_failed",
+                    self._dataset_name,
+                    errors,
+                )
         except Exception as exc:  # noqa: BLE001
-            logger.debug(f"kb_gdrive.fingerprint_set_failed detail={exc}")
+            finished_at = _utc_now()
+            summary["status"] = "error"
+            summary["reason"] = str(exc)
+            summary["updated_at"] = finished_at
+            summary["finished_at"] = finished_at
+            summary["duration_s"] = asyncio.get_running_loop().time() - started_monotonic
+            summary["processed"] = processed
+            summary["skipped"] = skipped
+            summary["errors"] = errors
+            await self._store_summary(summary)
+            logger.exception(f"kb_gdrive.failed dataset={dataset_alias} detail={exc}")
+            return
 
     async def refresh(self, force: bool = False) -> None:
         await self.load(force_ingest=force)

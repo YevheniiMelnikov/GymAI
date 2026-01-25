@@ -16,13 +16,22 @@ from apps.payments.models import Payment
 from apps.payments.repos import PaymentRepository
 from apps.diet_plans.repos import DietPlanRepository
 from apps.workout_plans.models import Program as ProgramModel
-from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
+from apps.workout_plans.repos import (
+    ProgramRepository,
+    SubscriptionRepository,
+    SubscriptionProgressSnapshotRepository,
+)
 from apps.webapp.weekly_survey import (
     WeeklySurveyPayload,
     SurveyFeedbackContext,
+    build_progress_history_summary,
+    build_progress_snapshot,
     build_weekly_survey_feedback,
+    compute_plan_hash,
     enqueue_subscription_update,
+    resolve_progress_week_start,
     resolve_plan_age_weeks,
+    resolve_plan_age_weeks_from_progress,
 )
 from apps.profiles.choices import ProfileStatus
 from apps.profiles.models import Profile
@@ -1093,13 +1102,70 @@ async def weekly_survey_submit(request: HttpRequest) -> JsonResponse:
         await call_repo(SubscriptionRepository.update_exercises, profile.id, exercises_by_day, subscription)
         await Cache.workout.update_subscription(profile.id, {"exercises": exercises_by_day})
 
-    plan_age_weeks = resolve_plan_age_weeks(getattr(subscription, "updated_at", None))
+    progress_history: str | None = None
+    plan_age_weeks: int | None = None
+    progress_weeks = max(0, int(settings.WEEKLY_SURVEY_PROGRESS_WEEKS))
+    plan_hash = compute_plan_hash(exercises_by_day)
+    if progress_weeks > 0:
+        week_start = resolve_progress_week_start()
+        subscription_id = getattr(subscription, "id", None)
+        if not subscription_id:
+            logger.warning(
+                f"weekly_survey_progress_snapshot_skipped profile_id={profile.id} "
+                f"reason=missing_subscription_id subscription_id={subscription_id}"
+            )
+            progress_history = None
+            plan_age_weeks = None
+        else:
+            try:
+                snapshot_payload = build_progress_snapshot(
+                    payload,
+                    exercises_by_day=exercises_by_day,
+                    week_start=week_start,
+                    resolve_entry=resolve_exercise_entry,
+                    plan_hash=plan_hash,
+                )
+                await call_repo(
+                    SubscriptionProgressSnapshotRepository.upsert_week_snapshot,
+                    profile_id=profile.id,
+                    subscription_id=int(subscription_id),
+                    week_start=week_start,
+                    payload=snapshot_payload,
+                )
+                await call_repo(
+                    SubscriptionProgressSnapshotRepository.trim_old,
+                    int(subscription_id),
+                    progress_weeks,
+                )
+                snapshots = await call_repo(
+                    SubscriptionProgressSnapshotRepository.get_recent_payloads,
+                    int(subscription_id),
+                    progress_weeks,
+                )
+                progress_history = build_progress_history_summary(snapshots, weeks=progress_weeks)
+                plan_age_weeks = resolve_plan_age_weeks_from_progress(snapshots, plan_hash=plan_hash)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    f"weekly_survey_progress_snapshot_failed profile_id={profile.id} "
+                    f"subscription_id={subscription_id} error={exc!s}"
+                )
+                progress_history = None
+                plan_age_weeks = None
+
+    if plan_age_weeks is None:
+        plan_age_weeks = resolve_plan_age_weeks(getattr(subscription, "updated_at", None))
     context = SurveyFeedbackContext(
         workout_goals=getattr(profile, "workout_goals", None),
         workout_experience=getattr(profile, "workout_experience", None),
         plan_age_weeks=plan_age_weeks,
     )
-    feedback = build_weekly_survey_feedback(payload, context=context)
+
+    feedback = build_weekly_survey_feedback(
+        payload,
+        context=context,
+        progress_history=progress_history,
+        progress_weeks=progress_weeks,
+    )
 
     workout_location_value = getattr(subscription, "workout_location", None) or getattr(
         profile, "workout_location", None

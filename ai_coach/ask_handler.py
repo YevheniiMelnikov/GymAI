@@ -597,7 +597,7 @@ async def handle_coach_request(
             )
 
         model_name = CoachAgent._completion_model_name or settings.AGENT_MODEL
-        kb_enabled = mode in {CoachMode.ask_ai, CoachMode.diet} and settings.AI_COACH_KB_ENABLED
+        kb_enabled = settings.AI_COACH_KB_ENABLED
         logger.info(
             f"ask.in request_id={data.request_id} profile_id={data.profile_id} mode={mode.value} "
             f"model={model_name} kb_enabled={str(kb_enabled).lower()}"
@@ -666,6 +666,8 @@ async def handle_coach_request(
                 mode=mode,
                 tools_used=deps.tool_calls,
             )
+            if deps.final_result is not None and not isinstance(result, JSONResponse):
+                result = deps.final_result
 
             if mode == CoachMode.ask_ai:
                 answer = getattr(result, "answer", None)

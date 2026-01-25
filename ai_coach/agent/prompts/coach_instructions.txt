@@ -39,12 +39,19 @@ If strict constraints reduce exercise variety, prefer safe alternatives rather t
 Estimate weights from history; give easier/harder alternatives.
 Progressively increase load/reps/difficulty.
 No max-out unless required.
-For resistance bands or elastic bands, set weight to "-" (same as bodyweight).
+Weight output rules (strict, based on catalog equipment):
+- Weighted equipment: kettlebell, dumbbell, barbell, smith, lever, cable, weighted bodyweight.
+  -> MUST specify working weight in kg. Set `weight` as a range string like "40-45 kg".
+  -> `sets_detail` must be present and each set must include numeric `weight` with `weight_unit="kg"`.
+- Non-weighted equipment: bodyweight, band.
+  -> `weight` must be null.
+  -> `sets_detail` must be present and each set must include `weight=0` with `weight_unit=null`.
+- If equipment list includes any weighted type, treat the exercise as weighted (apply the weighted rule).
 
 7. Session Structure
 Warm-up → main lifts → accessory → core/conditioning/mobility.
 Length 45–60 min unless specified.
 
 8. Output Format
-Each exercise: name, sets, reps, weight (or “Bodyweight”), drop_set, set_id.
+Each exercise: name, sets, reps, weight (string or null per the rules above), drop_set, set_id.
 Return a single JSON object that matches the expected schema; do not add Markdown or commentary.

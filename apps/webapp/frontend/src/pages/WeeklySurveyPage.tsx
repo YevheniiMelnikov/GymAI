@@ -27,7 +27,7 @@ type SurveyDay = {
 type EditedExerciseSets = {
     exerciseId: string;
     sets: ExerciseSetPayload[];
-    weightUnit: string | null;
+    weightUnit: string;
 };
 
 const DEFAULT_SLIDER_VALUE = 50;
@@ -187,17 +187,19 @@ const WeeklySurveyPage: React.FC = () => {
                     exercises: day.exercises.map((exercise) => {
                         const key = buildExerciseKey(day.id, exercise.id);
                         const stored = editedSets[key];
+                        const setsPayload = stored?.sets;
+                        const weightUnit = stored?.weightUnit ?? 'kg';
                         return {
                             id: exercise.id,
                             name: exercise.name,
                             difficulty: intensityValues[key] ?? DEFAULT_SLIDER_VALUE,
                             comment: commentValues[key] ?? '',
-                            sets_detail: stored
-                                ? stored.sets.map((set) => ({
-                                    reps: set.reps,
-                                    weight: set.weight,
-                                    weight_unit: stored.weightUnit
-                                }))
+                            sets_detail: setsPayload
+                                ? setsPayload.map((set) => ({
+                                      reps: set.reps,
+                                      weight: set.weight,
+                                      weight_unit: weightUnit
+                                  }))
                                 : undefined
                         };
                     })
@@ -229,8 +231,7 @@ const WeeklySurveyPage: React.FC = () => {
         openExerciseEditDialog(exercise, {
             allowReplace: false,
             onSave: (_, sets) => {
-                const weightUnit =
-                    exercise.weight?.unit ?? exercise.sets_detail?.[0]?.weight_unit ?? null;
+                const weightUnit = 'kg';
                 setEditedSets((current) => ({
                     ...current,
                     [key]: { exerciseId: exercise.id, sets, weightUnit }

@@ -237,6 +237,11 @@ class SearchService:
             logger.warning("knowledge_search_skipped profile_id={} reason=cognee_missing", profile_id)
             self._log_search_completion(profile_id, request_id or "na", "none", 0, started_at)
             return []
+        if self._knowledge_base is not None and self._knowledge_base.is_degraded():
+            info = self._knowledge_base.degraded_info()
+            logger.warning(f"knowledge_search_skipped profile_id={profile_id} reason=degraded details={info}")
+            self._log_search_completion(profile_id, request_id or "na", "degraded", 0, started_at)
+            return []
 
         normalized = query.strip()
         if not normalized:

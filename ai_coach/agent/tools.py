@@ -216,7 +216,32 @@ async def tool_search_exercises(
 ) -> list[ExerciseCatalogItem]:
     """Search the exercise catalog by category, muscle groups, or name."""
     tool_name = "tool_search_exercises"
-    effective_limit = None
+    normalized_category = str(category or "strength").strip().lower()
+    if normalized_category not in EXERCISE_CATEGORIES:
+        raise ModelRetry("Invalid category. Use one of: strength, conditioning, health.")
+    primary = [item.strip().lower() for item in (primary_muscles or []) if str(item or "").strip()]
+    secondary = [item.strip().lower() for item in (secondary_muscles or []) if str(item or "").strip()]
+    equipment_list = [item.strip().lower() for item in (equipment or []) if str(item or "").strip()]
+    if len(primary) > 1:
+        raise ModelRetry("Provide at most one primary muscle group per search.")
+    if secondary:
+        raise ModelRetry("Do not pass secondary muscles. Use only one primary muscle group or leave it empty.")
+    if len(equipment_list) > 1:
+        raise ModelRetry("Provide at most one equipment type per search or omit the equipment filter.")
+    if normalized_category in {"conditioning", "health"}:
+        primary = []
+        secondary = []
+        equipment_list = []
+        name_query = None
+    category = normalized_category
+    primary_muscles = primary or None
+    secondary_muscles = None
+    equipment = equipment_list or None
+
+    if limit is None:
+        effective_limit = int(settings.AI_COACH_EXERCISE_SEARCH_LIMIT)
+    else:
+        effective_limit = max(1, int(limit))
     cache_key = (
         tool_name,
         str(category or ""),
@@ -276,16 +301,12 @@ async def tool_search_exercises(
     ]
     if category and str(category).lower() not in EXERCISE_CATEGORIES:
         _log_tool_disabled(deps, tool_name, reason="invalid_category")
-    if primary_muscles:
-        invalid_primary = {item.lower() for item in primary_muscles} - MUSCLE_GROUPS
+    if primary:
+        invalid_primary = {item.lower() for item in primary} - MUSCLE_GROUPS
         if invalid_primary:
             _log_tool_disabled(deps, tool_name, reason="invalid_primary_muscles")
-    if secondary_muscles:
-        invalid_secondary = {item.lower() for item in secondary_muscles} - MUSCLE_GROUPS
-        if invalid_secondary:
-            _log_tool_disabled(deps, tool_name, reason="invalid_secondary_muscles")
-    if equipment:
-        invalid_equipment = {item.lower() for item in equipment} - EQUIPMENT_TYPES
+    if equipment_list:
+        invalid_equipment = {item.lower() for item in equipment_list} - EQUIPMENT_TYPES
         if invalid_equipment:
             _log_tool_disabled(deps, tool_name, reason="invalid_equipment")
     return _cache_result(deps, tool_name, payload, cache_key=cache_key)

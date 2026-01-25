@@ -61,3 +61,26 @@ class Subscription(models.Model):
                 condition=Q(enabled=True),
             ),
         ]
+
+
+class SubscriptionProgressSnapshot(models.Model):
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="subscription_progress_snapshots")
+    subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE, related_name="progress_snapshots")
+    week_start = models.DateField()
+    payload = JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Subscription progress snapshot"
+        verbose_name_plural = "Subscription progress snapshots"
+        indexes = [
+            models.Index(fields=["subscription", "-week_start"], name="sub_progress_week_idx"),
+            models.Index(fields=["profile", "-week_start"], name="sub_progress_profile_week_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["subscription", "week_start"],
+                name="sub_progress_unique_week",
+            )
+        ]

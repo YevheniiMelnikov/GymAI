@@ -403,6 +403,9 @@ class _KB:
         limit = max(1, raw_limit)
         return [row.text for row in rows][-limit:]
 
+    async def shutdown(self) -> None:
+        return None
+
     @classmethod
     async def search(
         cls, query: str, profile_id: int, k: int | None = None, *, request_id: str | None = None

@@ -1,3 +1,4 @@
+import json
 import os
 from fastapi import Body, Depends, HTTPException  # pyrefly: ignore[import-error]
 from fastapi.responses import JSONResponse  # pyrefly: ignore[import-error]
@@ -17,6 +18,7 @@ from ai_coach.schemas import AICoachRequest
 from ai_coach.types import CoachMode
 from config.app_settings import settings
 from core.exceptions import UserServiceError
+from core.utils.redis_lock import get_redis_client
 from core.schemas import DietPlan, Program, QAResponse, Subscription
 from pydantic import BaseModel
 
@@ -53,6 +55,19 @@ async def health_kb() -> dict[str, Any]:
         projection_reason = "fatal_error"
     dataset_registry_size = kb.dataset_service.get_dataset_alias_count()
     last_rebuild_info = kb.get_last_rebuild_result()
+    gdrive_summary: dict[str, Any] | None = None
+    degraded_info = kb.degraded_info()
+    folder_id = settings.KNOWLEDGE_BASE_FOLDER_ID
+    if folder_id:
+        try:
+            client = get_redis_client()
+            raw_summary = await client.get(f"ai_coach:gdrive:folder:{folder_id}:summary")
+            if raw_summary:
+                payload = json.loads(raw_summary)
+                if isinstance(payload, dict):
+                    gdrive_summary = payload
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"kb_health.gdrive_summary_failed detail={exc}")
     return {
         "status": "ok" if storage_ok and projected else "error",
         "storage_access_ok": storage_ok,
@@ -60,6 +75,8 @@ async def health_kb() -> dict[str, Any]:
         "projection_reason": projection_reason,
         "dataset_registry_size": dataset_registry_size,
         "last_rebuild_info": last_rebuild_info,
+        "gdrive_summary": gdrive_summary,
+        "degraded": degraded_info,
     }
 
 
@@ -238,6 +255,18 @@ async def prune_knowledge_base_internal(_: None = Depends(_require_hmac)) -> dic
 @app.post("/knowledge/prune/")
 async def prune_knowledge_base(_: None = Depends(_require_hmac)):
     return await _execute_prune()
+
+
+@app.post("/knowledge/resume/")
+async def resume_knowledge_base(_: None = Depends(_require_hmac)) -> dict[str, Any]:
+    kb = get_knowledge_base()
+    return kb.resume_projections()
+
+
+@app.post("/internal/knowledge/resume/")
+async def resume_knowledge_base_internal(_: None = Depends(_require_hmac)) -> dict[str, Any]:
+    kb = get_knowledge_base()
+    return kb.resume_projections()
 
 
 class ProfileSyncRequest(BaseModel):

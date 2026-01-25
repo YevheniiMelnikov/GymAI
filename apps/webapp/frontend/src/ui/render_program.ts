@@ -391,121 +391,81 @@ const isReducedMotionPreferred = (() => {
   }
 })();
 
-function attachDetailsAnimation(details: HTMLDetailsElement, content: HTMLElement): void {
-  if (isReducedMotionPreferred) {
+function attachDetailsAnimation(details: HTMLDetailsElement): void {
+  if (!details.querySelector('summary')) {
     return;
   }
-  const summary = details.querySelector('summary');
-  if (!summary) {
-    return;
-  }
-  let isAnimating = false;
-  let animationTimer: number | null = null;
-  let nestedResizeTimer: number | null = null;
 
-  const cleanup = () => {
-    content.style.height = '';
-    content.style.overflow = '';
-    content.style.transition = '';
-    isAnimating = false;
-    if (animationTimer !== null) {
-      window.clearTimeout(animationTimer);
-      animationTimer = null;
+  let autoScrollTimer: number | null = null;
+
+  const findScrollParent = (node: HTMLElement): HTMLElement => {
+    let parent = node.parentElement;
+    while (parent) {
+      const style = window.getComputedStyle(parent);
+      const overflowY = style.overflowY;
+      if ((overflowY === 'auto' || overflowY === 'scroll') && parent.scrollHeight > parent.clientHeight) {
+        return parent;
+      }
+      parent = parent.parentElement;
     }
-    if (nestedResizeTimer !== null) {
-      window.clearTimeout(nestedResizeTimer);
-      nestedResizeTimer = null;
+    return (document.scrollingElement as HTMLElement) || document.documentElement;
+  };
+
+  const scrollIntoViewFast = (target: HTMLElement): void => {
+    const container = findScrollParent(target);
+    const behavior: ScrollBehavior = isReducedMotionPreferred ? 'auto' : 'smooth';
+    const rect = target.getBoundingClientRect();
+    const containerRect = container === document.scrollingElement || container === document.documentElement
+      ? { bottom: window.innerHeight }
+      : container.getBoundingClientRect();
+    const bottomOverflow = rect.bottom - (containerRect.bottom - 12);
+    if (bottomOverflow > 0) {
+      if (container === document.scrollingElement || container === document.documentElement) {
+        window.scrollBy({ top: bottomOverflow, behavior });
+      } else {
+        container.scrollBy({ top: bottomOverflow, behavior });
+      }
     }
   };
 
-  const animateOpen = () => {
-    if (isAnimating) {
-      return;
+  const cancelAutoScroll = () => {
+    if (autoScrollTimer !== null) {
+      window.clearTimeout(autoScrollTimer);
+      autoScrollTimer = null;
     }
-    isAnimating = true;
-    details.open = true;
-    content.style.height = '0px';
-    content.style.overflow = 'hidden';
-    content.style.transition = 'height 0.45s ease';
-    const targetHeight = content.scrollHeight;
-    requestAnimationFrame(() => {
-      content.style.height = `${targetHeight}px`;
-    });
-    const finish = () => {
-      content.removeEventListener('transitionend', finish);
-      cleanup();
-    };
-    content.addEventListener('transitionend', finish);
-    animationTimer = window.setTimeout(finish, 520);
   };
 
-  const animateClose = () => {
-    if (isAnimating) {
+  const scheduleAutoScroll = (delayMs = 0) => {
+    if (!details.classList.contains('program-exercise-details')) {
       return;
     }
-    isAnimating = true;
-    if (details.classList.contains('program-day')) {
-      const nested = details.querySelectorAll<HTMLDetailsElement>('details.program-exercise-details[open]');
-      nested.forEach((item) => {
-        item.open = false;
-        const nestedContent = item.querySelector<HTMLElement>('.program-exercise-content');
-        if (nestedContent) {
-          nestedContent.style.height = '';
-          nestedContent.style.overflow = '';
-          nestedContent.style.transition = '';
+    cancelAutoScroll();
+    const run = () => {
+      requestAnimationFrame(() => {
+        if (!details.open) {
+          return;
         }
+        scrollIntoViewFast(details);
       });
-    }
-    const startHeight = content.scrollHeight;
-    content.style.height = `${startHeight}px`;
-    content.style.overflow = 'hidden';
-    content.style.transition = 'height 0.4s ease';
-    requestAnimationFrame(() => {
-      content.style.height = '0px';
-    });
-    const finish = () => {
-      content.removeEventListener('transitionend', finish);
-      details.open = false;
-      cleanup();
     };
-    content.addEventListener('transitionend', finish);
-    animationTimer = window.setTimeout(finish, 460);
-  };
-
-  if (details.classList.contains('program-day')) {
-    content.addEventListener('toggle', (event) => {
-      const target = event.target as HTMLElement | null;
-      if (!target || !target.classList.contains('program-exercise-details')) {
-        return;
-      }
-      if (!details.open) {
-        return;
-      }
-      if (content.style.height) {
-        content.style.height = `${content.scrollHeight}px`;
-        content.style.overflow = 'hidden';
-        if (nestedResizeTimer !== null) {
-          window.clearTimeout(nestedResizeTimer);
-        }
-        nestedResizeTimer = window.setTimeout(() => {
-          content.style.height = '';
-          content.style.overflow = '';
-          content.style.transition = '';
-        }, 320);
-      }
-    });
-  }
-
-  summary.addEventListener('click', (event) => {
-    if (details.classList.contains('program-day-rest')) {
+    if (delayMs > 0) {
+      autoScrollTimer = window.setTimeout(run, delayMs);
       return;
     }
-    event.preventDefault();
-    if (details.open) {
-      animateClose();
-    } else {
-      animateOpen();
+    run();
+  };
+
+  details.addEventListener('toggle', () => {
+    if (!details.open) {
+      cancelAutoScroll();
+      if (details.classList.contains('program-day')) {
+        details.querySelectorAll<HTMLDetailsElement>('details.program-exercise-details[open]').forEach((item) => {
+          item.open = false;
+        });
+      }
+      return;
     }
+    scheduleAutoScroll(isReducedMotionPreferred ? 0 : 120);
   });
 }
 
@@ -1422,7 +1382,7 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
     content.appendChild(setsTable);
   }
   details.appendChild(content);
-  attachDetailsAnimation(details, content);
+  attachDetailsAnimation(details);
   li.appendChild(details);
   return li;
 }
@@ -1463,7 +1423,7 @@ function renderDay(day: Day): HTMLElement {
       list.appendChild(createExerciseItem(item.exercise, item.index));
     });
     details.appendChild(list);
-    attachDetailsAnimation(details, list);
+    attachDetailsAnimation(details);
   }
 
   return details;
