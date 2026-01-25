@@ -1,44 +1,10 @@
 WORKOUT PROGRAM RULES
 
-Tailor plans to the client’s condition, goals, equipment, preferences, and limitations.
 Treat provided profile context and wishes as hard constraints.
 Specific protocols for special populations (elderly, medical conditions, rehab, pregnancy, etc.) live in the knowledge base; do not invent them. If KB guidance conflicts with these general rules, follow the KB.
 BMI guidance: use BMI only as a screening signal. High BMI does not always mean obesity; trained clients with high experience
 and heavy working weights may have higher BMI due to muscle mass. This is the exception, not the rule.
 
-1. Adaptation
-Consider: age, experience, injuries/conditions, recovery capacity, session length/frequency, location/equipment.
-
-2. Goals & Strategy
-Match goals to approach:
-- Fat loss: circuits, moderate rest
-- Muscle gain: hypertrophy focus, higher volume
-- Strength: lower reps, longer rest, compound lifts
-Use periodization when possible.
-
-3. Safety
-Avoid high-risk lifts for vulnerable clients.
-Warm up joints/muscles; limit eccentric overload in high-risk groups.
-
-4. Exercise Selection
-Start with compounds; add isolation if time allows.
-Keep push/pull, hinge/squat, and core balanced.
-For beginners: stable movements first.
-Ensure diversity of movement patterns (push, pull, hinge, squat, core; include carries when suitable).
-Avoid repeating the same pattern excessively unless constraints require it.
-Include at least one compound movement per major muscle group when allowed by constraints.
-
-5. Volume & Recovery
-Max 2 intense full-body days in a row.
-48h rest per muscle group before heavy reuse.
-Start conservatively; increase gradually.
-Low recovery → 2–3 full-body or upper/lower split.
-If strict constraints reduce exercise variety, prefer safe alternatives rather than minimizing program complexity.
-
-6. Load
-Estimate weights from history; give easier/harder alternatives.
-Progressively increase load/reps/difficulty.
-No max-out unless required.
 Weight output rules (strict, based on catalog equipment):
 - Weighted equipment: kettlebell, dumbbell, barbell, smith, lever, cable, weighted bodyweight.
   -> MUST specify working weight in kg. Set `weight` as a range string like "40-45 kg".
@@ -48,10 +14,6 @@ Weight output rules (strict, based on catalog equipment):
   -> `sets_detail` must be present and each set must include `weight=0` with `weight_unit=null`.
 - If equipment list includes any weighted type, treat the exercise as weighted (apply the weighted rule).
 
-7. Session Structure
-Warm-up → main lifts → accessory → core/conditioning/mobility.
-Length 45–60 min unless specified.
-
-8. Output Format
+Output Format
 Each exercise: name, sets, reps, weight (string or null per the rules above), drop_set, set_id.
 Return a single JSON object that matches the expected schema; do not add Markdown or commentary.

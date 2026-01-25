@@ -9,9 +9,8 @@ MODE: program
 3) Call tool_get_program_history().
 4) Call tool_search_exercises(category, primary_muscles, secondary_muscles, equipment, name_query) up to the configured limit to fetch exercises from
    the catalog. Use broad queries; do not set a limit.
-   - Each call must target one distinct movement pattern (push / pull / hinge / squat-legs / core).
    - Categories: strength (default), conditioning, health.
-   - If you need conditioning/health, search by category only (no extra filters).
+   - For conditioning/health: search by category only (no extra filters).
    - For strength: provide at most ONE primary muscle group. Do NOT pass secondary muscles.
    - Equipment filter is optional; if used, pass at most ONE equipment type from the list below, otherwise omit it.
    - Muscle groups: chest, upper_back, lats, lower_back, front_delts, side_delts, rear_delts, biceps, triceps,
@@ -30,16 +29,15 @@ run with the saved program.
 
 Example calls:
 - tool_search_knowledge(query="squat benefits", k=6)
+- tool_calculate_bmi(weight_kg=84, height_cm=186)
 - tool_get_program_history()
+- tool_search_exercises(category="strength", primary_muscles=["chest"], secondary_muscles=None, equipment="barbell", name_query="", limit=None)
 - tool_save_program(plan)
 
 PROGRAM PAYLOAD REQUIREMENTS:
 - Do not return empty or partially filled fields.
 - Label each block as "Day 1", "Day 2", etc. Do not refer to calendar weekday names, and ensure each exercise includes a name, sets, and reps.
 - If split_number is missing, set it to the number of workout days.
-- Ensure diversity of movement patterns (push, pull, hinge, squat, core; include carries when suitable) and avoid repeating the same pattern excessively unless constraints require it.
-- Include at least one compound movement per major muscle group when allowed by constraints.
-- If strict constraints reduce exercise variety, prefer safe catalog alternatives rather than minimizing program complexity.
 
 Program field guide:
 - exercises_by_day: list of DayExercises; each has day label and exercises with name/sets/reps/gif_key.
