@@ -12,5 +12,4 @@ class States(StatesGroup):
     workout_experience = State()
     health_notes_choice = State()
     health_notes = State()
-    accept_policy = State()
     ask_ai_question = State()

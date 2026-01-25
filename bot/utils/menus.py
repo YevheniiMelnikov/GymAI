@@ -67,32 +67,6 @@ async def show_balance_menu(
     await del_msg(callback_target)
 
 
-async def send_policy_confirmation(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    lang = data.get("lang", settings.DEFAULT_LANG)
-
-    info_msg = await answer_msg(
-        message,
-        translate(MessageText.contract_info_message, lang).format(
-            public_offer=settings.PUBLIC_OFFER,
-            privacy_policy=settings.PRIVACY_POLICY,
-        ),
-        disable_web_page_preview=True,
-    )
-    confirm_msg = await answer_msg(
-        message,
-        translate(MessageText.accept_policy, lang),
-        reply_markup=kb.yes_no_kb(lang),
-    )
-    message_ids: list[int] = []
-    if info_msg:
-        message_ids.append(info_msg.message_id)
-    if confirm_msg:
-        message_ids.append(confirm_msg.message_id)
-    await state.update_data(chat_id=message.chat.id, message_ids=message_ids)
-    await del_msg(message)
-
-
 def _extract_chat_id(target: InteractionTarget) -> int | None:
     if isinstance(target, CallbackQuery):
         user = target.from_user

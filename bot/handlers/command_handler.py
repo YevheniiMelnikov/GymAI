@@ -90,17 +90,14 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         await prompt_language_selection(message, state)
 
 
-@cmd_router.message(Command(CommandName.offer))
-async def cmd_policy(message: Message, state: FSMContext) -> None:
+@cmd_router.message(Command(CommandName.info))
+async def cmd_info(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile", {})
     profile = Profile.model_validate(profile_data) if profile_data else None
     lang = profile.language if profile else settings.DEFAULT_LANG
     await message.answer(
-        translate(MessageText.contract_info_message, lang).format(
-            public_offer=settings.PUBLIC_OFFER,
-            privacy_policy=settings.PRIVACY_POLICY,
-        ),
+        translate(MessageText.info, lang).format(privacy_policy=settings.PRIVACY_POLICY),
         disable_web_page_preview=True,
     )
     with suppress(TelegramBadRequest):

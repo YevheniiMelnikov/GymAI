@@ -10,7 +10,6 @@ from bot.keyboards import (
     workout_experience_kb,
     workout_location_kb,
     yes_no_kb,
-    select_language_kb,
 )
 from bot.states import States
 from config.app_settings import settings
@@ -18,7 +17,7 @@ from core.cache import Cache
 from core.enums import ProfileStatus, Language
 from core.exceptions import ProfileNotFoundError
 from core.services import APIService
-from bot.utils.menus import show_main_menu, send_policy_confirmation
+from bot.utils.menus import show_main_menu
 from bot.utils.profiles import should_grant_gift_credits, update_profile_data
 from bot.utils.bot import del_msg, answer_msg, delete_messages, set_bot_commands
 from bot.utils.text import parse_int_with_decimal
@@ -220,7 +219,7 @@ async def height(message: Message, state: FSMContext) -> None:
 
 
 @questionnaire_router.callback_query(States.health_notes_choice)
-async def health_notes_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
+async def health_notes_choice(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
     await callback_query.answer()
@@ -242,55 +241,21 @@ async def health_notes_choice(callback_query: CallbackQuery, state: FSMContext) 
         return
 
     await state.update_data(health_notes="", status=ProfileStatus.completed)
+    if await should_grant_gift_credits(callback_query.from_user.id):
+        await state.update_data(credits_delta=settings.DEFAULT_CREDITS)
     if callback_query.message is not None:
-        await send_policy_confirmation(cast(Message, callback_query.message), state)
-    await state.set_state(States.accept_policy)
+        await update_profile_data(cast(Message, callback_query.message), state, bot)
     await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
 
 @questionnaire_router.message(States.health_notes)
-async def health_notes(message: Message, state: FSMContext) -> None:
+async def health_notes(message: Message, state: FSMContext, bot: Bot) -> None:
     if not message.text:
         return
 
     await delete_messages(state)
     await state.update_data(health_notes=message.text, status=ProfileStatus.completed)
-    await send_policy_confirmation(cast(Message, message), state)
-    await state.set_state(States.accept_policy)
+    if await should_grant_gift_credits(message.from_user.id):
+        await state.update_data(credits_delta=settings.DEFAULT_CREDITS)
+    await update_profile_data(cast(Message, message), state, bot)
     return
-
-
-@questionnaire_router.callback_query(States.accept_policy)
-async def process_policy(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    if callback_query.data == "yes":
-        message = callback_query.message
-        data = await state.get_data()
-        if await should_grant_gift_credits(callback_query.from_user.id):
-            await state.update_data(credits_delta=settings.DEFAULT_CREDITS)
-            lang = data.get("lang", settings.DEFAULT_LANG)
-            alert_text = translate(MessageText.initial_credits_granted, lang).format(credits=settings.DEFAULT_CREDITS)
-            await callback_query.answer(alert_text, show_alert=True)
-        else:
-            await callback_query.answer()
-        await delete_messages(state)
-        if message is not None:
-            await update_profile_data(cast(Message, message), state, bot)
-        return
-    else:
-        await callback_query.answer()
-        await delete_messages(state)
-        await state.clear()
-        if callback_query.message is not None:
-            start_msg = await callback_query.message.answer(translate(MessageText.start, settings.DEFAULT_LANG))
-            lang_msg = await callback_query.message.answer(
-                translate(MessageText.select_language, settings.DEFAULT_LANG),
-                reply_markup=select_language_kb(),
-            )
-            msg_ids = []
-            if start_msg:
-                msg_ids.append(start_msg.message_id)
-            if lang_msg:
-                msg_ids.append(lang_msg.message_id)
-            await state.update_data(message_ids=msg_ids, chat_id=callback_query.message.chat.id)
-            await state.set_state(States.select_language)
-        await del_msg(callback_query)

@@ -67,7 +67,6 @@ class MessageText(AutoName):
     weekly_survey_submitted = auto()
 
     profile_deleted = auto()
-    accept_policy = auto()
     your_data_updated = auto()
     select_language = auto()
 
@@ -93,6 +92,7 @@ class MessageText(AutoName):
     credit_balance_menu = auto()
     not_enough_credits = auto()
     initial_credits_granted = auto()
+    info = auto()
 
     def __str__(self) -> str:
         return f"messages.{self.name}"
