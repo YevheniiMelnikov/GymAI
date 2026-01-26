@@ -30,7 +30,6 @@ class TaskPaymentNotifier(PaymentNotifier):
 
     def failure(self, profile_id: int, language: str) -> None:
         message = translate(MessageText.payment_failure, language).format(
-            mail=settings.EMAIL,
             tg=settings.TG_SUPPORT_CONTACT,
         )
         self._task.delay(profile_id, message)

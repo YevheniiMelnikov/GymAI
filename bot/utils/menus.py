@@ -46,7 +46,6 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext, 
 async def show_balance_menu(
     callback_obj: InteractionTarget,
     profile: Profile,
-    state: FSMContext,
     *,
     already_answered: bool = False,
     back_webapp_url: str | None = None,

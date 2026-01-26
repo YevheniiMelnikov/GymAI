@@ -440,6 +440,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
         cls,
         prompt: str,
         deps: AgentDeps,
+        profile_context: str | None = None,
         attachments: Sequence[dict[str, str]] | None = None,
     ) -> QAResponse:
         deps.mode = CoachMode.ask_ai
@@ -457,9 +458,11 @@ class CoachAgent(metaclass=CoachAgentMeta):
             mode=deps.mode,
             messages=len(history),
         )
+        resolved_profile_context = profile_context or "Profile data: not provided."
         user_prompt = ASK_AI_USER_PROMPT.format(
             language=language_label,
             question=prompt,
+            profile_context=resolved_profile_context,
         )
 
         multimodal_input = cls._build_user_message(user_prompt, attachments)
@@ -499,6 +502,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
                 prompt,
                 deps,
                 history,
+                profile_context=resolved_profile_context,
                 prefetched_knowledge=None,
             )
             if fallback is not None:
@@ -547,6 +551,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
                 prompt,
                 deps,
                 history,
+                profile_context=resolved_profile_context,
                 prefetched_knowledge=None,
             )
             if fallback is not None:

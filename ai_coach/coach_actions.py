@@ -63,6 +63,7 @@ DISPATCH: dict[CoachMode, CoachAction] = {
     CoachMode.ask_ai: lambda ctx: CoachAgent.answer_question(
         ctx["prompt"] or "",
         deps=ctx["deps"],
+        profile_context=ctx.get("profile_context"),
         **({"attachments": ctx["attachments"]} if ctx.get("attachments") else {}),
     ),
     CoachMode.diet: lambda ctx: CoachAgent.generate_diet_plan(

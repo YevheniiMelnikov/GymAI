@@ -70,6 +70,7 @@ class CoachAgentProtocol(Protocol):
         cls,
         prompt: str,
         deps: AgentDeps,
+        profile_context: str | None = None,
         attachments: list[dict[str, str]] | None = None,
     ) -> QAResponse: ...
 

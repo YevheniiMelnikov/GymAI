@@ -132,7 +132,7 @@ async def start_ask_ai_prompt(
     if user_profile.credits < cost:
         await _notify_user(origin, translate(MessageText.not_enough_credits, lang), show_alert=True)
         if show_balance_menu_on_insufficient:
-            await show_balance_menu(origin, profile, state, already_answered=True)
+            await show_balance_menu(origin, profile, already_answered=True)
         return False
 
     file_path = Path(__file__).resolve().parent.parent.parent / "images" / "ai_coach.png"

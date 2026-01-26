@@ -322,8 +322,12 @@ class GDriveDocumentLoader(KnowledgeLoader):
                     index == 1 or index % progress_every == 0 or index == total_files
                 )
                 logger.debug(
-                    f"kb_gdrive.file_start dataset={dataset_alias} index={index}/{total_files} "
-                    f"file={kb_path} size={size}"
+                    "kb_gdrive.file_start dataset={} index={}/{} file={} size={}",
+                    dataset_alias,
+                    index,
+                    total_files,
+                    kb_path,
+                    size,
                 )
 
                 try:
@@ -337,8 +341,11 @@ class GDriveDocumentLoader(KnowledgeLoader):
                         continue
                     if (size or 0) > settings.MAX_FILE_SIZE_MB * (1024 * 1024):
                         logger.debug(
-                            f"kb_gdrive.file_decision dataset={dataset_alias} file={kb_path} "
-                            f"decision=skip reason=file_too_large size_mb={size / 1_048_576:.1f}"
+                            "kb_gdrive.file_decision dataset={} file={} decision=skip reason=file_too_large "
+                            "size_mb={:.1f}",
+                            dataset_alias,
+                            kb_path,
+                            size / 1_048_576,
                         )
                         skipped += 1
                         continue
@@ -446,9 +453,16 @@ class GDriveDocumentLoader(KnowledgeLoader):
                     if should_log_progress:
                         remaining = total_files - index
                         logger.info(
-                            f"kb_gdrive.progress dataset={dataset_alias} index={index}/{total_files} "
-                            f"processed={processed} skipped={skipped} errors={errors} remaining={remaining} "
-                            f"current={kb_path}"
+                            "kb_gdrive.progress dataset={} index={}/{} processed={} skipped={} errors={} "
+                            "remaining={} current={}",
+                            dataset_alias,
+                            index,
+                            total_files,
+                            processed,
+                            skipped,
+                            errors,
+                            remaining,
+                            kb_path,
                         )
                         summary["processed"] = processed
                         summary["skipped"] = skipped

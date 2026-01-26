@@ -74,25 +74,26 @@ def suggest_replacement_exercises(
     entries = load_exercise_catalog()
     query = str(name_query or "").strip()
     if not query:
-        return list(entries)[: max(1, min(50, int(limit)))]
+        return list(entries)
     base_candidates = filter_exercise_entries(entries, name_query=query, limit=1)
     base = base_candidates[0] if base_candidates else None
     if base is None:
-        return filter_exercise_entries(entries, name_query=query, limit=limit)
+        return filter_exercise_entries(entries, name_query=query, limit=None)
+
+    normalized_category = base.category
+    if normalized_category in {"conditioning", "health"}:
+        return [
+            entry for entry in entries if entry.category == normalized_category and entry.canonical != base.canonical
+        ]
 
     base_primary = {item.lower() for item in base.primary_muscles}
-    results: list[ExerciseCatalogEntry] = []
-    for entry in entries:
-        if entry.category != base.category:
-            continue
-        if entry.canonical == base.canonical:
-            continue
-        if not base_primary.intersection({item.lower() for item in entry.primary_muscles}):
-            continue
-        results.append(entry)
-        if len(results) >= limit:
-            break
-    return results
+    return [
+        entry
+        for entry in entries
+        if entry.category == normalized_category
+        and entry.canonical != base.canonical
+        and base_primary.intersection({item.lower() for item in entry.primary_muscles})
+    ]
 
 
 __all__ = ["filter_exercise_entries", "search_exercises", "suggest_replacement_exercises"]

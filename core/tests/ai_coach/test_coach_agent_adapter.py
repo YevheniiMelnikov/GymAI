@@ -117,6 +117,7 @@ async def test_answer_question_uses_fallback_when_completion_fails(monkeypatch: 
         deps: AgentDeps,
         history: list[object],
         *,
+        profile_context: str | None = None,
         prefetched_knowledge: Sequence[KnowledgeSnippet] | None = None,
     ) -> QAResponse | None:
         return QAResponse(answer="Fallback", sources=["kb_global"])
@@ -141,6 +142,7 @@ async def test_answer_question_manual_answer_when_everything_fails(monkeypatch: 
         deps: AgentDeps,
         history: list[object],
         *,
+        profile_context: str | None = None,
         prefetched_knowledge: Sequence[KnowledgeSnippet] | None = None,
     ) -> QAResponse | None:
         return None
@@ -199,7 +201,7 @@ def test_normalize_tool_call_arguments_fills_sources() -> None:
 
 
 def test_api_passthrough_returns_llm_answer(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_answer(prompt: str, deps: AgentDeps) -> QAResponse:
+    async def fake_answer(prompt: str, deps: AgentDeps, profile_context: str | None = None) -> QAResponse:
         return QAResponse(answer="OK_FROM_LLM", sources=["kb_global"])
 
     monkeypatch.setattr(CoachAgent, "answer_question", staticmethod(fake_answer))

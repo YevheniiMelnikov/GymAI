@@ -66,6 +66,7 @@ class LLMHelperProto(Protocol):
         deps: AgentDeps,
         history: list[ModelMessage],
         *,
+        profile_context: str | None = None,
         prefetched_knowledge: Sequence[KnowledgeSnippet] | None = None,
     ) -> QAResponse | None: ...
 
@@ -336,6 +337,7 @@ class LLMHelper:
         deps: AgentDeps,
         history: list[ModelMessage],
         *,
+        profile_context: str | None = None,
         prefetched_knowledge: Sequence[KnowledgeSnippet] | None = None,
     ) -> QAResponse | None:
         if deps.fallback_used:
@@ -375,9 +377,11 @@ class LLMHelper:
         _, language_label = cls._language_context(deps)
         knowledge_section = format_knowledge_entries(entries)
         system_prompt = COACH_SYSTEM_PROMPT
+        resolved_profile_context = profile_context or "Profile data: not provided."
         user_prompt = ASK_AI_USER_PROMPT.format(
             language=language_label,
             question=prompt,
+            profile_context=resolved_profile_context,
         )
         if knowledge_section:
             user_prompt = f"{user_prompt}\n\nKnowledge entries:\n{knowledge_section}"

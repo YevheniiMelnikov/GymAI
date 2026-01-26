@@ -22,7 +22,7 @@ def _patch_agent(monkeypatch: pytest.MonkeyPatch, attr: str, value) -> None:
 
 def test_ask_ai_agent(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
-        async def fake_answer(prompt: str, deps: object) -> QAResponse:
+        async def fake_answer(prompt: str, deps: object, profile_context: str | None = None) -> QAResponse:
             return QAResponse(answer="hi")
 
         _patch_agent(monkeypatch, "answer_question", staticmethod(fake_answer))
@@ -40,7 +40,7 @@ def test_ask_ai_agent(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_ask_ai_tool_error(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
-        async def fake_answer(prompt: str, deps: object) -> QAResponse:
+        async def fake_answer(prompt: str, deps: object, profile_context: str | None = None) -> QAResponse:
             raise RuntimeError("saving not allowed in this mode")
 
         _patch_agent(monkeypatch, "answer_question", staticmethod(fake_answer))
@@ -58,7 +58,7 @@ def test_ask_ai_tool_error(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_ask_ai_model_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
-        async def fake_answer(prompt: str, deps: object) -> QAResponse:
+        async def fake_answer(prompt: str, deps: object, profile_context: str | None = None) -> QAResponse:
             raise AgentExecutionAborted("empty", reason="model_empty_response")
 
         _patch_agent(monkeypatch, "answer_question", staticmethod(fake_answer))
@@ -78,7 +78,7 @@ def test_ask_ai_model_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_ask_ai_knowledge_base_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
-        async def fake_answer(prompt: str, deps: object) -> QAResponse:
+        async def fake_answer(prompt: str, deps: object, profile_context: str | None = None) -> QAResponse:
             raise AgentExecutionAborted("no kb", reason="knowledge_base_empty")
 
         _patch_agent(monkeypatch, "answer_question", staticmethod(fake_answer))

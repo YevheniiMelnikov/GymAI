@@ -138,15 +138,15 @@ def test_ask_ai_dispatch_and_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
         captured: dict[str, tuple] = {}
 
-        async def fake_answer(prompt: str, deps: object) -> str:
-            captured["args"] = (prompt, deps)
+        async def fake_answer(prompt: str, deps: object, profile_context: str | None = None) -> str:
+            captured["args"] = (prompt, deps, profile_context)
             return "ask_ai-result"
 
         _patch_agent(monkeypatch, "answer_question", staticmethod(fake_answer))
         ctx = {"prompt": "p", "deps": "d"}
         result = await DISPATCH[CoachMode.ask_ai](ctx)  # pyrefly: ignore[bad-argument-type]
         assert result == "ask_ai-result"
-        assert captured["args"] == ("p", "d")
+        assert captured["args"] == ("p", "d", None)
         assert set(DISPATCH) == {
             CoachMode.program,
             CoachMode.subscription,

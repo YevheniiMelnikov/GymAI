@@ -1,5 +1,7 @@
 Client language: {language}
 Client question: {question}
+Profile context:
+{profile_context}
 
 Expectations:
 - Call tool_search_knowledge(query) with a precise summary of the client's request before finalizing the answer.

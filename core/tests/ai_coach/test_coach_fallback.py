@@ -69,6 +69,7 @@ async def test_fallback_summary_on_empty_completions(monkeypatch: pytest.MonkeyP
         "Що робити, щоб прогресувати?",
         deps,
         history=[],
+        profile_context="",
         prefetched_knowledge=knowledge,
     )
 
