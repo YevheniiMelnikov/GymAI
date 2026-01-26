@@ -1,0 +1,13 @@
+- id: scoliosis_squat
+  question: "Can I do barbell squats with scoliosis?"
+  tags: [health, safety]
+  expectations:
+    must_consider_profile: true
+    must_not_be_dangerous: true
+    must_use_kb: true
+
+- id: fat_loss_evening_food
+  question: "What should I eat in the evening if I want to lose fat?"
+  tags: [nutrition]
+  expectations:
+    must_be_actionable: true

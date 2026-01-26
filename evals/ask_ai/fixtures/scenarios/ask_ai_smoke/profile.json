@@ -1,0 +1,15 @@
+{
+  "tg_id": 999000001,
+  "language": "eng",
+  "gender": "male",
+  "born_in": 1995,
+  "workout_experience": "amateur",
+  "workout_goals": "fat_loss",
+  "health_notes": "scoliosis",
+  "weight": 82,
+  "height": 178,
+  "workout_location": "gym",
+  "diet_allergies": "",
+  "diet_products": ["plant_food", "meat", "fish_seafood", "eggs", "dairy"],
+  "status": "completed"
+}

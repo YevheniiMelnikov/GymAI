@@ -239,6 +239,29 @@ uv run pytest -q
 
 ---
 
+## Ask AI Evals
+
+The Ask AI eval runner is an integration quality test that calls the AI Coach over HTTP and relies on the local
+Docker stack (API + AI Coach + Cognee).
+
+Requirements:
+- `task run` is running the local stack.
+- `AI_COACH_URL` is reachable from the host (typically `http://localhost:9000`).
+- `LLM_API_KEY` is configured for the judge model (uses the same provider settings as the AI coach).
+
+Run:
+
+```bash
+task eval
+```
+
+Reports:
+- Fixtures live in `evals/ask_ai/fixtures/scenarios/<scenario>/`.
+- `evals/ask_ai/reports/latest.md` (overwritten each run)
+- timestamped report in `evals/ask_ai/reports/` (ask_ai_YYYYMMDD_HHMMSS.md)
+
+---
+
 ## Taskfile Commands
 
 The project includes a [Taskfile](https://taskfile.dev/) for convenience.
@@ -250,6 +273,7 @@ The project includes a [Taskfile](https://taskfile.dev/) for convenience.
 | `run`        | Start all services with Docker     |
 | `runapi`     | Rebuild and start only the API container from `docker-compose-local.yml` (no deps) for quick backend changes |
 | `test`       | Run tests                          |
+| `eval`       | Run Ask AI eval runner (local stack required) |
 | `lint`       | Lint the codebase (ruff + pyrefly) |
 | `format`     | Format the codebase                |
 | `update`     | Update dependencies                |

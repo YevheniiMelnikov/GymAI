@@ -51,6 +51,9 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+.uv-cache/
+evals/ask_ai/reports/*
+!evals/ask_ai/reports/.gitkeep
 cover/
 
 # Translations
