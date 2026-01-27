@@ -23,8 +23,8 @@ x-common-env: &common_env
     VECTOR_DB_PROVIDER: ${VECTOR_DB_PROVIDER:-qdrant}
     VECTOR_DB_URL: ${VECTOR_DB_URL:-http://qdrant:6333}
     VECTOR_DB_KEY: ${VECTOR_DB_KEY:-}
-    BOT_INTERNAL_HOST: ${BOT_UPSTREAM_HOST:-bot}
-    BOT_INTERNAL_PORT: ${BOT_UPSTREAM_PORT:-8088}
+    BOT_INTERNAL_HOST: ${BOT_SERVICE:-bot}
+    BOT_INTERNAL_PORT: ${BOT_CONTAINER_PORT:-8088}
   env_file:
     - .env
   volumes:
@@ -63,8 +63,8 @@ services:
       SKIP_COLLECTSTATIC: "true"
       API_URL: ${API_URL:-http://api:8000}
       GOOGLE_APPLICATION_CREDENTIALS: "/app/google_creds.json"
-      DOCKER_BOT_START: ${DOCKER_BOT_START:-true}
       COGNEE_STORAGE_PATH: "/app/cognee_storage"
+      SERVICE_ROLE: bot
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8088/telegram/webhook/__ping"]
       interval: 5s
@@ -72,8 +72,8 @@ services:
       retries: 5
       start_period: 10s
     <<: *common_env
-    entrypoint: /bin/sh
-    command: -lc 'if [ "${DOCKER_BOT_START}" = "true" ]; then exec /app/docker/entrypoint.sh python -m bot.main; else echo "bot disabled (DOCKER_BOT_START!=true)"; exec sleep infinity; fi'
+    entrypoint: /app/docker/entrypoint.sh
+    command: python -m bot.main
     restart: unless-stopped
     networks: [internal]
 

@@ -53,6 +53,8 @@ GymAI is a Dockerized platform that includes a Telegram bot (aiogram), API (Djan
    cp docker/.env.example docker/.env
    ```
 
+   > `.env.example` describes the **production** environment. Local development builds often keep a separate `docker/.env` (or any other secret-managed file) that overrides the production defaults.
+
 2. Set `Required` ENV's (see section `Configuration` below).
 
 3. Place Google service account credentials at the project root:
@@ -83,7 +85,7 @@ Local development options:
 * With Docker Compose: `task run` starts Postgres, Redis, RabbitMQ, Qdrant, Neo4j, API, bot, AI coach, and local Nginx on [http://localhost:8000](http://localhost:8000). When `CF_TUNNEL_TOKEN` is defined the bundled Cloudflare tunnel also connects to expose the stack for local development (never run the tunnel in production).
 * (Optional) Expose the local stack to Telegram via the bundled Cloudflare tunnel. Set `CF_TUNNEL_TOKEN` in `.env` before running `task run` so the tunnel container can authenticate; without the token the container exits immediately. The tunnel is meant purely for local testing—use proper ingress in production. Use the published URL as `WEBHOOK_HOST` when tunnelling Telegram webhooks.
 
-> To run bot locally FULLY with docker set `DOCKER_BOT_START=true`
+> The bot service now starts automatically whenever the compose stack is up; no extra flag is required.
 
 ---
 
@@ -129,6 +131,12 @@ In the production compose file the RabbitMQ ports are published to the host (see
 ## Frontend (webapp) live-reload
 
 For local development, `docker-compose-local.yml` includes a `webapp_watch` service (`npm run build:watch`) that rebuilds the webapp assets into `staticfiles/js-build-v2`. It is not used in production; for simple backend work you can skip running it.
+
+## Production frontend assets
+
+The production stack does **not** rebuild the webapp at runtime. Before bringing up `docker/docker-compose.yml`, run the npm build locally (`npm ci && npm run build` inside `apps/webapp`) so `/app/staticfiles` already contains the generated JS/CSS. The `staticfiles` volume is mounted read-only into `nginx`, therefore no build step occurs inside the container and missing assets will break the UI.
+
+> Production deploy **assumes** the frontend build already happened, otherwise `/static/js/` and `/webapp/` will fail to load.
 
 ## Celery
 
