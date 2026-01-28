@@ -6,9 +6,12 @@ upstream bot_upstream {
 limit_req_zone $binary_remote_addr zone=api_limit:10m rate=20r/s;
 limit_req_zone $binary_remote_addr zone=webhook_limit:5m rate=5r/s;
 
+# =========================
+# HTTP (80) → redirect + ACME
+# =========================
 server {
     listen 80;
-    server_name bot-api.gymbot.site;
+    server_name ${SERVER_NAME};
     client_max_body_size ${CLIENT_MAX_BODY_SIZE};
 
     location ^~ /.well-known/acme-challenge/ {
@@ -16,7 +19,7 @@ server {
         try_files $uri =404;
     }
 
-        location = /telegram/webhook/__ping {
+    location = /telegram/webhook/__ping {
         access_log off;
         default_type application/json;
         return 200 '{"ok": true}';
@@ -27,20 +30,24 @@ server {
     }
 }
 
+# =========================
+# HTTPS (443) → app
+# =========================
 server {
     listen 443 ssl http2;
-    server_name bot-api.gymbot.site;
+    server_name ${SERVER_NAME};
     client_max_body_size ${CLIENT_MAX_BODY_SIZE};
 
-    ssl_certificate     /etc/letsencrypt/live/bot-api.gymbot.site/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/bot-api.gymbot.site/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
 
     resolver 127.0.0.11 ipv6=off valid=1s;
     resolver_timeout 5s;
 
-    # ==== JS (with Django) ====
-    location ^~ /static/js/ {
-        set $api_upstream http://api:8000;
+    set $api_upstream http://${API_SERVICE}:${API_PORT};
+
+    # ==== STATIC JS BUILD → Django (Whitenoise / app-served) ====
+    location ^~ /static/js-build-v3/ {
         proxy_pass $api_upstream;
 
         proxy_http_version 1.1;
@@ -49,6 +56,7 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port  443;
 
         proxy_connect_timeout 3s;
         proxy_send_timeout    10s;
@@ -56,11 +64,37 @@ server {
         send_timeout          30s;
 
         proxy_redirect off;
+
         add_header Cache-Control "no-store" always;
         add_header Pragma "no-cache" always;
         add_header Expires "0" always;
     }
 
+    # ==== STATIC JS → Django (legacy path) ====
+    location ^~ /static/js/ {
+        proxy_pass $api_upstream;
+
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port  443;
+
+        proxy_connect_timeout 3s;
+        proxy_send_timeout    10s;
+        proxy_read_timeout    30s;
+        send_timeout          30s;
+
+        proxy_redirect off;
+
+        add_header Cache-Control "no-store" always;
+        add_header Pragma "no-cache" always;
+        add_header Expires "0" always;
+    }
+
+    # ==== STATIC (everything else) → nginx filesystem ====
     location /static/ {
         alias /app/staticfiles/;
         add_header Cache-Control "public, max-age=86400";
@@ -69,8 +103,8 @@ server {
 
     # ==== API → Django ====
     location /api/ {
-        set $api_upstream http://api:8000;
         proxy_pass $api_upstream;
+
         limit_req zone=api_limit burst=40 nodelay;
         limit_req_status 429;
 
@@ -80,6 +114,7 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port  443;
 
         proxy_connect_timeout 3s;
         proxy_send_timeout    10s;
@@ -95,7 +130,6 @@ server {
 
     # ==== Payments webhook → Django ====
     location ^~ /payments-webhook/ {
-        set $api_upstream http://api:8000;
         proxy_pass $api_upstream;
 
         proxy_http_version 1.1;
@@ -104,6 +138,7 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port  443;
 
         proxy_connect_timeout 3s;
         proxy_send_timeout    10s;
@@ -118,7 +153,6 @@ server {
 
     # ==== Webapp HTML → Django ====
     location ^~ /webapp/ {
-        set $api_upstream http://api:8000;
         proxy_pass $api_upstream;
 
         proxy_http_version 1.1;
@@ -127,6 +161,7 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port  443;
 
         proxy_connect_timeout 3s;
         proxy_send_timeout    10s;
@@ -141,8 +176,8 @@ server {
         proxy_hide_header X-WebKit-CSP;
         proxy_hide_header X-Frame-Options;
 
-        # CSP
         add_header Content-Security-Policy "default-src 'self' https://telegram.org https://t.me data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org data: blob: *; connect-src 'self' https://telegram.org http: https:; img-src 'self' data: blob: https://telegram.org https://t.me https://storage.googleapis.com https://storage.cloud.google.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors https://t.me https://web.telegram.org https://*.telegram.org; base-uri 'self'; form-action 'self';" always;
+
         add_header Cache-Control "no-store, no-cache, must-revalidate" always;
         add_header Pragma "no-cache" always;
         add_header Expires "0" always;
@@ -151,24 +186,31 @@ server {
     # ==== Bot UI → bot ====
     location ^~ /gym_bot/ {
         proxy_pass http://bot_upstream;
+
         proxy_http_version 1.1;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port  443;
+
         proxy_redirect off;
     }
 
     # ==== Telegram webhooks → bot ====
     location ^~ /telegram/webhook {
         proxy_pass http://bot_upstream;
+
         limit_req zone=webhook_limit burst=10 nodelay;
         limit_req_status 429;
+
         proxy_http_version 1.1;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port  443;
+
         proxy_redirect off;
     }
 
@@ -180,7 +222,6 @@ server {
 
     # ==== health → Django ====
     location /health/ {
-        set $api_upstream http://api:8000;
         proxy_pass $api_upstream;
 
         proxy_http_version 1.1;
@@ -189,27 +230,10 @@ server {
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port  443;
 
         proxy_connect_timeout 2s;
         proxy_read_timeout    5s;
-    }
-
-    # ==== Django Admin ====
-    location ^~ /admin/ {
-        set $api_upstream http://api:8000;
-        proxy_pass $api_upstream;
-
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        proxy_connect_timeout 3s;
-        proxy_send_timeout    10s;
-        proxy_read_timeout    30s;
-        send_timeout          30s;
 
         proxy_redirect off;
     }
@@ -217,11 +241,14 @@ server {
     # ==== fallback → bot ====
     location / {
         proxy_pass http://bot_upstream;
+
         proxy_http_version 1.1;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port  443;
+
         proxy_redirect off;
     }
 
