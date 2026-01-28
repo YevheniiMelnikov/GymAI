@@ -112,6 +112,7 @@ class APIClient:
         retry_server_errors: bool = True,
     ) -> tuple[int, Any | None]:
         headers = headers or {}
+        headers.setdefault("X-Forwarded-Proto", "https")
         if self.use_default_auth and self.api_key:
             headers.setdefault("Authorization", f"Bearer {self.api_key}")
 

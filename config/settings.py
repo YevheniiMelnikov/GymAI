@@ -30,13 +30,13 @@ _parsed_urls = [p for p in map(_parse_url, _raw_urls) if p and p.hostname]
 CSRF_TRUSTED_ORIGINS = [f"{p.scheme}://{p.netloc}" for p in _parsed_urls if p.scheme]
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = settings.SECURE_SSL_REDIRECT
 ASGI_APPLICATION = "config.asgi.application"
 if DEBUG:
     STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
 else:
     STATICFILES_STORAGE = "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"
 
-SECURE_SSL_REDIRECT = settings.SECURE_SSL_REDIRECT if not DEBUG else False
 SESSION_COOKIE_SECURE = settings.SESSION_COOKIE_SECURE if not DEBUG else False
 CSRF_COOKIE_SECURE = settings.CSRF_COOKIE_SECURE if not DEBUG else False
 SECURE_HSTS_SECONDS = settings.SECURE_HSTS_SECONDS if not DEBUG else 0
