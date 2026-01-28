@@ -319,7 +319,7 @@ services:
       COGNEE_STORAGE_PATH: /app/cognee_storage
     entrypoint: /app/docker/entrypoint.sh
     healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://localhost:${BOT_CONTAINER_PORT:-8088}/telegram/webhook/__ping >/dev/null 2>&1 || exit 1" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:${BOT_CONTAINER_PORT:-8088}/telegram/webhook/__ping >/dev/null 2>&1 || exit 1" ]
       interval: 10s
       timeout: 3s
       retries: 30
