@@ -142,15 +142,7 @@ server {
         proxy_hide_header X-Frame-Options;
 
         # CSP
-        add_header Content-Security-Policy "default-src 'self' https://telegram.org https://t.me data: blob:; \
-          script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org data: blob: *; \
-          connect-src 'self' https://telegram.org http: https:; \
-          img-src 'self' data: blob: https://telegram.org https://t.me https://storage.googleapis.com https://storage.cloud.google.com; \
-          style-src 'self' 'unsafe-inline'; \
-          font-src 'self' data:; \
-          frame-ancestors https://t.me https://web.telegram.org https://*.telegram.org; \
-          base-uri 'self'; form-action 'self';" always;
-
+        add_header Content-Security-Policy "default-src 'self' https://telegram.org https://t.me data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org data: blob: *; connect-src 'self' https://telegram.org http: https:; img-src 'self' data: blob: https://telegram.org https://t.me https://storage.googleapis.com https://storage.cloud.google.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors https://t.me https://web.telegram.org https://*.telegram.org; base-uri 'self'; form-action 'self';" always;
         add_header Cache-Control "no-store, no-cache, must-revalidate" always;
         add_header Pragma "no-cache" always;
         add_header Expires "0" always;
