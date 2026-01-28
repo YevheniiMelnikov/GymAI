@@ -92,7 +92,7 @@ services:
       QDRANT__SERVICE__HTTP_PORT: ${QDRANT_HTTP_PORT:-6333}
       QDRANT__SERVICE__GRPC_PORT: ${QDRANT_GRPC_PORT:-6334}
     healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://localhost:6333/healthz >/dev/null 2>&1 || exit 1" ]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:${QDRANT_HTTP_PORT:-6333}/healthz >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 30
@@ -134,9 +134,9 @@ services:
       db:
         condition: service_healthy
       ai_coach:
-        condition: service_started
+        condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${API_PORT:-8000}/health/"]
       interval: 60s
@@ -175,9 +175,9 @@ services:
       db:
         condition: service_healthy
       ai_coach:
-        condition: service_started
+        condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     networks: [internal]
     restart: unless-stopped
     volumes:
@@ -209,9 +209,9 @@ services:
       db:
         condition: service_healthy
       ai_coach:
-        condition: service_started
+        condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     networks: [internal]
     restart: unless-stopped
     volumes:
@@ -243,9 +243,9 @@ services:
       db:
         condition: service_healthy
       ai_coach:
-        condition: service_started
+        condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     volumes:
       - staticfiles:/app/staticfiles
@@ -287,7 +287,7 @@ services:
       neo4j:
         condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${COACH_PORT:-9000}/health/"]
       interval: 30s
@@ -325,7 +325,7 @@ services:
       db:
         condition: service_healthy
       ai_coach:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     networks: [internal]
     volumes:
@@ -379,9 +379,9 @@ services:
       - 443:443
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
       bot:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost/health/"]
       interval: 30s
