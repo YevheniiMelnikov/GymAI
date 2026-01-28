@@ -16,6 +16,12 @@ server {
         try_files $uri =404;
     }
 
+        location = /telegram/webhook/__ping {
+        access_log off;
+        default_type application/json;
+        return 200 '{"ok": true}';
+    }
+
     location / {
         return 301 https://$host$request_uri;
     }
