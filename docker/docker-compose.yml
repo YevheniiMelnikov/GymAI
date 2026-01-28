@@ -321,7 +321,7 @@ services:
         EXTRAS: ""
     <<: *common_env
     environment:
-      API_URL: http://api:8000
+      API_URL: ${API_URL:-http://api:8000}
       GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
       BOT_CONTAINER_PORT: ${BOT_CONTAINER_PORT:-8088}
       SERVICE_ROLE: bot
