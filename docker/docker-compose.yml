@@ -136,7 +136,7 @@ services:
       ai_coach:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${API_PORT:-8000}/health/"]
       interval: 60s
@@ -177,7 +177,7 @@ services:
       ai_coach:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     networks: [internal]
     restart: unless-stopped
     volumes:
@@ -211,7 +211,7 @@ services:
       ai_coach:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     networks: [internal]
     restart: unless-stopped
     volumes:
@@ -245,7 +245,7 @@ services:
       ai_coach:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     volumes:
       - staticfiles:/app/staticfiles
@@ -287,7 +287,7 @@ services:
       neo4j:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${COACH_PORT:-9000}/health/"]
       interval: 30s
