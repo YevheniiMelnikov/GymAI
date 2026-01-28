@@ -46,52 +46,18 @@ server {
 
     set $api_upstream http://${API_SERVICE}:${API_PORT};
 
-    # ==== STATIC JS BUILD → Django (Whitenoise / app-served) ====
+    # ==== STATIC JS BUILD (expected path) → nginx filesystem (real path) ====
     location ^~ /static/js-build-v3/ {
-        proxy_pass $api_upstream;
-
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Port  443;
-
-        proxy_connect_timeout 3s;
-        proxy_send_timeout    10s;
-        proxy_read_timeout    30s;
-        send_timeout          30s;
-
-        proxy_redirect off;
-
-        add_header Cache-Control "no-store" always;
-        add_header Pragma "no-cache" always;
-        add_header Expires "0" always;
+        alias /app/staticfiles/js-build-v3-user/;
+        add_header Cache-Control "public, max-age=86400";
+        try_files $uri $uri/ =404;
     }
 
-    # ==== STATIC JS → Django (legacy path) ====
+    # ==== STATIC JS → nginx filesystem (legacy path; if exists) ====
     location ^~ /static/js/ {
-        proxy_pass $api_upstream;
-
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Port  443;
-
-        proxy_connect_timeout 3s;
-        proxy_send_timeout    10s;
-        proxy_read_timeout    30s;
-        send_timeout          30s;
-
-        proxy_redirect off;
-
-        add_header Cache-Control "no-store" always;
-        add_header Pragma "no-cache" always;
-        add_header Expires "0" always;
+        alias /app/staticfiles/js/;
+        add_header Cache-Control "public, max-age=86400";
+        try_files $uri $uri/ =404;
     }
 
     # ==== STATIC (everything else) → nginx filesystem ====
