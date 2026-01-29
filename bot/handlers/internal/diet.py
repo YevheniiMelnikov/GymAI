@@ -10,6 +10,7 @@ from bot.keyboards import diet_view_kb
 from bot.texts import MessageText, translate
 from bot.utils.ai_coach.ask_ai import send_chunk_with_reply_fallback
 from bot.utils.urls import get_webapp_url, support_contact_url
+from config.app_settings import settings
 from core.ai_coach.state.diet import AiDietState
 from core.exceptions import ProfileNotFoundError, UserServiceError
 from core.services import APIService
@@ -126,7 +127,8 @@ async def _internal_ai_diet_ready_impl(request: web.Request) -> web.Response:  #
     try:
         await bot.send_message(
             chat_id=profile.tg_id,
-            text=translate(MessageText.diet_ready, language),
+            text=translate(MessageText.diet_ready, language).format(bot_name=settings.BOT_NAME),
+            parse_mode=ParseMode.HTML,
             reply_markup=menu,
             disable_notification=True,
         )

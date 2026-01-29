@@ -14,7 +14,8 @@ MODE: subscription
    - Equipment filter is optional; if used, pass at most ONE equipment type from the list below, otherwise omit it.
    - Muscle groups: chest, upper_back, lats, lower_back, front_delts, side_delts, rear_delts, biceps, triceps,
      forearms, quadriceps, hamstrings, glutes, calves, adductors, abductors, abs, obliques, core.
-   - Equipment: kettlebell, dumbbell, barbell, smith, lever, cable, band, bodyweight, weighted bodyweight.
+ - Equipment: kettlebell, dumbbell, barbell, smith, lever, cable, band, bodyweight, weighted bodyweight.
+  - When `workout_location` is "home", avoid exercises that require cable, lever, kettlebell, barbell, or dumbbell equipment unless the user's `wishes` explicitly mention having that equipment available.
 4) Generate SubscriptionPayload including split_number (1-7) and exercises, avoiding calendar weekday names.
    Use ONLY exercises from the catalog results and include gif_key for each exercise.
    - Treat profile context, wishes, and health notes as hard constraints.

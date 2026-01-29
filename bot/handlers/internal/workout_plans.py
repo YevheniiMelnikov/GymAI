@@ -199,7 +199,10 @@ class ProgramPlanFinalizer(PlanFinalizer):
         try:
             await context.bot.send_message(
                 chat_id=context.profile.tg_id,
-                text=translate(MessageText.new_workout_plan, context.profile.language),
+                text=translate(MessageText.new_workout_plan, context.profile.language).format(
+                    bot_name=settings.BOT_NAME
+                ),
+                parse_mode=ParseMode.HTML,
                 reply_markup=program_view_kb(
                     context.profile.language,
                     get_webapp_url("program", context.profile.language),
@@ -311,7 +314,9 @@ class SubscriptionPlanFinalizer(PlanFinalizer):
         try:
             await context.bot.send_message(
                 chat_id=context.profile.tg_id,
-                text=translate(MessageText.program_updated, context.profile.language),
+                text=translate(MessageText.program_updated, context.profile.language).format(
+                    bot_name=settings.BOT_NAME
+                ),
                 parse_mode=ParseMode.HTML,
                 reply_markup=plan_updated_kb(
                     context.profile.language,
@@ -396,9 +401,10 @@ class SubscriptionPlanFinalizer(PlanFinalizer):
         try:
             await context.bot.send_message(
                 chat_id=context.profile.tg_id,
-                text=translate(MessageText.subscription_created, context.profile.language).format(
+                text=translate(MessageText.new_workout_plan, context.profile.language).format(
                     bot_name=settings.BOT_NAME
                 ),
+                parse_mode=ParseMode.HTML,
                 reply_markup=program_view_kb(
                     context.profile.language,
                     get_webapp_url("subscription", context.profile.language),

@@ -43,6 +43,13 @@ _LOG_PAYLOADS = os.getenv("AI_COACH_LOG_PAYLOADS", "").strip() == "1"
 _inflight_requests: dict[str, asyncio.Future] = {}
 _inflight_lock = asyncio.Lock()
 
+WORKOUT_EXPERIENCE_DESCRIPTIONS: dict[str, str] = {
+    "beginner": "a newcomer with little to no structured training or only very sporadic activity, not yet training consistently", # noqa: E501
+    "amateur": "someone with a few months of experience, training irregularly and comfortable with basic movements",
+    "advanced": "a regular trainee for at least a year, familiar with technique and structured progression patterns",
+    "pro": "long-term, consistent athlete with years of disciplined practice, close to competitive conditioning",
+}
+
 
 def _to_language_code(raw: object, default: str) -> str:
     """Normalize raw language values to a lowercase language code."""
@@ -227,7 +234,12 @@ async def _build_profile_context(profile: Profile | None, *, include_plans: bool
         lines.append(f"Height (cm): {height}")
     workout_experience = getattr(profile, "workout_experience", None)
     if workout_experience:
-        lines.append(f"Workout experience: {workout_experience}")
+        experience_value = str(workout_experience).lower()
+        experience_description = WORKOUT_EXPERIENCE_DESCRIPTIONS.get(experience_value)
+        if experience_description:
+            lines.append(f"Workout experience: {experience_value} ({experience_description})")
+        else:
+            lines.append(f"Workout experience: {experience_value}")
     health_notes = getattr(profile, "health_notes", None)
     if health_notes:
         lines.append(f"Health notes: {health_notes}")

@@ -75,7 +75,6 @@ class MessageText(AutoName):
 
     payment_success = auto()
     payment_failure = auto()
-    contract_info_message = auto()
     main_menu = auto()
     start = auto()
     saved = auto()
@@ -85,7 +84,6 @@ class MessageText(AutoName):
     ask_ai_prompt = auto()
     new_workout_plan = auto()
     program_updated = auto()
-    subscription_created = auto()
 
     credit_balance_menu = auto()
     not_enough_credits = auto()
