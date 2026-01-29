@@ -33,7 +33,11 @@ def _walk_cognee_modules(
     if not paths:
         return []
     out: list[str] = []
-    for mod in pkgutil.walk_packages(paths, prefix=f"{base}."):
+
+    def _ignore_walk_error(error: Exception) -> None:  # pragma: no cover - safety shim
+        return None
+
+    for mod in pkgutil.walk_packages(paths, prefix=f"{base}.", onerror=_ignore_walk_error):
         name = mod.name
         lowered = name.lower()
         ok = True
