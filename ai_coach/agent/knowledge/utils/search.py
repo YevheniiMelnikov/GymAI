@@ -5,7 +5,7 @@ import logging
 from time import monotonic
 from enum import Enum
 from hashlib import sha256
-from typing import Any, Awaitable, Iterable, Mapping, Sequence, cast, Literal, Optional, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, Iterable, Mapping, Sequence, cast, Literal, Optional, TYPE_CHECKING
 
 try:
     from cognee.modules.search.types import SearchType
@@ -30,9 +30,12 @@ except ModuleNotFoundError:
 from loguru import logger
 
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet, ProjectionStatus
+from ai_coach.agent.knowledge.utils.cognee_compat import (
+    resolve_get_cache_engine,
+    resolve_set_session_user_context_variable,
+)
 from ai_coach.agent.knowledge.utils.datasets import DatasetService
 from ai_coach.agent.knowledge.utils.projection import ProjectionService
-from ai_coach.exceptions import AgentExecutionAborted
 from config.app_settings import settings
 from core.schemas import Profile
 from core.utils.redis_lock import get_redis_client
@@ -72,6 +75,9 @@ class SearchService:
         self.projection_service = projection_service
         self._knowledge_base: Optional["KnowledgeBase"] = knowledge_base
         self._search_type_default = _resolve_search_type(getattr(settings, "COGNEE_SEARCH_MODE", None))
+        self._cache_engine_checked: bool = False
+        self._get_cache_engine: Callable[..., Any] | None = None
+        self._cache_engine_module: str | None = None
 
     def _require_kb(self) -> "KnowledgeBase":
         if self._knowledge_base is None:
@@ -81,31 +87,63 @@ class SearchService:
     async def _apply_session_context(self, user_ctx: Any | None, profile_id: int) -> None:
         if user_ctx is None:
             return
-        try:
-            from cognee.modules.retrieval.utils.session_cache import set_session_user_context_variable
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("cognee_session_context_unavailable profile_id={} detail={}", profile_id, exc)
+        setter, _module = resolve_set_session_user_context_variable()
+        if setter is None:
+            logger.debug("cognee_session_context_unavailable profile_id={} detail=setter_missing", profile_id)
             return
         try:
             import inspect
 
-            if inspect.iscoroutinefunction(set_session_user_context_variable):
-                await set_session_user_context_variable(user_ctx)
+            if inspect.iscoroutinefunction(setter):
+                await setter(user_ctx)
             else:
-                set_session_user_context_variable(user_ctx)
+                setter(user_ctx)
         except Exception as exc:  # noqa: BLE001
             logger.debug("cognee_session_context_failed profile_id={} detail={}", profile_id, exc)
 
-    def _ensure_session_cache_available(self, profile_id: int) -> None:
+    def _session_cache_supported(self, profile_id: int) -> bool:
+        if not self._cache_engine_checked:
+            getter, module = resolve_get_cache_engine()
+            self._get_cache_engine = getter
+            self._cache_engine_module = module
+            self._cache_engine_checked = True
+            if getter is not None:
+                logger.info("knowledge_session_cache_resolved module={}", module or "unknown")
+
+        getter = self._get_cache_engine
+        if getter is None:
+            self.dataset_service.log_once(
+                logging.WARNING,
+                "knowledge_session_cache_disabled",
+                profile_id=profile_id,
+                detail="get_cache_engine_missing",
+                min_interval=300.0,
+            )
+            return False
+
         try:
-            from cognee.infrastructure.databases.cache.get_cache_engine import get_cache_engine
+            cache = getter(lock_key=f"chat_session:{profile_id}")
         except Exception as exc:  # noqa: BLE001
-            logger.error("knowledge_session_cache_unavailable profile_id={} detail={}", profile_id, exc)
-            raise AgentExecutionAborted("knowledge_base_unavailable", reason="knowledge_base_unavailable") from exc
-        cache = get_cache_engine(lock_key=f"chat_session:{profile_id}")
+            self.dataset_service.log_once(
+                logging.WARNING,
+                "knowledge_session_cache_disabled",
+                profile_id=profile_id,
+                detail=str(exc),
+                min_interval=120.0,
+            )
+            return False
+
         if cache is None:
-            logger.error("knowledge_session_cache_unavailable profile_id={} detail=cache_engine_none", profile_id)
-            raise AgentExecutionAborted("knowledge_base_unavailable", reason="knowledge_base_unavailable")
+            self.dataset_service.log_once(
+                logging.WARNING,
+                "knowledge_session_cache_disabled",
+                profile_id=profile_id,
+                detail="cache_engine_none",
+                min_interval=120.0,
+            )
+            return False
+
+        return True
 
     def _build_candidate_aliases(self, datasets: Sequence[str] | None, profile_id: int) -> list[str]:
         candidate_aliases: list[str] = []
@@ -252,9 +290,9 @@ class SearchService:
         actor = user if user is not None else await self.dataset_service.get_cognee_user()
         await self._schedule_profile_sync(profile_id)
         user_ctx = self.dataset_service.to_user_ctx(actor)
-        session_id = self.dataset_service.session_id_for_profile(profile_id)
         await self._apply_session_context(user_ctx, profile_id)
-        self._ensure_session_cache_available(profile_id)
+        supported = self._session_cache_supported(profile_id)
+        session_id = self.dataset_service.session_id_for_profile(profile_id) if supported else ""
         candidate_aliases = self._build_candidate_aliases(datasets, profile_id)
         candidate_aliases, global_unavailable = await self._ensure_global_dataset_ready(
             candidate_aliases,

@@ -1,13 +1,13 @@
 MODE: subscription
 1) Call tool_search_knowledge(query).
-   - Build a compact query that starts with `profile:` and lists key fields (gender, birth_year, weight, height,
-     workout_goals, workout_experience, workout_location, health_notes) plus a short cue like "workout plan" and the user's goal or constraint.
-   - Keep the query <=220 characters. Do not include role text, instructions, or anything starting with "MODE:".
+   - Compose a structured query describing the client: start with `profile:` and mention gender, birth_year or age, workout_experience with a short descriptor, workout_location, goals/wishes, and health_notes or conditions. Include any relevant equipment context or training constraints.
+   - Add `intent:` to describe what you expect to learn (e.g., “intent: sustainable hypertrophy for home gym”), and append `dataset:profile`, `dataset:global`, or both to narrow the scope.
+   - Keep the entire query under 220 characters and avoid including role text or anything starting with “MODE:”.
 2) If weight and height are available in the profile, call tool_calculate_bmi(weight_kg, height_cm) ONCE.
    - Treat BMI as a screening signal, not a diagnosis. High BMI does not always mean obesity; trained clients with high experience
      and heavy working weights may have higher BMI due to muscle mass. This is the exception, not the rule.
-3) Call tool_search_exercises(category, primary_muscles, secondary_muscles, equipment, name_query) up to the configured limit to fetch exercises from
-   the catalog. Use broad queries; do not set a limit.
+3) Call tool_search_exercises(category, primary_muscles, equipment, limit) up to the configured limit to fetch exercises from
+   the catalog. Use broad queries; do not set a limit. Focus on the muscle groups and equipment you need; skip the name filter.
    - Categories: strength (default), conditioning, health.
    - For conditioning/health: search by category only (no extra filters).
    - For strength: provide at most ONE primary muscle group. Do NOT pass secondary muscles.
@@ -34,8 +34,7 @@ tool_search_exercises up to the configured limit. If BMI is used, call tool_calc
 If you receive a response indicating a tool was already run, skip additional calls and complete the subscription with
 the existing data.
 
-Example calls:
-- tool_search_knowledge(query="profile: male, 1995, 84 kg, 186 cm, muscle gain, gym", k=6)
+- tool_search_knowledge(query="profile: gender=male; age=28; experience=amateur; location=gym; goals=build strength; health=none; wishes=focus on squats; intent:6-week strength phase; dataset:profile,global", k=6)
 - tool_calculate_bmi(weight_kg=84, height_cm=186)
-- tool_search_exercises(category="strength", primary_muscles=["quadriceps"], secondary_muscles=None, equipment="barbell", name_query="", limit=None)
+- tool_search_exercises(category="strength", primary_muscles=["quadriceps"], equipment="barbell", limit=None)
 - tool_create_subscription(split_number=3, exercises=payload.exercises, period="1m", wishes=wishes, workout_location=workout_location)

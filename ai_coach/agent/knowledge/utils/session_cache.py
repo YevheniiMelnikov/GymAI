@@ -3,6 +3,7 @@ from typing import Any, Protocol, Sequence
 import cognee
 from loguru import logger
 
+from ai_coach.agent.knowledge.utils.cognee_compat import resolve_get_cache_engine
 from ai_coach.agent.knowledge.utils.memify_scheduler import try_lock_chat_summary
 from ai_coach.types import MessageRole
 from config.app_settings import settings
@@ -53,10 +54,12 @@ class SessionCacheService:
         return f"agent_sessions:{user_id}:{session_id}"
 
     async def load_session_entries(self, profile_id: int, *, limit_pairs: int | None = None) -> list[dict[str, Any]]:
-        try:
-            from cognee.infrastructure.databases.cache.get_cache_engine import get_cache_engine
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("cognee_cache_engine_unavailable profile_id={} detail={}", profile_id, exc)
+        getter, _module = resolve_get_cache_engine()
+        if getter is None:
+            logger.debug(
+                "cognee_cache_engine_unavailable profile_id={} detail=get_cache_engine_missing",
+                profile_id,
+            )
             return []
 
         user = await self._dataset_service.get_cognee_user()
@@ -64,7 +67,7 @@ class SessionCacheService:
         if not user_id:
             return []
         session_id = self._dataset_service.session_id_for_profile(profile_id)
-        cache = get_cache_engine(lock_key=f"chat_session:{profile_id}")
+        cache = getter(lock_key=f"chat_session:{profile_id}")
         if cache is None:
             return []
         try:

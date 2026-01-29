@@ -44,7 +44,7 @@ _inflight_requests: dict[str, asyncio.Future] = {}
 _inflight_lock = asyncio.Lock()
 
 WORKOUT_EXPERIENCE_DESCRIPTIONS: dict[str, str] = {
-    "beginner": "a newcomer with little to no structured training or only very sporadic activity, not yet training consistently", # noqa: E501
+    "beginner": "a newcomer with little to no structured training or only very sporadic activity, not yet training consistently",  # noqa: E501
     "amateur": "someone with a few months of experience, training irregularly and comfortable with basic movements",
     "advanced": "a regular trainee for at least a year, familiar with technique and structured progression patterns",
     "pro": "long-term, consistent athlete with years of disciplined practice, close to competitive conditioning",

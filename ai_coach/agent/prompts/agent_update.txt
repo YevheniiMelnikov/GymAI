@@ -2,7 +2,7 @@ MODE: update
 1) If weight and height are available in the profile, call tool_calculate_bmi(weight_kg, height_cm) ONCE.
    - Treat BMI as a screening signal, not a diagnosis. High BMI does not always mean obesity; trained clients with high experience
      and heavy working weights may have higher BMI due to muscle mass. This is the exception, not the rule.
-2) Call tool_search_exercises(category, primary_muscles, secondary_muscles, equipment, name_query) up to the configured limit to fetch exercises from
+2) Call tool_search_exercises(category, primary_muscles, equipment, limit) up to the configured limit to fetch exercises from
    the catalog. Use broad queries; do not set a limit.
    - Each call must target one distinct movement pattern (push / pull / hinge / squat-legs / core).
    - Categories: strength (default), conditioning, health.

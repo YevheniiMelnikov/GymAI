@@ -25,7 +25,7 @@ Instructions:
   - Respect injuries, fatigue, or strong preferences.
   - If the client has been on the same exercise list for many weeks, consider rotating some exercises to avoid stagnation.
   - Keep output compact and relevant.
-- When selecting exercises, call tool_search_exercises(category, primary_muscles, secondary_muscles, equipment, name_query) up to the configured limit to
+-- When selecting exercises, call tool_search_exercises(category, primary_muscles, equipment, limit) up to the configured limit to
   fetch exercises from the catalog. Use broad queries and limit up to 30 items. Use ONLY those catalog entries; include
   gif_key for each exercise. Each call should target a distinct movement pattern when possible.
 

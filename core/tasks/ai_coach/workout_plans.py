@@ -12,7 +12,7 @@ from loguru import logger
 from config.app_settings import settings
 from core.ai_coach.state.plan import AiPlanState
 from core.celery_app import app
-from core.enums import SubscriptionPeriod, WorkoutPlanType, WorkoutLocation
+from core.enums import SubscriptionPeriod, WorkoutLocation, WorkoutPlanType
 from core.internal_http import build_internal_hmac_auth_headers, internal_request_timeout
 from core.schemas import Program, Subscription
 from core.services import APIService
@@ -33,6 +33,21 @@ AI_PLAN_SOFT_TIME_LIMIT = settings.AI_COACH_TIMEOUT
 AI_PLAN_TIME_LIMIT = AI_PLAN_SOFT_TIME_LIMIT + 30
 AI_PLAN_NOTIFY_SOFT_LIMIT = settings.AI_PLAN_NOTIFY_TIMEOUT
 AI_PLAN_NOTIFY_TIME_LIMIT = AI_PLAN_NOTIFY_SOFT_LIMIT + 30
+
+
+KNOWLEDGE_BASE_FATAL_REASONS: set[str] = {
+    "knowledge_base_unavailable",
+    "knowledge_base_empty",
+}
+
+
+def _is_fatal_kb_reason(reason: str) -> bool:
+    cleaned = (reason or "").strip()
+    if not cleaned:
+        return False
+    if cleaned.startswith("knowledge_"):
+        return True
+    return cleaned in KNOWLEDGE_BASE_FATAL_REASONS
 
 
 def _resolve_profile_id(payload: Mapping[str, Any]) -> int | None:
@@ -343,7 +358,16 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
             f"request_id={request_id} attempt={attempt} status={exc.status} retryable={exc.retryable} "
             f"reason={exc.reason}"
         )
-        if not exc.retryable:
+        fatal_reason = _is_fatal_kb_reason(exc.reason or "")
+        if fatal_reason:
+            logger.warning(
+                "ai_generate_plan fatal knowledge_base error profile_id={} plan_type={} request_id={} reason={}",
+                profile_id,
+                plan_type.value,
+                request_id,
+                exc.reason,
+            )
+        if fatal_reason or not exc.retryable:
             await _notify_error(
                 plan_type=plan_type,
                 request_id=request_id,
@@ -469,7 +493,16 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> d
             f"request_id={request_id} attempt={attempt} status={exc.status} retryable={exc.retryable} "
             f"reason={exc.reason}"
         )
-        if not exc.retryable:
+        fatal_reason = _is_fatal_kb_reason(exc.reason or "")
+        if fatal_reason:
+            logger.warning(
+                "ai_update_plan fatal knowledge_base error profile_id={} plan_type={} request_id={} reason={}",
+                profile_id,
+                plan_type.value,
+                request_id,
+                exc.reason,
+            )
+        if fatal_reason or not exc.retryable:
             await _notify_error(
                 plan_type=plan_type,
                 request_id=request_id,

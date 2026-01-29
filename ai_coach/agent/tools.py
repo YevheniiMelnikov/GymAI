@@ -211,10 +211,9 @@ async def tool_search_exercises(
     primary_muscles: list[str] | None,
     secondary_muscles: list[str] | None,
     equipment: list[str] | None,
-    name_query: str | None,
     limit: int | None,
 ) -> list[ExerciseCatalogItem]:
-    """Search the exercise catalog by category, muscle groups, or name."""
+    """Search the exercise catalog by category, muscle groups, and equipment."""
     tool_name = "tool_search_exercises"
     normalized_category = str(category or "strength").strip().lower()
     if normalized_category not in EXERCISE_CATEGORIES:
@@ -232,7 +231,6 @@ async def tool_search_exercises(
         primary = []
         secondary = []
         equipment_list = []
-        name_query = None
     category = normalized_category
     primary_muscles = primary or None
     secondary_muscles = None
@@ -248,7 +246,6 @@ async def tool_search_exercises(
         ",".join(primary_muscles or []),
         ",".join(secondary_muscles or []),
         ",".join(equipment or []),
-        str(name_query or ""),
     )
     deps, skipped, cached = _start_tool(ctx, tool_name, cache_key=cache_key)
     if skipped:
@@ -257,12 +254,11 @@ async def tool_search_exercises(
     if not entries:
         raise AgentExecutionAborted("Exercise catalog is missing", reason="exercise_catalog_missing")
     logger.debug(
-        "tool_search_exercises profile_id={} category={} primary={} secondary={} name_query='{}' limit={}",
+        "tool_search_exercises profile_id={} category={} primary={} secondary={} limit={}",
         deps.profile_id,
         category,
         primary_muscles,
         secondary_muscles,
-        str(name_query or "")[:80],
         effective_limit,
     )
     results = search_exercises(
@@ -270,7 +266,6 @@ async def tool_search_exercises(
         primary_muscles=primary_muscles,
         secondary_muscles=secondary_muscles,
         equipment=equipment,
-        name_query=name_query,
         limit=effective_limit,
     )
     if not results:

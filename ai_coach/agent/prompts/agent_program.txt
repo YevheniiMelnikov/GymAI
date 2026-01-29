@@ -1,13 +1,13 @@
 MODE: program
 1) Call tool_search_knowledge(query).
-   - Build a compact query that starts with `profile:` and lists key fields (gender, birth_year, weight, height,
-     workout_goals, workout_experience, workout_location, health_notes) plus a short cue like "workout plan" and the user's goal or constraint.
-   - Keep the query <=220 characters. Do not include role text, instructions, or anything starting with "MODE:".
+   - Compose a structured query that summarizes the client so the KB knows who is being coached. Start with `profile:` and include gender, birth_year or age, workout_experience with a short note about what it means, workout_location, goals/wishes, and any health_notes or conditions. Mention equipment or training constraints if relevant.
+   - After the profile section add `intent:` to describe what you expect the knowledge base to supply (e.g., "intent: muscle hypertrophy progression" or "intent: avoid lower-back load"). Append `dataset:profile` when you only need personal history, `dataset:global` when you need general coaching guidance, or both separated by commas.
+   - Keep the entire query under 220 characters and avoid anything that looks like role text or other instructions.
 2) If weight and height are available in the profile, call tool_calculate_bmi(weight_kg, height_cm) ONCE.
    - Treat BMI as a screening signal, not a diagnosis. High BMI does not always mean obesity; trained clients with high experience
      and heavy working weights may have higher BMI due to muscle mass. This is the exception, not the rule.
 3) Call tool_get_program_history().
-4) Call tool_search_exercises(category, primary_muscles, secondary_muscles, equipment, name_query) up to the configured limit to fetch exercises from
+4) Call tool_search_exercises(category, primary_muscles, equipment, limit) up to the configured limit to fetch exercises from
    the catalog. Use broad queries; do not set a limit.
    - Categories: strength (default), conditioning, health.
    - For conditioning/health: search by category only (no extra filters).
@@ -28,11 +28,10 @@ call tool_calculate_bmi once after tool_search_knowledge. Call tool_search_exerc
 response indicates it was already executed, do not attempt to call it again; continue to the next step and finish the
 run with the saved program.
 
-Example calls:
-- tool_search_knowledge(query="squat benefits", k=6)
+- tool_search_knowledge(query="profile: gender=male; age=27; experience=advanced (1y+); location=gym; goals=muscle gain; health=none; wishes=squat focus; intent:hypertrophy cues; dataset:profile,global", k=6)
 - tool_calculate_bmi(weight_kg=84, height_cm=186)
 - tool_get_program_history()
-- tool_search_exercises(category="strength", primary_muscles=["chest"], secondary_muscles=None, equipment="barbell", name_query="", limit=None)
+ - tool_search_exercises(category="strength", primary_muscles=["chest"], equipment="barbell", limit=None)
 - tool_save_program(plan)
 
 PROGRAM PAYLOAD REQUIREMENTS:
