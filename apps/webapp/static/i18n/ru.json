@@ -221,5 +221,10 @@
     "weekly_survey.sending": "Отправляем...",
     "weekly_survey.comment.add": "Добавить комментарий",
     "weekly_survey.comment.edit": "Редактировать комментарий",
-    "weekly_survey.comment.placeholder": "Можно оставить любую информацию, которая поможет тренеру"
+    "weekly_survey.comment.placeholder": "Здесь можно описать любую важную информацию или пожелания",
+    "modal.generationFailed.title": "Не удалось сгенерировать",
+    "modal.generationFailed.body": "Произошла ошибка при генерации. Попробуйте ещё раз.",
+    "modal.generationFailed.bodyCreditsRefunded": "Произошла ошибка при генерации. Кредиты возвращены на баланс. Попробуйте ещё раз или напишите в поддержку.",
+    "modal.generationFailed.supportButton": "Написать в поддержку",
+    "modal.generationFailed.closeButton": "Закрыть"
 }

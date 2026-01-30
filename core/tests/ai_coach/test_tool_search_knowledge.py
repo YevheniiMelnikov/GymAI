@@ -3,7 +3,7 @@ from typing import Any
 import pytest  # pyrefly: ignore[import-error]
 
 from ai_coach.agent import AgentDeps
-from ai_coach.exceptions import AgentExecutionAborted
+from ai_coach.exceptions import AgentExecutionAborted, KnowledgeBaseUnavailableError
 from ai_coach.agent import tools as agent_tools
 from ai_coach.agent.tools import tool_get_chat_history, tool_search_knowledge
 from ai_coach.agent import utils as agent_utils
@@ -72,14 +72,11 @@ def test_tool_search_knowledge_timeout_fallback(monkeypatch: pytest.MonkeyPatch)
             coro.close()
             raise TimeoutError
 
-        async def fake_fallback_entries(profile_id: int, limit: int = 6) -> list[tuple[str, str]]:
-            return [("Fallback guidance", "kb_global")]
-
         monkeypatch.setattr("ai_coach.agent.tools.wait_for", fake_wait_for)
-        _patch_kb_attr(monkeypatch, "fallback_entries", fake_fallback_entries)
         ctx = _Ctx()
-        result = await tool_search_knowledge(ctx, "timeout case", k=3)
-        assert result == ["Fallback guidance"]
+        with pytest.raises(AgentExecutionAborted) as exc_info:
+            await tool_search_knowledge(ctx, "timeout case", k=3)
+        assert exc_info.value.reason == "knowledge_base_unavailable"
         assert ctx.deps.knowledge_base_empty is False
         assert ctx.deps.last_knowledge_empty is False
 
@@ -91,16 +88,27 @@ def test_tool_search_knowledge_uses_fallback_entries(monkeypatch: pytest.MonkeyP
         async def fake_search(cls, query: str, profile_id: int, k: int, **kwargs: Any) -> list[str]:
             return []
 
-        async def fake_fallback_entries(profile_id: int, limit: int = 6) -> list[tuple[str, str]]:
-            return [(" First entry ", "kb_global"), ("Second entry", "kb_chat_1")]
+        _patch_kb_attr(monkeypatch, "search", fake_search)
+        ctx = _Ctx()
+        with pytest.raises(AgentExecutionAborted) as exc_info:
+            await tool_search_knowledge(ctx, "need fallback", k=2)
+        assert exc_info.value.reason == "knowledge_base_empty"
+        assert ctx.deps.knowledge_base_empty is True
+        assert ctx.deps.last_knowledge_empty is True
+
+    asyncio.run(runner())
+
+
+def test_tool_search_knowledge_propagates_kb_reason(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        async def fake_search(cls, query: str, profile_id: int, k: int, **kwargs: Any) -> list[str]:
+            raise KnowledgeBaseUnavailableError("KB degraded", reason="knowledge_base_degraded")
 
         _patch_kb_attr(monkeypatch, "search", fake_search)
-        _patch_kb_attr(monkeypatch, "fallback_entries", fake_fallback_entries)
         ctx = _Ctx()
-        result = await tool_search_knowledge(ctx, "need fallback", k=2)
-        assert result == ["First entry", "Second entry"]
-        assert ctx.deps.knowledge_base_empty is False
-        assert ctx.deps.last_knowledge_empty is False
+        with pytest.raises(AgentExecutionAborted) as exc_info:
+            await tool_search_knowledge(ctx, "need search", k=2)
+        assert exc_info.value.reason == "knowledge_base_degraded"
 
     asyncio.run(runner())
 

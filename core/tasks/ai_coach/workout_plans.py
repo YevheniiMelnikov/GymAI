@@ -86,17 +86,18 @@ async def _refund_plan_credits(
     profile_id: int,
     request_id: str,
     plan_type: WorkoutPlanType,
-) -> None:
+) -> bool:
     if not request_id:
-        return
+        logger.debug(f"ai_plan_refund_skip profile_id={profile_id} reason=missing_request_id")
+        return False
     state = AiPlanState.create()
     if await state.is_refunded(request_id):
         logger.debug(f"ai_plan_refund_skip profile_id={profile_id} request_id={request_id} reason=already_refunded")
-        return
+        return True
     locked = await state.claim_refund(request_id, ttl_s=settings.AI_PLAN_NOTIFY_FAILURE_TTL)
     if not locked:
         logger.debug(f"ai_plan_refund_skip profile_id={profile_id} request_id={request_id} reason=lock_held")
-        return
+        return False
     try:
         cost = _resolve_refund_cost(payload, plan_type)
         if cost is None or cost <= 0:
@@ -105,10 +106,11 @@ async def _refund_plan_credits(
                 profile_id,
                 request_id,
             )
-            return
+            return False
         await APIService.profile.adjust_credits(profile_id, cost)
         await state.mark_refunded(request_id, ttl_s=settings.AI_PLAN_NOTIFY_FAILURE_TTL)
         logger.info(f"ai_plan_refund_ok profile_id={profile_id} request_id={request_id} cost={cost}")
+        return True
     except APIClientHTTPError as exc:
         logger.error(f"ai_plan_refund_failed profile_id={profile_id} request_id={request_id} error={exc.reason}")
         raise
@@ -277,9 +279,22 @@ async def _notify_error(
     action: str,
     error: str,
     payload: Mapping[str, Any] | None = None,
-) -> None:
+) -> bool:
+    refunded = False
     if action == "create" and payload is not None:
-        await _refund_plan_credits(payload, profile_id=profile_id, request_id=request_id, plan_type=plan_type)
+        refunded = await _refund_plan_credits(
+            payload,
+            profile_id=profile_id,
+            request_id=request_id,
+            plan_type=plan_type,
+        )
+        logger.info(
+            "ai_plan_refund_result profile_id={} request_id={} refunded={} reason={}",
+            profile_id,
+            request_id,
+            refunded,
+            error,
+        )
     notify_payload: dict[str, Any] = {
         "profile_id": profile_id,
         "plan_type": plan_type.value,
@@ -287,12 +302,14 @@ async def _notify_error(
         "action": action,
         "request_id": request_id,
         "error": error,
+        "credits_refunded": refunded,
     }
     notify_ai_plan_ready_task.apply_async(  # pyrefly: ignore[not-callable]
         args=[notify_payload],
         queue="ai_coach",
         routing_key="ai_coach",
     )
+    return refunded
 
 
 async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> dict[str, Any] | None:
@@ -368,7 +385,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
                 exc.reason,
             )
         if fatal_reason or not exc.retryable:
-            await _notify_error(
+            refunded = await _notify_error(
                 plan_type=plan_type,
                 request_id=request_id,
                 action="create",
@@ -378,7 +395,16 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
             )
             cache.set(
                 f"generation_status:{request_id}",
-                {"status": "error", "progress": 0, "error": exc.reason or f"http_{exc.status}"},
+                {
+                    "status": "error",
+                    "progress": 0,
+                    "error": exc.reason or f"http_{exc.status}",
+                    "error_code": exc.reason or f"http_{exc.status}",
+                    "localized_message_key": "coach_agent_error",
+                    "credits_refunded": refunded,
+                    "support_contact_action": True,
+                    "request_id": request_id,
+                },
                 timeout=settings.AI_COACH_TIMEOUT,
             )
             return None
@@ -389,13 +415,27 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
             f"request_id={request_id} attempt={attempt} error={exc}"
         )
         if attempt >= getattr(task, "max_retries", 0):
-            await _notify_error(
+            refunded = await _notify_error(
                 plan_type=plan_type,
                 request_id=request_id,
                 action="create",
                 error=str(exc),
                 profile_id=profile_id,
                 payload=payload,
+            )
+            cache.set(
+                f"generation_status:{request_id}",
+                {
+                    "status": "error",
+                    "progress": 0,
+                    "error": str(exc),
+                    "error_code": str(exc),
+                    "localized_message_key": "coach_agent_error",
+                    "credits_refunded": refunded,
+                    "support_contact_action": True,
+                    "request_id": request_id,
+                },
+                timeout=settings.AI_COACH_TIMEOUT,
             )
         raise
 
@@ -404,18 +444,27 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
             "ai_generate_plan returned empty "
             f"profile_id={profile_id} plan_type={plan_type.value} request_id={request_id}"
         )
-        cache.set(
-            f"generation_status:{request_id}",
-            {"status": "error", "progress": 0, "error": "empty_plan"},
-            timeout=settings.AI_COACH_TIMEOUT,
-        )
-        await _notify_error(
+        refunded = await _notify_error(
             plan_type=plan_type,
             request_id=request_id,
             action="create",
             error="empty_plan",
             profile_id=profile_id,
             payload=payload,
+        )
+        cache.set(
+            f"generation_status:{request_id}",
+            {
+                "status": "error",
+                "progress": 0,
+                "error": "empty_plan",
+                "error_code": "empty_plan",
+                "localized_message_key": "coach_agent_error",
+                "credits_refunded": refunded,
+                "support_contact_action": True,
+                "request_id": request_id,
+            },
+            timeout=settings.AI_COACH_TIMEOUT,
         )
         return None
 

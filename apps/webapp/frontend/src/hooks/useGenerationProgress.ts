@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { emitGenerationFailed, parseGenerationFailure } from '../ui/generation_failure';
 
 const POLL_INTERVAL = 2000;
 
@@ -19,6 +20,7 @@ export const useGenerationProgress = (
     const [taskId, setTaskId] = useState<string | null>(null);
     const [stage, setStage] = useState<string>('initializing');
     const pollTimerRef = useRef<number | null>(null);
+    const failureEmittedRef = useRef(false);
 
     useEffect(() => {
         const savedTaskId = localStorage.getItem(`generation_task_id_${storageKey}`);
@@ -28,12 +30,34 @@ export const useGenerationProgress = (
         }
     }, [storageKey]);
 
+    const emitFailure = useCallback((data?: any) => {
+        if (failureEmittedRef.current) {
+            return;
+        }
+        const feature = storageKey === 'diet' ? 'diets' : 'workouts';
+        emitGenerationFailed(parseGenerationFailure(feature, data));
+        failureEmittedRef.current = true;
+    }, [storageKey]);
+
     const pollStatus = useCallback(async (currentTaskId: string) => {
         try {
             const response = await fetch(`/api/generation-status/?task_id=${currentTaskId}`);
-            if (!response.ok) return;
+            if (!response.ok) {
+                setIsActive(false);
+                localStorage.removeItem(`generation_task_id_${storageKey}`);
+                emitFailure(null);
+                return;
+            }
 
-            const data = await response.json();
+            let data: any = null;
+            try {
+                data = await response.json();
+            } catch {
+                setIsActive(false);
+                localStorage.removeItem(`generation_task_id_${storageKey}`);
+                emitFailure(null);
+                return;
+            }
             if (data.status === 'success') {
                 setProgress(100);
                 setStage('completed');
@@ -43,7 +67,7 @@ export const useGenerationProgress = (
             } else if (data.status === 'error' || data.status === 'unknown') {
                 setIsActive(false);
                 localStorage.removeItem(`generation_task_id_${storageKey}`);
-                // Optionally handle error state here
+                emitFailure(data);
             } else {
                 // Ensure we don't jump back
                 setProgress((prev) => Math.max(prev, data.progress || 0));
@@ -83,6 +107,7 @@ export const useGenerationProgress = (
         setIsActive(true);
         setProgress(0);
         setStage('queued');
+        failureEmittedRef.current = false;
         localStorage.setItem(`generation_task_id_${storageKey}`, newTaskId);
     }, [storageKey]);
 
@@ -91,6 +116,7 @@ export const useGenerationProgress = (
         setProgress(0);
         setTaskId(null);
         setStage('idle');
+        failureEmittedRef.current = false;
         localStorage.removeItem(`generation_task_id_${storageKey}`);
     }, [storageKey]);
 

@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import importlib.util
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
@@ -29,6 +30,24 @@ from core.services.internal import APIService
 configure_logging()
 
 knowledge_ready_event: asyncio.Event | None = None
+
+
+def _log_dependency_versions() -> None:
+    deps = {
+        "cognee": "cognee",
+        "cognee-community-vector-adapter-qdrant": "cognee-community-vector-adapter-qdrant",
+        "qdrant-client": "qdrant-client",
+    }
+    resolved: dict[str, str] = {}
+    for label, package in deps.items():
+        try:
+            resolved[label] = version(package)
+        except PackageNotFoundError:
+            resolved[label] = "missing"
+        except Exception as exc:  # noqa: BLE001
+            resolved[label] = f"error:{type(exc).__name__}"
+    summary = ", ".join(f"{name}={ver}" for name, ver in resolved.items())
+    logger.info(f"deps.versions {summary}")
 
 
 def _ensure_storage_path() -> None:
@@ -295,6 +314,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             raise RuntimeError("AI coach HMAC credentials are not configured")
         logger.warning("AI coach HMAC credentials are not configured; running without HMAC in non-production mode")
 
+    _log_dependency_versions()
     _ensure_storage_path()
 
     container = create_container()

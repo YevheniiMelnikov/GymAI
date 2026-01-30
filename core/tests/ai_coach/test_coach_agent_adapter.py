@@ -218,7 +218,7 @@ def test_api_passthrough_returns_llm_answer(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert resp.status_code == 503
     payload = resp.json()
-    assert payload["detail"] == "Service unavailable"
+    assert payload["detail"] == "Knowledge base unavailable"
 
 
 def test_ask_ai_runtime_error(monkeypatch) -> None:

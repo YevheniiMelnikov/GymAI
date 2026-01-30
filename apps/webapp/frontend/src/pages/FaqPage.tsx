@@ -4,8 +4,6 @@ import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
 import { applyLang, t } from '../i18n/i18n';
 import {
-    closeWebApp,
-    openTelegramLink,
     readInitData,
     readPreferredLocale,
     showBackButton,
@@ -14,6 +12,7 @@ import {
     offBackButtonClick,
 } from '../telegram';
 import { getSupportContact } from '../api/http';
+import { openSupportChat } from '../utils/support';
 import type { LangCode, TranslationKey } from '../i18n/i18n';
 
 type FaqAnswer =
@@ -165,8 +164,7 @@ const FaqPage: React.FC = () => {
                             type="button"
                             className="primary-button faq-support__button"
                             onClick={() => {
-                                openTelegramLink(supportUrl);
-                                closeWebApp();
+                                void openSupportChat({ initData: readInitData(), supportUrl, closeOnOpen: true });
                             }}
                         >
                             {t('faq.support')}

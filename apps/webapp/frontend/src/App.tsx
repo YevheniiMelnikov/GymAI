@@ -11,10 +11,17 @@ import RegistrationRequiredPage from './pages/RegistrationRequiredPage';
 import WorkoutFlowPage from './pages/WorkoutFlowPage';
 import DietPage from './pages/DietPage';
 import DietFlowPage from './pages/DietFlowPage';
+import GenerationFailedModal from './components/GenerationFailedModal';
 import { useTelegramInit } from './hooks/useTelegramInit';
 import { getProfile, HttpError } from './api/http';
 import { applyLang, LANG_CHANGED_EVENT } from './i18n/i18n';
 import { readInitData } from './telegram';
+import {
+    GENERATION_FAILED_EVENT,
+    emitGenerationFailed,
+    parseGenerationFailure,
+    type GenerationFailurePayload,
+} from './ui/generation_failure';
 
 const LANG_STORAGE_KEY = 'app:lang';
 const WORKOUT_TASK_KEY = 'generation_task_id_workout';
@@ -93,6 +100,17 @@ const GlobalGenerationRedirect: React.FC = () => {
             }
         };
 
+        const failAndClear = (kind: 'workout' | 'diet', data: unknown) => {
+            if (kind === 'workout') {
+                clearKey(WORKOUT_TASK_KEY);
+                clearKey(WORKOUT_PLAN_TYPE_KEY);
+            } else {
+                clearKey(DIET_TASK_KEY);
+            }
+            const payload = parseGenerationFailure(kind === 'diet' ? 'diets' : 'workouts', data);
+            emitGenerationFailed(payload);
+        };
+
         const pollTask = async (taskId: string, kind: 'workout' | 'diet') => {
             if (inFlightRef.current.has(taskId)) {
                 return;
@@ -101,9 +119,16 @@ const GlobalGenerationRedirect: React.FC = () => {
             try {
                 const resp = await fetch(`/api/generation-status/?task_id=${encodeURIComponent(taskId)}`);
                 if (!resp.ok) {
+                    failAndClear(kind, null);
                     return;
                 }
-                const data = await resp.json();
+                let data: any = null;
+                try {
+                    data = await resp.json();
+                } catch {
+                    failAndClear(kind, null);
+                    return;
+                }
                 if (data.status === 'success') {
                     const resultId = data.result_id ? String(data.result_id) : '';
                     if (kind === 'workout') {
@@ -128,14 +153,10 @@ const GlobalGenerationRedirect: React.FC = () => {
                         }
                     }
                 } else if (data.status === 'error' || data.status === 'unknown') {
-                    if (kind === 'workout') {
-                        clearKey(WORKOUT_TASK_KEY);
-                        clearKey(WORKOUT_PLAN_TYPE_KEY);
-                    } else {
-                        clearKey(DIET_TASK_KEY);
-                    }
+                    failAndClear(kind, data);
                 }
             } catch {
+                failAndClear(kind, null);
             } finally {
                 inFlightRef.current.delete(taskId);
             }
@@ -171,11 +192,64 @@ const GlobalGenerationRedirect: React.FC = () => {
 
 type ProfileGate = 'loading' | 'ready' | 'missing';
 
+const GenerationFailureHandler: React.FC<{ onFailure: (payload: GenerationFailurePayload) => void }> = ({
+    onFailure
+}) => {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const lastFailureRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        const getStoredLang = () => {
+            try {
+                return window.sessionStorage.getItem(LANG_STORAGE_KEY) ?? '';
+            } catch {
+                return '';
+            }
+        };
+
+        const buildQuery = (): string => {
+            const params = new URLSearchParams();
+            const storedLang = getStoredLang();
+            if (storedLang) {
+                params.set('lang', storedLang);
+            }
+            const query = params.toString();
+            return query ? `?${query}` : '';
+        };
+
+        const handler = (event: Event) => {
+            const payload = (event as CustomEvent<GenerationFailurePayload>).detail;
+            if (!payload) {
+                return;
+            }
+            const dedupeKey = `${payload.feature}:${payload.errorCode ?? 'na'}:${payload.correlationId ?? 'na'}`;
+            if (lastFailureRef.current === dedupeKey) {
+                return;
+            }
+            lastFailureRef.current = dedupeKey;
+            const query = buildQuery();
+            const target = payload.feature === 'diets' ? `/diets${query}` : `/${query}`;
+            if (location.pathname !== (payload.feature === 'diets' ? '/diets' : '/')) {
+                navigate(target, { replace: true });
+            }
+            onFailure(payload);
+        };
+        window.addEventListener(GENERATION_FAILED_EVENT, handler as EventListener);
+        return () => {
+            window.removeEventListener(GENERATION_FAILED_EVENT, handler as EventListener);
+        };
+    }, [navigate, location.pathname, onFailure]);
+
+    return null;
+};
+
 const App: React.FC = () => {
     useTelegramInit();
     const [profileGate, setProfileGate] = useState<ProfileGate>('loading');
     const initData = useMemo(() => readInitData(), []);
     const [langVersion, setLangVersion] = useState(0);
+    const [generationFailure, setGenerationFailure] = useState<GenerationFailurePayload | null>(null);
 
     useEffect(() => {
         if (!initData) {
@@ -240,6 +314,7 @@ const App: React.FC = () => {
         <BrowserRouter>
             <LegacyRedirect />
             <GlobalGenerationRedirect />
+            <GenerationFailureHandler onFailure={setGenerationFailure} />
             <Routes key={langVersion}>
                 <Route path="/" element={<ProgramPage />} />
                 <Route path="/history" element={<HistoryPage />} />
@@ -252,6 +327,13 @@ const App: React.FC = () => {
                 <Route path="/diets" element={<DietPage />} />
                 <Route path="/diet-flow" element={<DietFlowPage />} />
             </Routes>
+            {generationFailure && (
+                <GenerationFailedModal
+                    payload={generationFailure}
+                    initData={initData}
+                    onClose={() => setGenerationFailure(null)}
+                />
+            )}
         </BrowserRouter>
     );
 };

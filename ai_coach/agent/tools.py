@@ -21,6 +21,7 @@ from ai_coach.types import CoachMode
 
 from ..schemas import ProgramPayload
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+from ai_coach.exceptions import KnowledgeBaseUnavailableError
 from core.ai_coach.exercise_catalog import (
     EQUIPMENT_TYPES,
     EXERCISE_CATEGORIES,
@@ -391,53 +392,6 @@ async def tool_search_knowledge(
         deps.kb_used = False
         return _cache_result(deps, tool_name, [], cache_key=cache_key)
 
-    async def _load_fallback(reason: str) -> list[str]:
-        fallback_pairs: list[tuple[str, str]] = []
-        fallback_fn = getattr(type(kb), "fallback_entries", None)
-        if fallback_fn is not None:
-            try:
-                if _needs_instance_argument(fallback_fn):
-                    fallback_pairs = await fallback_fn(kb, profile_id, limit=effective_k)
-                else:
-                    fallback_pairs = await fallback_fn(profile_id, limit=effective_k)
-            except Exception as fallback_exc:  # noqa: BLE001 - diagnostics only
-                logger.debug(
-                    f"knowledge_search_fallback_failed profile_id={profile_id} query='{normalized_query[:80]}' "
-                    f"reason={reason} detail={fallback_exc}"
-                )
-                fallback_pairs = []
-        trimmed: list[str] = []
-        for value, dataset in fallback_pairs:
-            text = _as_text(value)
-            if not text:
-                continue
-            trimmed.append(text)
-        deps.last_knowledge_query = normalized_query
-        if trimmed:
-            deps.last_knowledge_empty = False
-            deps.knowledge_base_empty = False
-            deps.kb_used = True
-            logger.info(
-                "knowledge_search_{}_fallback profile_id={} query='{}' entries={}".format(
-                    reason,
-                    profile_id,
-                    normalized_query[:80],
-                    len(trimmed),
-                )
-            )
-            return _cache_result(deps, tool_name, trimmed, cache_key=cache_key)
-        deps.last_knowledge_empty = True
-        deps.knowledge_base_empty = True
-        deps.kb_used = False
-        logger.info(
-            "knowledge_search_{} profile_id={} query='{}' detail=no_entries".format(
-                reason,
-                profile_id,
-                normalized_query[:80],
-            )
-        )
-        raise AgentExecutionAborted("knowledge_base_empty", reason="knowledge_base_empty")
-
     snippets: list[Any] = []
     try:
         snippets = await wait_for(
@@ -453,18 +407,31 @@ async def tool_search_knowledge(
         raise
     except TimeoutError:
         logger.info(
-            "knowledge_search_timeout profile_id={} query='{}' timeout={:.1f}".format(
-                profile_id,
-                normalized_query[:80],
-                timeout,
-            )
+            f"knowledge_search_timeout profile_id={profile_id} query='{normalized_query[:80]}' timeout={timeout:.1f}"
         )
-        return await _load_fallback("timeout")
+        deps.last_knowledge_query = normalized_query
+        deps.last_knowledge_empty = False
+        deps.knowledge_base_empty = False
+        deps.kb_used = False
+        raise AgentExecutionAborted("knowledge_base_unavailable", reason="knowledge_base_unavailable")
+    except KnowledgeBaseUnavailableError as exc:
+        logger.warning(
+            f"knowledge_search_failed profile_id={profile_id} query='{normalized_query[:80]}' "
+            f"reason={exc.reason} detail={exc}"
+        )
+        deps.last_knowledge_query = normalized_query
+        deps.last_knowledge_empty = False
+        deps.knowledge_base_empty = False
+        deps.kb_used = False
+        reason = exc.reason or "knowledge_base_unavailable"
+        raise AgentExecutionAborted(reason, reason=reason) from exc
     except Exception as e:
-        message = str(e)
-        if "Empty graph" in message or "EntityNotFound" in type(e).__name__:
-            return await _load_fallback("empty")
-        raise ModelRetry(f"Knowledge search failed: {e}. Refine the query and retry.") from e
+        logger.warning(f"knowledge_search_failed profile_id={profile_id} query='{normalized_query[:80]}' detail={e}")
+        deps.last_knowledge_query = normalized_query
+        deps.last_knowledge_empty = False
+        deps.knowledge_base_empty = False
+        deps.kb_used = False
+        raise AgentExecutionAborted("knowledge_base_unavailable", reason="knowledge_base_unavailable") from e
 
     deps.last_knowledge_query = normalized_query
     if snippets:
@@ -476,7 +443,12 @@ async def tool_search_knowledge(
         if texts:
             return _cache_result(deps, tool_name, texts, cache_key=cache_key)
 
-    return await _load_fallback("empty")
+    deps.last_knowledge_query = normalized_query
+    deps.last_knowledge_empty = True
+    deps.knowledge_base_empty = True
+    deps.kb_used = False
+    logger.info(f"knowledge_search_empty profile_id={profile_id} query='{normalized_query[:80]}' detail=no_entries")
+    raise AgentExecutionAborted("knowledge_base_empty", reason="knowledge_base_empty")
 
 
 @toolset.tool(prepare=_single_use_prepare("tool_get_chat_history"))  # pyrefly: ignore[no-matching-overload]

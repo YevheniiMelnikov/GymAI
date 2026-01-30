@@ -163,7 +163,15 @@ class APIClient:
                     body = exc.response.text if exc.response else ""
                     reason = self._extract_reason(body)
                     retryable = status == 429 or (
-                        retry_server_errors and status >= 500 and reason not in {"timeout", "knowledge_base_empty"}
+                        retry_server_errors
+                        and status >= 500
+                        and reason
+                        not in {
+                            "timeout",
+                            "knowledge_base_empty",
+                            "knowledge_base_unavailable",
+                            "knowledge_base_degraded",
+                        }
                     )
                     if retryable:
                         if attempt < attempts:
@@ -195,7 +203,13 @@ class APIClient:
                     retry_server_errors
                     and status is not None
                     and status >= 500
-                    and reason not in {"timeout", "knowledge_base_empty"}
+                    and reason
+                    not in {
+                        "timeout",
+                        "knowledge_base_empty",
+                        "knowledge_base_unavailable",
+                        "knowledge_base_degraded",
+                    }
                 )
                 if retryable and attempt < attempts:
                     logger.warning(

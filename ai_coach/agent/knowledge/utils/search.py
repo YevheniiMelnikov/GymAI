@@ -30,6 +30,7 @@ except ModuleNotFoundError:
 from loguru import logger
 
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet, ProjectionStatus
+from ai_coach.exceptions import KnowledgeBaseUnavailableError
 from ai_coach.agent.knowledge.utils.cognee_compat import (
     resolve_get_cache_engine,
     resolve_set_session_user_context_variable,
@@ -273,13 +274,11 @@ class SearchService:
         started_at = monotonic()
         if cognee is None:
             logger.warning("knowledge_search_skipped profile_id={} reason=cognee_missing", profile_id)
-            self._log_search_completion(profile_id, request_id or "na", "none", 0, started_at)
-            return []
+            raise KnowledgeBaseUnavailableError("Cognee is not available", reason="cognee_missing")
         if self._knowledge_base is not None and self._knowledge_base.is_degraded():
             info = self._knowledge_base.degraded_info()
             logger.warning(f"knowledge_search_skipped profile_id={profile_id} reason=degraded details={info}")
-            self._log_search_completion(profile_id, request_id or "na", "degraded", 0, started_at)
-            return []
+            raise KnowledgeBaseUnavailableError("Knowledge base is degraded", reason="knowledge_base_degraded")
 
         normalized = query.strip()
         if not normalized:
@@ -372,6 +371,7 @@ class SearchService:
         skipped_aliases: list[str] = []
         rid_value = request_id or "na"
         user_ctx = self.dataset_service.to_user_ctx(user)
+        has_any_rows = False
 
         async def _search_targets(targets: list[str], session: str | None) -> list[str]:
             params: dict[str, Any] = {
@@ -403,6 +403,8 @@ class SearchService:
                 if legacy_rows > 0 and text_rows <= 0 and chunk_rows <= 0:
                     logger.debug(f"projection.legacy_rows dataset={target} alias={alias} legacy_rows={legacy_rows}")
             has_rows = (text_rows > 0 or chunk_rows > 0) or legacy_rows > 0
+            if has_rows:
+                has_any_rows = True
             if not has_rows:
                 self.dataset_service.log_once(
                     logging.INFO,
@@ -446,16 +448,11 @@ class SearchService:
                     datasets=",".join(skipped_aliases),
                     min_interval=5.0,
                 )
-            fallback_raw = await self._fallback_dataset_entries(datasets, user, top_k=k)
-            if fallback_raw:
-                primary_source = skipped_aliases[0] if skipped_aliases else datasets[0]
-                primary_alias = self.dataset_service.alias_for_dataset(primary_source)
-                snippets = [
-                    KnowledgeSnippet(text=value, dataset=primary_alias, kind="document")
-                    for value in fallback_raw
-                    if value.strip()
-                ]
-                return snippets[:k] if k is not None else snippets
+            if has_any_rows:
+                raise KnowledgeBaseUnavailableError(
+                    "Knowledge base projection is unavailable",
+                    reason="knowledge_base_unavailable",
+                )
             self.dataset_service.log_once(
                 logging.INFO,
                 "search:empty",
@@ -507,12 +504,18 @@ class SearchService:
                     f"knowledge_dataset_search_skipped dataset={','.join(ready_aliases)} rid={rid_value} "
                     f"reason=projection_incomplete detail={exc}"
                 )
-                return []
+                raise KnowledgeBaseUnavailableError(
+                    "Knowledge base projection is incomplete",
+                    reason="knowledge_base_unavailable",
+                ) from exc
             logger.warning(
                 f"knowledge_search_failed profile_id={profile_id} rid={rid_value} query_hash={query_hash} detail={exc}"
             )
             logger.debug(f"kb.search.fail detail={exc}")
-            return []
+            raise KnowledgeBaseUnavailableError(
+                "Knowledge base search failed",
+                reason="knowledge_base_unavailable",
+            ) from exc
 
     async def _build_snippets(
         self, items: Iterable[Any], datasets: Sequence[str], user: Any | None
@@ -674,6 +677,12 @@ class SearchService:
         from ai_coach.agent.knowledge.utils.storage import StorageService
         from ai_coach.agent.knowledge.utils.hash_store import HashStore
 
+        storage_service = None
+        if self._knowledge_base is not None:
+            storage_service = getattr(self._knowledge_base, "storage_service", None)
+        if storage_service is None:
+            storage_service = StorageService(self.dataset_service)
+
         collected: list[tuple[str, str]] = []
         limit = top_k or 6
         for dataset in datasets:
@@ -690,7 +699,7 @@ class SearchService:
                 metadata_dict = self.dataset_service._infer_metadata_from_text(normalized, metadata)
                 dig_sha = StorageService.compute_digests(normalized, dataset_alias=alias)
                 ensured_metadata = StorageService.augment_metadata(metadata_dict, alias, digest_sha=dig_sha)
-                StorageService.ensure_storage_file(
+                storage_service.ensure_storage_file(
                     digest_sha=dig_sha,
                     text=normalized,
                     dataset=alias,

@@ -221,5 +221,10 @@
     "weekly_survey.sending": "Надсилаємо...",
     "weekly_survey.comment.add": "Додати коментар",
     "weekly_survey.comment.edit": "Редагувати коментар",
-    "weekly_survey.comment.placeholder": "Можна залишити будь-яку інформацію, яка допоможе тренеру"
+    "weekly_survey.comment.placeholder": "Можна описати тут будь-яку важливу інформацію, чи побажання",
+    "modal.generationFailed.title": "Не вдалося згенерувати",
+    "modal.generationFailed.body": "Сталася помилка під час генерації. Спробуйте ще раз.",
+    "modal.generationFailed.bodyCreditsRefunded": "Сталася помилка під час генерації. Кредити повернено на баланс. Спробуйте ще раз або напишіть у підтримку.",
+    "modal.generationFailed.supportButton": "Написати в підтримку",
+    "modal.generationFailed.closeButton": "Закрити"
 }

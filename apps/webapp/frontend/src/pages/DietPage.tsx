@@ -316,7 +316,7 @@ const DietPage: React.FC = () => {
     };
 
     return (
-        <div className="page-container with-bottom-nav">
+        <div className="page-container with-bottom-nav diet-page">
             <TopBar title={dietId ? t('diet.detail.title') : t('diet.title')} onBack={dietId ? handleBack : undefined} />
 
             <div className="page-shell">

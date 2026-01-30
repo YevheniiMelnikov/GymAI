@@ -251,7 +251,7 @@ class AiCoachService(APIClient):
         logger.debug("ai_coach.ping.start request_id={} url={}", request_id, ping_url)
         ping_started = monotonic()
         # Retry readiness ping with exponential backoff
-        attempts = 5
+        attempts = 2
         delay = 0.5
         for attempt in range(1, attempts + 1):
             try:
@@ -297,7 +297,7 @@ class AiCoachService(APIClient):
                 delay = min(delay * 2.0, 4.5)
 
         # Main POST with retries and per-call client
-        attempts = 5
+        attempts = 2
         delay = 0.5
         status: int = 0
         data: Any | None = None
@@ -332,6 +332,12 @@ class AiCoachService(APIClient):
                     f"ai_coach.request.failed request_id={request_id} endpoint={endpoint} "
                     f"attempt={attempt} elapsed_ms={attempt_elapsed_ms} error={exc}"
                 )
+                if isinstance(exc, APIClientHTTPError) and not exc.retryable:
+                    logger.error(
+                        f"AI coach request failed request_id={request_id} profile_id={payload.profile_id} "
+                        f"status={exc.status} reason={exc.reason}"
+                    )
+                    raise
                 if attempt >= attempts:
                     if isinstance(exc, APIClientHTTPError):
                         logger.error(

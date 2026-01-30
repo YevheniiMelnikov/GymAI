@@ -80,6 +80,12 @@ async def _internal_ai_diet_ready_impl(request: web.Request) -> web.Response:  #
                 reply_markup=None,
                 reply_to_message_id=None,
             )
+            logger.info(
+                "coach_generation_failed_notification_sent action=diet profile_id={} request_id={} reason={}",
+                profile.id,
+                request_id,
+                reason,
+            )
         except Exception as exc:  # noqa: BLE001
             logger.error(
                 "event=ai_diet_error_message_failed request_id={} profile_id={} error={}",

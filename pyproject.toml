@@ -43,8 +43,9 @@ dependencies = [
 
 [project.optional-dependencies]
 coach = [
-  "cognee[neo4j]>=0.2.4",
-  "cognee-community-vector-adapter-qdrant",
+  "cognee[neo4j] >=0.4.1,<0.5.0",
+  "cognee-community-vector-adapter-qdrant >=0.1.0,<0.2.0",
+  "qdrant-client >=1.16.2,<1.17.0",
   "PyMuPDF==1.23.22",
   "dlt[postgres]>=1.15,<2.0",
   "pydantic-ai-slim==0.8.1",

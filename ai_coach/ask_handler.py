@@ -407,28 +407,65 @@ def _log_stage_duration(
         logger.debug(message)
 
 
+def _build_error_payload(
+    *,
+    error_code: str,
+    detail: str,
+    request_id: str | None,
+    correlation_id: str | None,
+    credits_refunded: bool = False,
+    support_contact_action: bool = True,
+    localized_message_key: str = "coach_agent_error",
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "detail": detail,
+        "reason": error_code,
+        "error_code": error_code,
+        "localized_message_key": localized_message_key,
+        "credits_refunded": credits_refunded,
+        "support_contact_action": support_contact_action,
+    }
+    if request_id:
+        payload["request_id"] = request_id
+    if correlation_id:
+        payload["correlation_id"] = correlation_id
+    return payload
+
+
 async def _handle_abort(
     exc: AgentExecutionAborted,
     deps: AgentDeps,
     mode: CoachMode,
+    *,
+    request_id: str | None,
 ) -> Program | Subscription | JSONResponse:
     reason_map = {
         "max_tool_calls_exceeded": "tool budget exceeded",
         "timeout": "request timed out",
         "knowledge_base_empty": "knowledge base returned no data",
         "knowledge_base_unavailable": "knowledge base unavailable",
+        "knowledge_base_degraded": "knowledge base degraded",
+        "cognee_missing": "cognee is unavailable",
         "model_empty_response": "model returned empty response",
         "ask_ai_unavailable": "unable to process ask_ai request; credits refunded",
     }
     detail_reason = reason_map.get(exc.reason, exc.reason)
-    if exc.reason in {"knowledge_base_empty", "knowledge_base_unavailable"}:
+    if exc.reason in {
+        "knowledge_base_empty",
+        "knowledge_base_unavailable",
+        "knowledge_base_degraded",
+        "cognee_missing",
+    }:
         logger.error("knowledge_base_unavailable profile_id={} mode={}", deps.profile_id, mode.value)
+        detail = "knowledge base unavailable"
         return JSONResponse(
             status_code=503,
-            content={
-                "detail": "knowledge base unavailable",
-                "reason": exc.reason,
-            },
+            content=_build_error_payload(
+                error_code=exc.reason,
+                detail=detail,
+                request_id=request_id,
+                correlation_id=deps.request_rid,
+            ),
         )
     if mode in {CoachMode.program, CoachMode.subscription}:
         final_result = deps.final_result
@@ -442,10 +479,13 @@ async def _handle_abort(
             return final_result
     return JSONResponse(
         status_code=408,
-        content={
-            "detail": detail_reason or "AI coach aborted request",
-            "reason": exc.reason,
-        },
+        content=_build_error_payload(
+            error_code=exc.reason,
+            detail=detail_reason or "AI coach aborted request",
+            request_id=request_id,
+            correlation_id=deps.request_rid,
+            support_contact_action=False,
+        ),
     )
 
 
@@ -512,6 +552,12 @@ async def _prepare_chat_kb(
     language: str,
 ) -> KnowledgeBase | None:
     if mode != CoachMode.ask_ai or not prompt:
+        logger.debug(
+            "kb_prepare_skipped profile_id={} mode={} reason={}",
+            profile_id,
+            mode.value,
+            "no_prompt" if not prompt else "mode_not_ask_ai",
+        )
         return None
     return get_knowledge_base()
 
@@ -701,7 +747,15 @@ async def handle_coach_request(
                         data.profile_id,
                         mode.value,
                     )
-                    raise HTTPException(status_code=503, detail="Knowledge base unavailable")
+                    return JSONResponse(
+                        status_code=503,
+                        content=_build_error_payload(
+                            error_code="knowledge_base_unavailable",
+                            detail="Knowledge base unavailable",
+                            request_id=data.request_id,
+                            correlation_id=rid,
+                        ),
+                    )
 
                 response_data: dict[str, Any] = {"answer": answer}
                 blocks = getattr(result, "blocks", None)
@@ -726,7 +780,15 @@ async def handle_coach_request(
                     data.profile_id,
                     mode.value,
                 )
-                raise HTTPException(status_code=503, detail="Knowledge base unavailable")
+                return JSONResponse(
+                    status_code=503,
+                    content=_build_error_payload(
+                        error_code="knowledge_base_unavailable",
+                        detail="Knowledge base unavailable",
+                        request_id=data.request_id,
+                        correlation_id=rid,
+                    ),
+                )
 
             if dedupe_key and result and not isinstance(result, JSONResponse):
                 dedupe_cache[dedupe_key] = result
@@ -741,7 +803,7 @@ async def handle_coach_request(
                 f"/ask agent aborted rid={rid} request_id={data.request_id} profile_id={data.profile_id} "
                 f"mode={mode.value} reason={exc.reason} detail={exc.reason} steps_used={deps.tool_calls}"
             )
-            result = await _handle_abort(exc, deps, mode)
+            result = await _handle_abort(exc, deps, mode, request_id=data.request_id)
             return result
         except ModelHTTPError as exc:
             inflight_error = exc
@@ -751,17 +813,51 @@ async def handle_coach_request(
                     f"/ask agent failed rid={rid} request_id={data.request_id} "
                     f"profile_id={data.profile_id} mode={mode.value} status={status_code} detail={exc}"
                 )
-                raise HTTPException(status_code=400, detail="ai_coach_invalid_request") from exc
+                return JSONResponse(
+                    status_code=400,
+                    content=_build_error_payload(
+                        error_code="ai_coach_invalid_request",
+                        detail="ai_coach_invalid_request",
+                        request_id=data.request_id,
+                        correlation_id=rid,
+                        support_contact_action=False,
+                    ),
+                )
             logger.exception(f"/ask agent failed rid={rid}: {exc}")
-            raise HTTPException(status_code=503, detail="Service unavailable") from exc
+            return JSONResponse(
+                status_code=503,
+                content=_build_error_payload(
+                    error_code="ai_coach_unavailable",
+                    detail="Service unavailable",
+                    request_id=data.request_id,
+                    correlation_id=rid,
+                ),
+            )
         except ValidationError as exc:
             inflight_error = exc
             logger.exception(f"/ask agent validation error rid={rid}: {exc}")
-            raise HTTPException(status_code=422, detail="Invalid response") from exc
+            return JSONResponse(
+                status_code=422,
+                content=_build_error_payload(
+                    error_code="ai_coach_invalid_response",
+                    detail="Invalid response",
+                    request_id=data.request_id,
+                    correlation_id=rid,
+                    support_contact_action=False,
+                ),
+            )
         except Exception as exc:
             inflight_error = exc
             logger.exception(f"/ask agent failed rid={rid}: {exc}")
-            raise HTTPException(status_code=503, detail="Service unavailable") from exc
+            return JSONResponse(
+                status_code=503,
+                content=_build_error_payload(
+                    error_code="ai_coach_unavailable",
+                    detail="Service unavailable",
+                    request_id=data.request_id,
+                    correlation_id=rid,
+                ),
+            )
         finally:
             _final_log(mode, result, deps, started, data.profile_id, data.request_id)
             if inflight_owner and request_id and inflight_future is not None:

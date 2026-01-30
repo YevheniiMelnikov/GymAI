@@ -67,30 +67,45 @@ def _dispatch_refund_task(payload: dict[str, Any]) -> None:
     )
 
 
-async def _refund_credits_impl(payload: dict[str, Any]) -> None:
+async def _attempt_inline_refund(payload: dict[str, Any]) -> bool:
+    request_id = str(payload.get("request_id", ""))
+    profile_id = _resolve_profile_id(payload)
+    try:
+        return await _refund_credits_impl(payload)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            f"event=ai_diet_refund_inline_failed request_id={request_id} profile_id={profile_id} error={exc!s}"
+        )
+        return False
+
+
+async def _refund_credits_impl(payload: dict[str, Any]) -> bool:
     request_id = str(payload.get("request_id", ""))
     if not request_id:
         logger.error("event=ai_diet_refund_missing_request_id")
-        return
+        return False
     state = AiDietState.create()
 
     profile_id = _resolve_profile_id(payload)
     if profile_id is None:
         logger.error(f"event=ai_diet_refund_missing_profile request_id={request_id}")
-        return
+        return False
     cost = int(payload.get("cost", 0))
+    if cost <= 0:
+        logger.debug(f"event=ai_diet_refund_skip request_id={request_id} profile_id={profile_id} reason=invalid_cost")
+        return False
     locked = await state.claim_refund(request_id, ttl_s=settings.AI_QA_DEDUP_TTL)
     if not locked:
         logger.debug(f"event=ai_diet_refund_skip request_id={request_id} reason=lock_held")
-        return
+        return False
     release_lock = True
     try:
         if await state.is_refunded(request_id):
             logger.debug(f"event=ai_diet_refund_skip request_id={request_id} reason=already_refunded")
-            return
+            return True
         if not await state.is_charged(request_id):
             logger.debug(f"event=ai_diet_refund_skip request_id={request_id} reason=not_charged")
-            return
+            return False
 
         profile: Profile | None = None
         try:
@@ -123,6 +138,7 @@ async def _refund_credits_impl(payload: dict[str, Any]) -> None:
         logger.debug(
             f"event=ai_diet_refund_ok request_id={request_id} profile_id={profile_id} cost={cost} balance={balance}"
         )
+        return True
     finally:
         if release_lock:
             await state.release_refund_lock(request_id)
@@ -243,6 +259,7 @@ async def _notify_ai_diet_error(
     request_id: str,
     error: str,
     cost: int,
+    credits_refunded: bool = False,
     dispatch: bool = False,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
@@ -251,6 +268,10 @@ async def _notify_ai_diet_error(
         "error": error,
         "force": True,
         "cost": cost,
+        "credits_refunded": credits_refunded,
+        "error_code": error or "ai_diet_error",
+        "localized_message_key": "coach_agent_error",
+        "support_contact_action": True,
     }
     if profile_id is not None:
         payload["profile_id"] = profile_id
@@ -387,15 +408,27 @@ async def _generate_diet_plan_impl(payload: dict[str, Any], task: Task) -> dict[
             f"status={exc.status} retryable={exc.retryable} reason={exc.reason}"
         )
         if not exc.retryable:
+            refund_payload = {"request_id": request_id, "profile_id": profile_id, "cost": cost}
+            refunded = await _attempt_inline_refund(refund_payload)
             error_payload = await _notify_ai_diet_error(
                 profile_id=profile_id,
                 request_id=request_id,
                 error=exc.reason or f"http_{exc.status}",
                 cost=cost,
+                credits_refunded=refunded,
             )
             cache.set(
                 f"generation_status:{request_id}",
-                {"status": "error", "progress": 0, "error": exc.reason or f"http_{exc.status}"},
+                {
+                    "status": "error",
+                    "progress": 0,
+                    "error": exc.reason or f"http_{exc.status}",
+                    "error_code": error_payload.get("error_code", exc.reason or f"http_{exc.status}"),
+                    "localized_message_key": error_payload.get("localized_message_key", "coach_agent_error"),
+                    "credits_refunded": bool(error_payload.get("credits_refunded")),
+                    "support_contact_action": bool(error_payload.get("support_contact_action", True)),
+                    "request_id": request_id,
+                },
                 timeout=settings.AI_COACH_TIMEOUT,
             )
             return error_payload
@@ -405,24 +438,54 @@ async def _generate_diet_plan_impl(payload: dict[str, Any], task: Task) -> dict[
             f"event=ai_diet_failed profile_id={profile_id} request_id={request_id} attempt={attempt} error={exc}"
         )
         if attempt >= getattr(task, "max_retries", 0):
-            return await _notify_ai_diet_error(
+            refund_payload = {"request_id": request_id, "profile_id": profile_id, "cost": cost}
+            refunded = await _attempt_inline_refund(refund_payload)
+            error_payload = await _notify_ai_diet_error(
                 profile_id=profile_id,
                 request_id=request_id,
                 error=str(exc),
                 cost=cost,
+                credits_refunded=refunded,
             )
+            cache.set(
+                f"generation_status:{request_id}",
+                {
+                    "status": "error",
+                    "progress": 0,
+                    "error": str(exc),
+                    "error_code": error_payload.get("error_code", str(exc)),
+                    "localized_message_key": error_payload.get("localized_message_key", "coach_agent_error"),
+                    "credits_refunded": bool(error_payload.get("credits_refunded")),
+                    "support_contact_action": bool(error_payload.get("support_contact_action", True)),
+                    "request_id": request_id,
+                },
+                timeout=settings.AI_COACH_TIMEOUT,
+            )
+            return error_payload
 
     if response is None:
         logger.error(f"event=ai_diet_empty_response profile_id={profile_id} request_id={request_id}")
+        refund_payload = {"request_id": request_id, "profile_id": profile_id, "cost": cost}
+        refunded = await _attempt_inline_refund(refund_payload)
         error_payload = await _notify_ai_diet_error(
             profile_id=profile_id,
             request_id=request_id,
             error="empty_response",
             cost=cost,
+            credits_refunded=refunded,
         )
         cache.set(
             f"generation_status:{request_id}",
-            {"status": "error", "progress": 0, "error": "empty_response"},
+            {
+                "status": "error",
+                "progress": 0,
+                "error": "empty_response",
+                "error_code": error_payload.get("error_code", "empty_response"),
+                "localized_message_key": error_payload.get("localized_message_key", "coach_agent_error"),
+                "credits_refunded": bool(error_payload.get("credits_refunded")),
+                "support_contact_action": bool(error_payload.get("support_contact_action", True)),
+                "request_id": request_id,
+            },
             timeout=settings.AI_COACH_TIMEOUT,
         )
         return error_payload

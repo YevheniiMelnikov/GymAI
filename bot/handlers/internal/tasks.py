@@ -129,6 +129,13 @@ async def _process_ai_plan_ready(
             message = translate(MessageText.coach_agent_error, profile.language).format(tg=support_contact_url())
             try:
                 await bot.send_message(chat_id=profile.tg_id, text=message)
+                logger.info(
+                    "coach_generation_failed_notification_sent action={} profile_id={} request_id={} reason={}",
+                    action,
+                    resolved_profile_id,
+                    request_id,
+                    detail,
+                )
             except Exception as exc:  # noqa: BLE001
                 logger.error(
                     f"ai_plan_failure_user_message_failed action={action} "

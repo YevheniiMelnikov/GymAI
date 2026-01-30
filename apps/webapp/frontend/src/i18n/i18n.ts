@@ -239,7 +239,7 @@ export const fallbackEn = {
   'weekly_survey.sending': 'Sending...',
   'weekly_survey.comment.add': 'Add comment',
   'weekly_survey.comment.edit': 'Edit comment',
-  'weekly_survey.comment.placeholder': 'You can leave any information that might help your coach',
+  'weekly_survey.comment.placeholder': 'You can describe any important information or wishes here',
   'progress.generating': 'Generating...',
   'progress.hint': 'This usually takes a few minutes. We will notify you when your plan is ready. You can close this window now.',
   'progress.close_app': 'Close App',
@@ -254,7 +254,13 @@ export const fallbackEn = {
   'progress.stage.plan_received': 'Plan received, finalizing...',
   'progress.stage.completed': 'Completed!',
   'progress.stage.error': 'An error occurred.',
-  'progress.processing': 'Cooking your plan...'
+  'progress.processing': 'Cooking your plan...',
+  'modal.generationFailed.title': 'Unable to generate',
+  'modal.generationFailed.body': 'Something went wrong during generation. Please try again.',
+  'modal.generationFailed.bodyCreditsRefunded':
+    'Something went wrong during generation. Credits were returned to your balance. Try again or contact support.',
+  'modal.generationFailed.supportButton': 'Contact support',
+  'modal.generationFailed.closeButton': 'Close'
 } as const;
 
 export type TranslationKey = keyof typeof fallbackEn;
