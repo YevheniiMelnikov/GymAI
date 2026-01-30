@@ -41,6 +41,7 @@ services:
     container_name: db
     image: postgres:18
     environment:
+      TZ: Europe/Kyiv
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
@@ -157,7 +158,7 @@ services:
     restart: unless-stopped
 
   celery_worker:
-    container_name: celery-worker
+    container_name: celery_worker
     image: *app_image
     build:
       context: ..
@@ -192,7 +193,7 @@ services:
       - ../${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:/app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:ro
 
   ai_coach_worker:
-    container_name: ai-coach-worker
+    container_name: ai_coach_worker
     image: *coach_image
     build:
       context: ..
@@ -261,7 +262,7 @@ services:
       - ../${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:/app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:ro
 
   ai_coach:
-    container_name: ai-coach
+    container_name: ai_coach
     image: *coach_image
     build:
       context: ..
@@ -272,6 +273,7 @@ services:
         EXTRAS: coach
     <<: *common_env
     environment:
+      TZ: Europe/Kyiv
       SERVICE_ROLE: ai_coach
       SKIP_COLLECTSTATIC: "true"
       COGNEE_STORAGE_PATH: /app/cognee_storage
@@ -321,6 +323,7 @@ services:
         EXTRAS: ""
     <<: *common_env
     environment:
+      TZ: Europe/Kyiv
       API_URL: ${API_URL:-http://api:8000}
       GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
       BOT_CONTAINER_PORT: ${BOT_CONTAINER_PORT:-8088}
@@ -378,8 +381,10 @@ services:
     networks: [internal]
 
   nginx:
+    container_name: nginx
     image: nginx:alpine
     environment:
+      TZ: Europe/Kyiv
       DOMAIN: ${DOMAIN}
       SERVER_NAME: ${SERVER_NAME}
       API_SERVICE: ${API_SERVICE:-api}

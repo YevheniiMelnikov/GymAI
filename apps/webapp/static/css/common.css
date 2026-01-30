@@ -1626,9 +1626,6 @@ a:hover{ opacity: .9; }
   min-height: clamp(120px, 22vh, 220px);
   padding-block: clamp(4px, 1.4vh, 12px);
 }
-.diet-page .history-empty{
-  margin-top: clamp(14px, 3vh, 26px);
-}
 .history-empty__image{
   display: block;
   width: clamp(160px, 46vw, 220px);

@@ -17,12 +17,13 @@ MODE: subscription
  - Equipment: kettlebell, dumbbell, barbell, smith, lever, cable, band, bodyweight, weighted bodyweight.
   - When `workout_location` is "home", avoid exercises that require cable, lever, kettlebell, barbell, or dumbbell equipment unless the user's `wishes` explicitly mention having that equipment available.
 4) Generate SubscriptionPayload including split_number (1-7) and exercises, avoiding calendar weekday names.
-   Use ONLY exercises from the catalog results and include gif_key for each exercise.
+   Use ONLY exercises from the catalog results and include gif_key for each exercise. Do NOT include warm-up or cardio
+   blocks as exercises; those are added automatically after you save the program.
    - Treat profile context, wishes, and health notes as hard constraints.
    - Guidance for special populations (elderly, medical conditions, rehab, pregnancy, etc.) lives in the knowledge base; do not invent it.
 Subscription field guide:
 - split_number: number of training days per week (1-7). Exercises must have "Day 1".."Day N" matching split_number.
-- exercises: list of DayExercises; each item has day + exercises with name, sets, reps, gif_key.
+- exercises: list of DayExercises; each item has day + exercises with name, sets, reps, gif_key (catalog only).
 - period: subscription billing period ("1m", "6m", "12m").
 - wishes: client's preferences or limitations in free-form text.
 - workout_location: training location ("home", "gym", "strength").

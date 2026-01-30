@@ -18,7 +18,8 @@ MODE: program
  - Equipment: kettlebell, dumbbell, barbell, smith, lever, cable, band, bodyweight, weighted bodyweight.
   - When `workout_location` is "home", avoid exercises that require cable, lever, kettlebell, barbell, or dumbbell equipment unless the user's `wishes` explicitly mention having that equipment available.
 5) Generate a complete ProgramPayload using ONLY exercises from the catalog results. Each exercise must include
-   gif_key from the catalog entry you chose.
+   gif_key from the catalog entry you chose. Do NOT include warm-up or cardio blocks as exercises; those are added
+   automatically after you save the program.
 - Treat profile context, wishes, and health notes as hard constraints.
    - Guidance for special populations (elderly, medical conditions, rehab, pregnancy, etc.) lives in the knowledge base; do not invent it.
 6) Call tool_save_program(plan) and return the resulting Program.
@@ -40,7 +41,7 @@ PROGRAM PAYLOAD REQUIREMENTS:
 - If split_number is missing, set it to the number of workout days.
 
 Program field guide:
-- exercises_by_day: list of DayExercises; each has day label and exercises with name/sets/reps/gif_key.
+- exercises_by_day: list of DayExercises; each has day label and exercises with name/sets/reps/gif_key (catalog only).
 - split_number: number of workout days in the plan.
 - workout_location: training location from the profile ("home", "gym", "strength").
 - wishes: client's preferences or limitations (optional).

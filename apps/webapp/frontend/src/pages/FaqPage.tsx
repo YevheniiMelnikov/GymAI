@@ -10,6 +10,7 @@ import {
     hideBackButton,
     onBackButtonClick,
     offBackButtonClick,
+    closeWebApp,
 } from '../telegram';
 import { getSupportContact } from '../api/http';
 import { openSupportChat } from '../utils/support';

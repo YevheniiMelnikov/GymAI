@@ -10,6 +10,8 @@ Rules:
 
 Instructions:
 - Produce a single JSON object matching the ProgramPayload schema with no surrounding text.
+- Use ONLY catalog exercises in exercises_by_day and include gif_key for each. Do NOT include warm-up or cardio blocks;
+  those are added automatically after you save the program.
 - Include working weight (kg) strictly according to the equipment-based rules in "WORKOUT PROGRAM RULES".
 - Treat the provided request context and workout rules as hard constraints; do not ignore them.
 - Guidance for special populations (elderly, medical conditions, rehab, pregnancy, etc.) lives in the knowledge base; do not invent it.
@@ -21,7 +23,7 @@ Instructions:
 - Treat "Wishes" as HARD constraints. If there's any conflict, Wishes override all other heuristics. Before returning the final JSON, verify the plan fully complies with Wishes; if not, regenerate and re-check.
 
 Program field guide:
-- exercises_by_day: list of DayExercises; each has day label and exercises with name/sets/reps.
+- exercises_by_day: list of DayExercises; each has day label and exercises with name/sets/reps/gif_key (catalog only).
 - split_number: number of workout days in the plan.
 - workout_location: training location from the profile ("home", "gym", "strength").
 - wishes: client's preferences or limitations (optional).
