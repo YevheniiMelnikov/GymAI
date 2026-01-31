@@ -113,6 +113,11 @@ main#app{
   --app-padding-right: calc(clamp(18px, 2.4vw, 28px) + max(12px, env(safe-area-inset-right)));
   --app-padding-bottom: calc(clamp(18px, 2.4vw, 28px) + max(16px, env(safe-area-inset-bottom)));
   --app-padding-left: calc(clamp(18px, 2.4vw, 28px) + max(12px, env(safe-area-inset-left)));
+  --segmented-stack-top: clamp(40px, 6vw, 60px);
+  --segmented-stack-bottom: clamp(24px, 4vw, 36px);
+  --segmented-stack-gap: clamp(14px, 2.6vw, 24px);
+  --empty-image-width: clamp(208px, 60vw, 286px);
+  --empty-image-height: clamp(156px, 47vw, 234px);
   padding: var(--app-padding-top) var(--app-padding-right) var(--app-padding-bottom) var(--app-padding-left);
   display: flex;
   flex-direction: column;
@@ -670,15 +675,24 @@ h1.page-title,
   gap: clamp(10px, 1.6vw, 16px);
   opacity: 0;
   transform: translateY(-3px);
-  transition: opacity .2s ease, transform .25s ease;
-  will-change: opacity, transform;
+  height: 0;
+  overflow: hidden;
+  will-change: height, opacity, transform;
+  transition:
+    height .32s cubic-bezier(.2,.7,.2,1),
+    opacity .2s ease,
+    transform .25s ease;
+}
+.program-day:not([open]) > .program-day-list{
+  display: flex;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 0;
+  opacity: 0;
 }
 .program-day[open] .program-day-list{
   opacity: 1;
   transform: translateY(0);
-  max-height: none !important;
-  height: auto !important;
-  overflow: visible;
 }
 .faq-answer{
   font-size: clamp(12px, 1.9vw, 14px);
@@ -796,16 +810,24 @@ h1.page-title,
   gap: 6px;
   opacity: 0;
   transform: translateY(-3px);
-  transition: opacity .2s ease, transform .25s ease;
-  will-change: opacity, transform;
+  height: 0;
+  overflow: hidden;
+  will-change: height, opacity, transform;
   background: transparent;
+  transition:
+    height .32s cubic-bezier(.2,.7,.2,1),
+    opacity .2s ease,
+    transform .25s ease;
+}
+.program-exercise-details:not([open]) > .program-exercise-content{
+  display: flex;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
 }
 .program-exercise-details[open] .program-exercise-content{
   opacity: 1;
   transform: translateY(0);
-  max-height: none !important;
-  height: auto !important;
-  overflow: visible;
 }
 .program-exercise-content--minimal{
   padding-top: clamp(4px, 1vw, 8px);
@@ -899,13 +921,19 @@ h1.page-title,
 }
 .program-exercise-actions{
   margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
+  display: contents;
 }
 .program-exercise-details:not([open]) .program-exercise-actions{
   display: none;
+}
+.program-exercise-technique-btn{
+  order: 2;
+}
+.exercise-sets-table{
+  order: 3;
+}
+.program-exercise-edit-btn{
+  order: 4;
 }
 .program-exercise-edit-btn{
   width: 70% !important;
@@ -1013,7 +1041,7 @@ h1.page-title,
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(14px, 2.6vw, 24px);
+  gap: var(--segmented-stack-gap);
   padding: 0;
 }
 .history-page .history-panel{
@@ -1229,84 +1257,136 @@ h1.page-title,
   position: fixed;
   inset: 0;
   display: none;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
   background: rgba(6, 11, 24, 0.55);
   backdrop-filter: blur(10px) saturate(115%);
   -webkit-backdrop-filter: blur(10px) saturate(115%);
   z-index: 120;
-  padding: 16px;
+  padding: 0;
 }
-.exercise-dialog[data-state="open"]{
+.exercise-dialog[data-state="open"],
+.exercise-dialog[data-state="opening"],
+.exercise-dialog[data-state="closing"]{
   display: flex;
 }
 .exercise-dialog__panel{
-  width: min(360px, 92vw);
-  border-radius: 18px;
-  padding: 24px clamp(20px, 4vw, 28px) clamp(20px, 3.6vw, 26px);
+  position: relative;
+  width: 100%;
+  max-height: calc(100dvh - clamp(24px, 3vh, 30px));
+  border-radius: 24px 24px 0 0;
+  padding: 16px clamp(16px, 4vw, 26px) clamp(18px, 3.6vw, 26px);
   background: color-mix(in oklab, var(--surface) 96%, var(--bg));
   color: var(--text);
-  box-shadow: 0 20px 48px rgba(9, 14, 24, 0.25);
+  box-shadow: 0 24px 60px rgba(9, 14, 24, 0.3);
   border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
   outline: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  transform: translateY(100%);
+  opacity: 0;
+  will-change: transform, opacity;
+  transition: transform .36s cubic-bezier(.2,.7,.2,1), opacity .22s ease;
+}
+.exercise-dialog[data-state="open"] .exercise-dialog__panel{
+  transform: translateY(0);
+  opacity: 1;
+}
+.exercise-dialog[data-state="closing"] .exercise-dialog__panel{
+  transform: translateY(100%);
+  opacity: 0;
 }
 .exercise-dialog__title{
-  margin: 0 0 8px;
+  margin: 8px 0 4px;
   font-size: 18px;
   font-weight: 700;
   color: color-mix(in oklab, var(--text) 94%, var(--accent));
+  text-align: center;
+}
+.exercise-technique-dialog .exercise-dialog__title{
+  text-align: left;
+  padding-right: 44px;
 }
 .exercise-dialog__body{
-  margin: 0 0 20px;
-  line-height: 1.5;
+  margin: 0;
+  line-height: 1.55;
   color: var(--muted);
   font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding-bottom: 4px;
 }
 .exercise-dialog__message{
   margin: 0;
+  text-align: center;
 }
 .exercise-dialog__media{
   display: block;
   width: 100%;
+  max-height: 46vh;
   height: auto;
-  border-radius: 14px;
+  padding: 0 6px;
+  border-radius: 18px;
   background: color-mix(in oklab, var(--surface) 80%, var(--bg));
-  box-shadow: 0 10px 30px rgba(9, 14, 24, 0.2);
+  box-shadow: 0 12px 32px rgba(9, 14, 24, 0.22);
+  object-fit: contain;
+}
+.exercise-technique-dialog .exercise-dialog__panel{
+  max-height: calc(100dvh - clamp(48px, 8vh, 72px));
+}
+.exercise-technique-dialog .exercise-dialog__media{
+  max-height: 40vh;
 }
 .exercise-dialog__technique{
-  margin: 14px 0 0;
-  padding: 0 0 0 18px;
+  margin: 0;
+  padding: 0 0 0 22px;
+  list-style-position: outside;
   color: color-mix(in oklab, var(--text) 82%, var(--muted));
-  font-size: 13.5px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.6;
 }
 .exercise-dialog__technique li + li{
   margin-top: 8px;
 }
-.exercise-dialog__actions{
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-}
-.exercise-dialog__actions .primary-button{
-  width: auto;
-  max-width: none;
-  min-width: 120px;
-  padding: 12px 18px;
-  font-size: 14px;
-}
-.exercise-dialog__actions .exercise-dialog__close{
-  min-width: 0;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: color-mix(in oklab, var(--text) 78%, var(--muted));
-  background: color-mix(in oklab, var(--surface) 70%, transparent);
+.exercise-dialog__close{
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
   border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  background: color-mix(in oklab, var(--surface) 85%, transparent);
+  color: color-mix(in oklab, var(--text) 80%, var(--muted));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
   box-shadow: none;
+  transition: transform .08s ease, background .18s ease, color .18s ease, border-color .18s ease;
 }
-.exercise-dialog__actions .exercise-dialog__close:hover{
-  background: color-mix(in oklab, var(--surface) 80%, transparent);
+.exercise-dialog__close::before,
+.exercise-dialog__close::after{
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 999px;
+}
+.exercise-dialog__close::before{ transform: rotate(45deg); }
+.exercise-dialog__close::after{ transform: rotate(-45deg); }
+.exercise-dialog__close:hover{
+  background: color-mix(in oklab, var(--surface) 92%, transparent);
+  color: color-mix(in oklab, var(--text) 92%, var(--accent));
+  transform: translateY(-1px);
+}
+.exercise-dialog__close:active{
+  transform: translateY(0);
 }
 .button-spinner{
   width: 16px;
@@ -1319,10 +1399,10 @@ h1.page-title,
 }
 .exercise-edit-dialog__panel{
   position: relative;
-  width: min(520px, 94vw);
-  max-height: min(82vh, 680px);
-  min-height: min(68vh, 620px);
-  padding: 22px clamp(18px, 4vw, 28px) 16px;
+  width: 100%;
+  max-height: calc(100dvh - clamp(24px, 3vh, 30px));
+  min-height: unset;
+  padding: 18px clamp(18px, 4vw, 28px) 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1456,6 +1536,10 @@ h1.page-title,
   bottom: 0;
   background: color-mix(in oklab, var(--surface) 96%, var(--bg));
   border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+.exercise-edit-dialog .exercise-dialog__close{
+  top: 12px;
+  right: 12px;
 }
 .exercise-edit-dialog__footer .button-ghost,
 .exercise-edit-dialog__footer .primary-button{
@@ -1626,10 +1710,13 @@ a:hover{ opacity: .9; }
   min-height: clamp(120px, 22vh, 220px);
   padding-block: clamp(4px, 1.4vh, 12px);
 }
+.diet-page .history-empty{
+  margin-top: calc(var(--segmented-stack-top) + var(--segmented-stack-bottom) + var(--segmented-stack-gap));
+}
 .history-empty__image{
   display: block;
-  width: clamp(160px, 46vw, 220px);
-  height: clamp(120px, 36vw, 180px);
+  width: var(--empty-image-width);
+  height: var(--empty-image-height);
   object-fit: contain;
   margin: 0 auto clamp(2px, .6vh, 8px);
 }
@@ -1638,6 +1725,27 @@ a:hover{ opacity: .9; }
   font-weight: 500;
   color: var(--text);
   margin: 0;
+}
+.history-empty__hint{
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  margin: 0;
+}
+
+.fab-button--pulse{
+  animation: fab-pulse-shadow 1.4s ease-in-out 0s 1;
+}
+@keyframes fab-pulse-shadow{
+  0%{
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.25);
+  }
+  50%{
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.34);
+  }
+  100%{
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.25);
+  }
 }
 
 .subscription-confirm{
@@ -1791,7 +1899,7 @@ a:hover{ opacity: .9; }
   background: color-mix(in oklab, var(--surface) 72%, transparent);
 }
 
-#segmented { display:flex; justify-content:center; margin-top: clamp(40px, 6vw, 60px); margin-bottom: clamp(24px, 4vw, 36px); padding: 0; width:100%; }
+#segmented { display:flex; justify-content:center; margin-top: var(--segmented-stack-top); margin-bottom: var(--segmented-stack-bottom); padding: 0; width:100%; }
 
 #segmented .segmented {
   display:flex; align-items:center;
@@ -2891,6 +2999,13 @@ body[data-keyboard="open"] .bottom-nav{
   border-top: 1px solid color-mix(in oklab, var(--text) 10%, transparent);
   backdrop-filter: blur(10px) saturate(1.2);
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
+}
+body[data-dialog="exercise-edit"] .bottom-nav{
+  display: none;
+}
+body[data-dialog="exercise-edit"] .with-bottom-nav{
+  --bottom-nav-offset: 0px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .bottom-nav__item{
   border: none;

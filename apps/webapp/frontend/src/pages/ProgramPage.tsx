@@ -70,6 +70,8 @@ const ProgramPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
     const [fabPressed, setFabPressed] = useState(false);
+    const [shouldPulseFab, setShouldPulseFab] = useState(false);
+    const [isEmptyState, setIsEmptyState] = useState(false);
     const [isExerciseEditOpen, setIsExerciseEditOpen] = useState(false);
     const [isTechniqueOpen, setIsTechniqueOpen] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
@@ -183,6 +185,7 @@ const ProgramPage: React.FC = () => {
         const fetchData = async () => {
             setLoading(true);
             setError(null);
+            setIsEmptyState(false);
             setDateText('');
             setCurrentItemId(null);
             if (contentRef.current) contentRef.current.innerHTML = '';
@@ -281,6 +284,7 @@ const ProgramPage: React.FC = () => {
                 } else if (e instanceof Error && e.message === 'no_programs') {
                     key = 'subscriptions.empty';
                 }
+                setIsEmptyState(key === 'no_programs' || key === 'subscriptions.empty');
                 setError(t(key as any));
             } finally {
                 setLoading(false);
@@ -313,6 +317,22 @@ const ProgramPage: React.FC = () => {
             : activeSegment === 'subscriptions'
                 ? 'create_subscription'
                 : null;
+
+    useEffect(() => {
+        if (!isEmptyState || !creationAction || progressHelper.isActive) {
+            return;
+        }
+        try {
+            const seen = window.localStorage.getItem('workout_fab_pulse_seen');
+            if (seen) {
+                return;
+            }
+            window.localStorage.setItem('workout_fab_pulse_seen', '1');
+            setShouldPulseFab(true);
+        } catch {
+            setShouldPulseFab(true);
+        }
+    }, [isEmptyState, creationAction, progressHelper.isActive]);
 
     const handleFabClick = useCallback(async () => {
         if (!creationAction) {
@@ -497,6 +517,9 @@ const ProgramPage: React.FC = () => {
                                             }}
                                         />
                                         <p className="history-empty__caption">{error}</p>
+                                        {isEmptyState && (
+                                            <p className="history-empty__hint">{t('program.empty_hint')}</p>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -509,12 +532,14 @@ const ProgramPage: React.FC = () => {
                 <button
                     type="button"
                     style={fabStyle}
+                    className={shouldPulseFab ? 'fab-button--pulse' : undefined}
                     aria-label={t('program.create_new')}
                     onClick={handleFabClick}
                     onPointerDown={() => setFabPressed(true)}
                     onPointerUp={() => setFabPressed(false)}
                     onPointerLeave={() => setFabPressed(false)}
                     disabled={actionLoading}
+                    onAnimationEnd={() => setShouldPulseFab(false)}
                 >
                     +
                 </button>

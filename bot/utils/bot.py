@@ -1,5 +1,6 @@
 import html
 from contextlib import suppress
+from dataclasses import dataclass
 from typing import NamedTuple, Optional, cast
 
 from aiogram import Bot
@@ -8,7 +9,6 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, BotCommand, InputFile, FSInputFile
 from aiohttp import ClientTimeout, ClientSession
-from loguru import logger
 from pydantic import ValidationError
 
 from bot.texts import MessageText, TextManager, translate
@@ -134,22 +134,35 @@ async def set_bot_commands(bot: Bot, lang: Optional[str] = None) -> None:
     await bot.set_my_commands(commands)
 
 
-async def check_webhook_alive(ping_url: str, timeout_seconds: float = 5.0) -> bool:
+@dataclass(frozen=True, slots=True)
+class WebhookHealthcheckResult:
+    ok: bool
+    error: str | None
+
+
+async def check_webhook_alive(ping_url: str, timeout_seconds: float = 5.0) -> WebhookHealthcheckResult:
     try:
         timeout = ClientTimeout(total=timeout_seconds)
         async with ClientSession(timeout=timeout) as session:
             async with session.get(ping_url) as resp:
                 if resp.status != 200:
-                    logger.error(f"Webhook healthcheck HTTP {resp.status} for {ping_url}")
-                    return False
+                    return WebhookHealthcheckResult(
+                        ok=False,
+                        error=f"Webhook healthcheck HTTP {resp.status} for {ping_url}",
+                    )
                 data = await resp.json(content_type=None)
                 ok = bool(data.get("ok")) if isinstance(data, dict) else False
                 if not ok:
-                    logger.error(f"Webhook healthcheck returned invalid payload from {ping_url}: {data}")
-            return ok
+                    return WebhookHealthcheckResult(
+                        ok=False,
+                        error=f"Webhook healthcheck returned invalid payload from {ping_url}: {data}",
+                    )
+            return WebhookHealthcheckResult(ok=True, error=None)
     except Exception as e:
-        logger.error(f"Webhook healthcheck failed to reach {ping_url}: {e}")
-        return False
+        return WebhookHealthcheckResult(
+            ok=False,
+            error=f"Webhook healthcheck failed to reach {ping_url}: {e}",
+        )
 
 
 async def prompt_language_selection(message: Message, state: FSMContext) -> None:

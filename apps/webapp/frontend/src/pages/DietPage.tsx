@@ -86,6 +86,7 @@ const DietPage: React.FC = () => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const [favoriteIds, setFavoriteIds] = useState<Set<number>>(() => loadFavoriteIds(FAVORITES_KEY));
+    const [shouldPulseFab, setShouldPulseFab] = useState(false);
 
     const [refreshKey, setRefreshKey] = useState(0);
 
@@ -241,6 +242,7 @@ const DietPage: React.FC = () => {
     const showControls = diets.length > 0;
     const isFavorite = dietId ? favoriteIds.has(Number(dietId)) : false;
     const isListEmpty = !loading && !progressHelper.isActive && visibleDiets.length === 0;
+    const isEmptyList = isListEmpty && !dietId;
     const emptyCaption = showSavedOnly ? t('diet.saved_empty') : t('diet.empty');
     const emptyImageSrc = `${STATIC_PREFIX}images/404.png${STATIC_VERSION ? `?v=${STATIC_VERSION}` : ''}`;
 
@@ -282,6 +284,22 @@ const DietPage: React.FC = () => {
             setIsDropdownOpen(false);
         }
     }, [canSort]);
+
+    useEffect(() => {
+        if (!isEmptyList || progressHelper.isActive) {
+            return;
+        }
+        try {
+            const seen = window.localStorage.getItem('diet_fab_pulse_seen');
+            if (seen) {
+                return;
+            }
+            window.localStorage.setItem('diet_fab_pulse_seen', '1');
+            setShouldPulseFab(true);
+        } catch {
+            setShouldPulseFab(true);
+        }
+    }, [isEmptyList, progressHelper.isActive]);
 
     const handleCopy = useCallback(async () => {
         if (!detailText) return;
@@ -439,6 +457,7 @@ const DietPage: React.FC = () => {
                                             }}
                                         />
                                         <p className="history-empty__caption">{emptyCaption}</p>
+                                        <p className="history-empty__hint">{t('diet.empty_hint')}</p>
                                     </div>
                                 )}
                                 {!loading && visibleDiets.length > 0 &&
@@ -628,11 +647,13 @@ const DietPage: React.FC = () => {
                 <button
                     type="button"
                     style={fabStyle}
+                    className={shouldPulseFab ? 'fab-button--pulse' : undefined}
                     aria-label={t('diet.flow.create')}
                     onClick={handleCreate}
                     onPointerDown={() => setFabPressed(true)}
                     onPointerUp={() => setFabPressed(false)}
                     onPointerLeave={() => setFabPressed(false)}
+                    onAnimationEnd={() => setShouldPulseFab(false)}
                 >
                     +
                 </button>

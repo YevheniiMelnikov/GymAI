@@ -14,14 +14,14 @@ faq:
   ua: "Часті питання❓"
 
 my_profile:
-  eng: "My profile 👤"
-  ru: "Мой профиль 👤"
-  ua: "Мій профіль 👤"
+  eng: "Profile 👤"
+  ru: "Профиль 👤"
+  ua: "Профіль 👤"
 
 my_program:
-  eng: "My trainings 🏋️"
-  ru: "Мои тренировки 🏋️"
-  ua: "Мої тренування 🏋️"
+  eng: "Workouts 🏋️"
+  ru: "Тренировки 🏋️"
+  ua: "Тренування 🏋️"
 
 top_up:
   eng: "Top up 💳"

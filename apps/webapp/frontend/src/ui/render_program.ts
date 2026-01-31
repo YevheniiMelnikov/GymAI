@@ -248,19 +248,28 @@ function formatNumber(value: number): string {
   return value.toFixed(2).replace(/\.?0+$/, '');
 }
 
+function formatWeightUnit(unit: string | null | undefined): string | null {
+  if (!unit) return null;
+  const normalized = unit.trim().toLowerCase();
+  if (normalized === 'kg') {
+    return t('profile.unit.kg');
+  }
+  return unit;
+}
+
 function buildDisplaySets(exercise: Exercise): DisplaySet[] {
   if (exercise.sets_detail && exercise.sets_detail.length > 0) {
     return exercise.sets_detail.map((detail) => ({
       reps: Math.max(1, Math.floor(parseNumeric(detail.reps, 1))),
       weight: Math.max(0, parseNumeric(detail.weight, 0)),
-      weightUnit: detail.weight_unit ?? null
+      weightUnit: formatWeightUnit(detail.weight_unit)
     }));
   }
 
   const setsCount = Math.max(1, Math.floor(parseNumeric(exercise.sets, 1)));
   const reps = parseReps(exercise.reps, 1);
   const weight = Math.max(0, parseNumeric(exercise.weight?.value ?? null, 0));
-  const weightUnit = exercise.weight?.unit ?? null;
+  const weightUnit = formatWeightUnit(exercise.weight?.unit ?? null);
   return Array.from({ length: setsCount }, () => ({
     reps,
     weight,
@@ -327,6 +336,8 @@ const EXERCISE_EDIT_EVENT = 'exercise-edit-dialog';
 export const EXERCISE_EDIT_SAVED_EVENT = 'exercise-edit-saved';
 export const EXERCISE_TECHNIQUE_EVENT = 'exercise-technique-dialog';
 
+const setsTableHandlers = new WeakMap<HTMLDivElement, { fill: () => void; reset: () => void }>();
+
 type ProgramSource = 'direct' | 'subscription';
 type ProgramContext = {
   programId: string | null;
@@ -391,12 +402,178 @@ const isReducedMotionPreferred = (() => {
   }
 })();
 
+const setAccordionOpen = (details: HTMLDetailsElement, open: boolean): void => {
+  if (details.open === open) {
+    return;
+  }
+  details.open = open;
+};
+
+type SwipeCloseConfig = {
+  root: HTMLElement;
+  panel: HTMLElement;
+  close: (force?: boolean) => void;
+  isOpen: () => boolean;
+};
+
+const attachSwipeToClose = ({ root, panel, close, isOpen }: SwipeCloseConfig): void => {
+  let startY = 0;
+  let startX = 0;
+  let lastY = 0;
+  let startTime = 0;
+  let active = false;
+  let dragging = false;
+  let closing = false;
+
+  const findScrollableParent = (node: HTMLElement | null): HTMLElement | null => {
+    let current = node;
+    while (current && current !== panel) {
+      const style = window.getComputedStyle(current);
+      const overflowY = style.overflowY;
+      if ((overflowY === 'auto' || overflowY === 'scroll') && current.scrollHeight > current.clientHeight) {
+        return current;
+      }
+      current = current.parentElement;
+    }
+    return null;
+  };
+
+  const resetDrag = () => {
+    active = false;
+    dragging = false;
+    panel.style.willChange = '';
+  };
+
+  const onTouchStart = (event: TouchEvent) => {
+    if (!isOpen() || closing) {
+      return;
+    }
+    if (event.touches.length !== 1) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    const scrollable = findScrollableParent(target);
+    if (scrollable && scrollable.scrollTop > 0) {
+      return;
+    }
+    active = true;
+    dragging = false;
+    startY = event.touches[0].clientY;
+    startX = event.touches[0].clientX;
+    lastY = startY;
+    startTime = window.performance.now();
+    panel.style.willChange = 'transform';
+  };
+
+  const onTouchMove = (event: TouchEvent) => {
+    if (!active || closing) {
+      return;
+    }
+    if (event.touches.length !== 1) {
+      return;
+    }
+    const touch = event.touches[0];
+    const deltaY = touch.clientY - startY;
+    const deltaX = touch.clientX - startX;
+    lastY = touch.clientY;
+    if (deltaY <= 0 && !dragging) {
+      return;
+    }
+    if (!dragging) {
+      if (Math.abs(deltaY) < 6 || Math.abs(deltaY) < Math.abs(deltaX)) {
+        return;
+      }
+      dragging = true;
+    }
+    event.preventDefault();
+    const translate = Math.max(0, deltaY);
+    panel.style.transform = `translateY(${translate}px)`;
+  };
+
+  const finishDrag = () => {
+    if (!dragging) {
+      resetDrag();
+      return;
+    }
+    const deltaY = lastY - startY;
+    const elapsed = Math.max(1, window.performance.now() - startTime);
+    const velocity = deltaY / elapsed;
+    const height = panel.getBoundingClientRect().height || 1;
+    const shouldClose = deltaY > Math.max(120, height * 0.25) || velocity > 0.6;
+    panel.style.transition = 'transform .2s ease';
+    if (shouldClose) {
+      closing = true;
+      root.dataset.state = 'closing';
+      panel.style.transform = 'translateY(100%)';
+      const onEnd = (event: TransitionEvent) => {
+        if (event.target !== panel) {
+          return;
+        }
+        panel.removeEventListener('transitionend', onEnd);
+        panel.style.transition = '';
+        panel.style.transform = '';
+        closing = false;
+        resetDrag();
+        close(true);
+      };
+      panel.addEventListener('transitionend', onEnd);
+      return;
+    }
+    panel.style.transform = '';
+    const onEnd = (event: TransitionEvent) => {
+      if (event.target !== panel) {
+        return;
+      }
+      panel.removeEventListener('transitionend', onEnd);
+      panel.style.transition = '';
+      panel.style.transform = '';
+      resetDrag();
+    };
+    panel.addEventListener('transitionend', onEnd);
+  };
+
+  const onTouchEnd = () => {
+    if (!active || closing) {
+      return;
+    }
+    finishDrag();
+  };
+
+  const onTouchCancel = () => {
+    if (!active || closing) {
+      return;
+    }
+    finishDrag();
+  };
+
+  panel.addEventListener('touchstart', onTouchStart, { passive: true });
+  panel.addEventListener('touchmove', onTouchMove, { passive: false });
+  panel.addEventListener('touchend', onTouchEnd);
+  panel.addEventListener('touchcancel', onTouchCancel);
+};
+
 function attachDetailsAnimation(details: HTMLDetailsElement): void {
   if (!details.querySelector('summary')) {
     return;
   }
 
   let autoScrollTimer: number | null = null;
+  let openEndTimer: number | null = null;
+
+  const getContent = (): HTMLElement | null => (
+    details.querySelector<HTMLElement>('.program-day-list, .program-exercise-content')
+  );
+
+  const initialContent = getContent();
+  if (initialContent) {
+    initialContent.style.height = details.open ? 'auto' : '0px';
+    initialContent.style.overflow = details.open ? 'visible' : 'hidden';
+    if (details.open) {
+      initialContent.querySelectorAll<HTMLDivElement>('.exercise-sets-table').forEach((table) => {
+        setsTableHandlers.get(table)?.fill();
+      });
+    }
+  }
 
   const findScrollParent = (node: HTMLElement): HTMLElement => {
     let parent = node.parentElement;
@@ -455,18 +632,124 @@ function attachDetailsAnimation(details: HTMLDetailsElement): void {
     run();
   };
 
-  details.addEventListener('toggle', () => {
-    if (!details.open) {
-      cancelAutoScroll();
-      if (details.classList.contains('program-day')) {
-        details.querySelectorAll<HTMLDetailsElement>('details.program-exercise-details[open]').forEach((item) => {
-          item.open = false;
-        });
+  const closeChildren = () => {
+    if (!details.classList.contains('program-day')) {
+      return;
+    }
+    details.querySelectorAll<HTMLDetailsElement>('details.program-exercise-details[open]').forEach((item) => {
+      item.open = false;
+    });
+  };
+
+  const ensureParentDayListAuto = () => {
+    if (!details.classList.contains('program-exercise-details')) {
+      return;
+    }
+    const parentList = details.closest<HTMLElement>('.program-day-list');
+    if (!parentList) {
+      return;
+    }
+    parentList.style.height = 'auto';
+    parentList.style.overflow = 'visible';
+  };
+
+  const fillPendingTables = (content: HTMLElement) => {
+    content.querySelectorAll<HTMLDivElement>('.exercise-sets-table').forEach((table) => {
+      setsTableHandlers.get(table)?.fill();
+    });
+  };
+
+  const resetPendingTables = (content: HTMLElement) => {
+    content.querySelectorAll<HTMLDivElement>('.exercise-sets-table').forEach((table) => {
+      setsTableHandlers.get(table)?.reset();
+    });
+  };
+
+  const animateToggle = () => {
+    const content = getContent();
+    if (!content) {
+      return;
+    }
+    if (isReducedMotionPreferred) {
+      content.style.height = details.open ? 'auto' : '0px';
+      content.style.overflow = details.open ? 'visible' : 'hidden';
+      content.dataset.animating = 'false';
+      ensureParentDayListAuto();
+      if (details.open) {
+        fillPendingTables(content);
+      } else {
+        resetPendingTables(content);
       }
       return;
     }
-    scheduleAutoScroll(isReducedMotionPreferred ? 0 : 120);
-  });
+    if (details.open) {
+      if (openEndTimer !== null) {
+        window.clearTimeout(openEndTimer);
+        openEndTimer = null;
+      }
+      content.style.overflow = 'hidden';
+      const cached = Number(content.dataset.targetHeight);
+      let target = cached > 0 ? cached : 0;
+      if (target <= 0) {
+        const prevHeight = content.style.height || '0px';
+        const prevVisibility = content.style.visibility;
+        content.style.visibility = 'hidden';
+        content.style.height = 'auto';
+        void content.offsetHeight;
+        target = content.scrollHeight;
+        content.style.height = prevHeight;
+        content.style.visibility = prevVisibility;
+        content.dataset.targetHeight = String(target);
+      }
+      content.style.height = '0px';
+      content.dataset.animating = 'true';
+      void content.offsetHeight;
+      requestAnimationFrame(() => {
+        content.style.height = `${target}px`;
+      });
+      const onOpenEnd = (event: TransitionEvent) => {
+        if (event.propertyName !== 'height') return;
+        content.removeEventListener('transitionend', onOpenEnd);
+        content.style.height = 'auto';
+        content.style.overflow = 'visible';
+        content.dataset.animating = 'false';
+        fillPendingTables(content);
+        ensureParentDayListAuto();
+        if (openEndTimer !== null) {
+          window.clearTimeout(openEndTimer);
+          openEndTimer = null;
+        }
+      };
+      content.addEventListener('transitionend', onOpenEnd);
+      openEndTimer = window.setTimeout(() => {
+        content.style.height = 'auto';
+        content.style.overflow = 'visible';
+        content.dataset.animating = 'false';
+        fillPendingTables(content);
+        ensureParentDayListAuto();
+        openEndTimer = null;
+      }, 420);
+      scheduleAutoScroll(120);
+      return;
+    }
+    if (openEndTimer !== null) {
+      window.clearTimeout(openEndTimer);
+      openEndTimer = null;
+    }
+    const start = content.scrollHeight;
+    content.style.height = `${start}px`;
+    content.style.overflow = 'hidden';
+    content.dataset.animating = 'false';
+    resetPendingTables(content);
+    requestAnimationFrame(() => {
+      content.style.height = '0px';
+    });
+    cancelAutoScroll();
+    closeChildren();
+  };
+
+  details.addEventListener('toggle', animateToggle);
+  animateToggle();
 }
 
 function getExerciseDialog(): ReplaceExerciseDialogController {
@@ -611,7 +894,7 @@ function getExerciseDialog(): ReplaceExerciseDialogController {
         setLoading(true);
         const editDialog = getExerciseEditDialog();
         editDialog.close();
-        ctx.details.open = false;
+        setAccordionOpen(ctx.details, false);
         ctx.details.classList.add('program-exercise-details--loading');
         close();
         const taskId = await replaceAction(programContext.programId!, ctx.exercise.id, initData, useCredits);
@@ -697,32 +980,64 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
   techniqueList.className = 'exercise-dialog__technique';
   techniqueList.hidden = true;
 
-  const actions = document.createElement('div');
-  actions.className = 'exercise-dialog__actions';
-
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
-  closeBtn.className = 'primary-button exercise-dialog__close';
+  closeBtn.className = 'exercise-dialog__close';
+  closeBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    close();
+  });
 
-  actions.append(closeBtn);
   body.append(message, media, techniqueList);
-  panel.append(title, body, actions);
+  panel.append(closeBtn, title, body);
   root.appendChild(panel);
   document.body.appendChild(root);
 
   let techniqueAbort: AbortController | null = null;
   let activeTechniqueKey: string | null = null;
   let activeLocale: Locale | null = null;
+  let isClosing = false;
+  let closeToken = 0;
+  let closeListener: ((event: TransitionEvent) => void) | null = null;
+  let ignoreBackdropUntil = 0;
 
-  const close = () => {
+  const close = (force = false) => {
     techniqueAbort?.abort();
     techniqueAbort = null;
     activeTechniqueKey = null;
     activeLocale = null;
-    root.dataset.state = 'closed';
-    root.setAttribute('aria-hidden', 'true');
+    if (force || root.dataset.state !== 'open') {
+      root.dataset.state = 'closed';
+      root.setAttribute('aria-hidden', 'true');
+      return;
+    }
+    if (isClosing) {
+      return;
+    }
+    isClosing = true;
+    closeToken += 1;
+    const token = closeToken;
+    root.dataset.state = 'closing';
     document.removeEventListener('keydown', handleKeydown);
     window.dispatchEvent(new CustomEvent(EXERCISE_TECHNIQUE_EVENT, { detail: { open: false } }));
+    if (closeListener) {
+      panel.removeEventListener('transitionend', closeListener);
+      closeListener = null;
+    }
+    const onTransitionEnd = (event: TransitionEvent) => {
+      if (event.target !== panel) {
+        return;
+      }
+      if (token !== closeToken) {
+        return;
+      }
+      panel.removeEventListener('transitionend', onTransitionEnd);
+      root.dataset.state = 'closed';
+      root.setAttribute('aria-hidden', 'true');
+      isClosing = false;
+    };
+    closeListener = onTransitionEnd;
+    panel.addEventListener('transitionend', onTransitionEnd);
   };
 
   const handleKeydown = (event: KeyboardEvent) => {
@@ -733,11 +1048,13 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
   };
 
   const open = (gifUrl?: string | null, exerciseName?: string, gifKey?: string | null) => {
-    const hasGif = Boolean(gifUrl);
-    title.textContent = hasGif ? '' : t('program.exercise.technique.title');
-    title.hidden = hasGif;
+    const resolvedTitle =
+      exerciseName && exerciseName.trim().length > 0 ? exerciseName : t('program.exercise.technique.title');
+    title.textContent = resolvedTitle;
+    title.hidden = false;
     message.textContent = t('program.exercise.technique.body');
-    closeBtn.textContent = t('program.exercise.technique.close');
+    closeBtn.setAttribute('aria-label', t('program.exercise.technique.close'));
+    closeBtn.setAttribute('title', t('program.exercise.technique.close'));
     techniqueList.innerHTML = '';
     techniqueList.hidden = true;
     techniqueAbort?.abort();
@@ -755,11 +1072,19 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
       message.hidden = false;
       title.hidden = false;
     }
-    root.dataset.state = 'open';
+    root.dataset.state = 'opening';
     root.setAttribute('aria-hidden', 'false');
+    isClosing = false;
+    closeToken += 1;
+    if (closeListener) {
+      panel.removeEventListener('transitionend', closeListener);
+      closeListener = null;
+    }
+    ignoreBackdropUntil = window.performance.now() + 350;
     document.addEventListener('keydown', handleKeydown);
     window.dispatchEvent(new CustomEvent(EXERCISE_TECHNIQUE_EVENT, { detail: { open: true } }));
     window.requestAnimationFrame(() => {
+      root.dataset.state = 'open';
       panel.focus();
     });
 
@@ -835,14 +1160,13 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
   const onBackdropClick = (event: MouseEvent) => {
     if (event.target === root) {
       event.preventDefault();
+      if (window.performance.now() < ignoreBackdropUntil) {
+        return;
+      }
       close();
     }
   };
 
-  closeBtn.addEventListener('click', (event) => {
-    event.preventDefault();
-    close();
-  });
   media.addEventListener('error', () => {
     media.removeAttribute('src');
     media.hidden = true;
@@ -851,6 +1175,7 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
     techniqueList.hidden = true;
   });
   root.addEventListener('click', onBackdropClick);
+  attachSwipeToClose({ root, panel, close, isOpen: () => root.dataset.state === 'open' });
 
   exerciseTechniqueDialog = { open, close };
   return exerciseTechniqueDialog;
@@ -914,6 +1239,10 @@ function getExerciseEditDialog(): ExerciseEditDialogController {
   panel.setAttribute('aria-modal', 'true');
   panel.tabIndex = -1;
 
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'exercise-dialog__close';
+
   const header = document.createElement('div');
   header.className = 'exercise-edit-dialog__header';
 
@@ -968,7 +1297,7 @@ function getExerciseEditDialog(): ExerciseEditDialogController {
 
   header.append(title);
   body.append(listHeader, list, addButton);
-  panel.append(header, body, footer, replaceButton);
+  panel.append(closeBtn, header, body, footer, replaceButton);
   root.appendChild(panel);
   document.body.appendChild(root);
 
@@ -1071,9 +1400,24 @@ function getExerciseEditDialog(): ExerciseEditDialogController {
     addButton.disabled = isSaving;
   };
 
-  const close = () => {
-    root.dataset.state = 'closed';
-    root.setAttribute('aria-hidden', 'true');
+  const close = (force = false) => {
+    if (force || root.dataset.state !== 'open') {
+      root.dataset.state = 'closed';
+      root.setAttribute('aria-hidden', 'true');
+      document.body.removeAttribute('data-dialog');
+      return;
+    }
+    root.dataset.state = 'closing';
+    const onTransitionEnd = (event: TransitionEvent) => {
+      if (event.target !== panel) {
+        return;
+      }
+      panel.removeEventListener('transitionend', onTransitionEnd);
+      root.dataset.state = 'closed';
+      root.setAttribute('aria-hidden', 'true');
+      document.body.removeAttribute('data-dialog');
+    };
+    panel.addEventListener('transitionend', onTransitionEnd);
     document.removeEventListener('keydown', handleKeydown);
     window.dispatchEvent(new CustomEvent(EXERCISE_EDIT_EVENT, { detail: { open: false } }));
   };
@@ -1089,11 +1433,15 @@ function getExerciseEditDialog(): ExerciseEditDialogController {
     if (!currentExercise) return;
     title.textContent = currentExercise.name;
     panel.setAttribute('aria-label', t('program.exercise.edit'));
-    root.dataset.state = 'open';
+    closeBtn.setAttribute('aria-label', t('program.exercise.edit_dialog.cancel'));
+    closeBtn.setAttribute('title', t('program.exercise.edit_dialog.cancel'));
+    root.dataset.state = 'opening';
     root.setAttribute('aria-hidden', 'false');
+    document.body.setAttribute('data-dialog', 'exercise-edit');
     document.addEventListener('keydown', handleKeydown);
     window.dispatchEvent(new CustomEvent(EXERCISE_EDIT_EVENT, { detail: { open: true } }));
     window.requestAnimationFrame(() => {
+      root.dataset.state = 'open';
       panel.focus();
     });
   };
@@ -1106,6 +1454,11 @@ function getExerciseEditDialog(): ExerciseEditDialogController {
   };
 
   root.addEventListener('click', onBackdropClick);
+  closeBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    close();
+  });
+  attachSwipeToClose({ root, panel, close, isOpen: () => root.dataset.state === 'open' });
 
   addButton.addEventListener('click', (event) => {
     event.preventDefault();
@@ -1218,7 +1571,7 @@ function createExerciseActions(details: HTMLDetailsElement, exercise: Exercise, 
       exercise.gif_url ||
       (exercise.gif_key ? `/api/gif/${encodeURIComponent(exercise.gif_key)}` : null);
     if (!details.open) {
-      details.open = true;
+      setAccordionOpen(details, true);
     }
     techniqueDialog.open(resolvedGifUrl, exerciseTitle, exercise.gif_key ?? null);
   };
@@ -1238,7 +1591,7 @@ function createExerciseActions(details: HTMLDetailsElement, exercise: Exercise, 
     event.preventDefault();
     event.stopPropagation();
     if (!details.open) {
-      details.open = true;
+      setAccordionOpen(details, true);
     }
     editDialog.open(exercise, details);
   });
@@ -1328,28 +1681,53 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
       header.append(setHeader, repsHeader, weightHeader);
       table.appendChild(header);
 
+      const cells: HTMLDivElement[] = [];
+
       sets.forEach((set, setIndex) => {
         const row = document.createElement('div');
         row.className = 'exercise-sets-table__row';
 
         const setCell = document.createElement('div');
         setCell.className = 'exercise-sets-table__cell';
-        setCell.textContent = String(setIndex + 1);
+        setCell.dataset.value = String(setIndex + 1);
+        setCell.textContent = '\u00a0';
+        cells.push(setCell);
 
         const repsCell = document.createElement('div');
         repsCell.className = 'exercise-sets-table__cell';
-        repsCell.textContent = formatNumber(set.reps);
+        repsCell.dataset.value = formatNumber(set.reps);
+        repsCell.textContent = '\u00a0';
+        cells.push(repsCell);
 
         const weightCell = document.createElement('div');
         weightCell.className = 'exercise-sets-table__cell';
         const weightValue = formatNumber(set.weight);
-        weightCell.textContent =
+        weightCell.dataset.value =
           set.weight <= 0 ? '—' : set.weightUnit ? `${weightValue} ${set.weightUnit}` : weightValue;
+        weightCell.textContent = '\u00a0';
+        cells.push(weightCell);
 
         row.append(setCell, repsCell, weightCell);
         table.appendChild(row);
       });
 
+      setsTableHandlers.set(table, {
+        fill: () => {
+          if (table.dataset.filled === 'true') {
+            return;
+          }
+          cells.forEach((cell) => {
+            cell.textContent = cell.dataset.value ?? '';
+          });
+          table.dataset.filled = 'true';
+        },
+        reset: () => {
+          cells.forEach((cell) => {
+            cell.textContent = '\u00a0';
+          });
+          table.dataset.filled = 'false';
+        }
+      });
       setsTable = table;
     }
   }
@@ -1367,6 +1745,7 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
   if (content.childElementCount === 0) {
     content.classList.add('program-exercise-content--minimal');
   }
+
 
   if (!auxExercise) {
     const actions = createExerciseActions(details, ex, title);

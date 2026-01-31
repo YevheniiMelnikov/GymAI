@@ -79,10 +79,15 @@ async def main() -> None:
         ping_url = settings.WEBHOOK_HEALTHCHECK_URL
         max_retries = 30
         retry_delay_seconds = 5
+        last_error: str | None = None
         for attempt in range(max_retries):
-            if await check_webhook_alive(ping_url):
+            result = await check_webhook_alive(ping_url)
+            if result.ok:
                 break  # Healthcheck passed
-            logger.warning(
+            last_error = result.error
+            if attempt == 0:
+                logger.info(f"Webhook healthcheck is not ready yet; retrying every {retry_delay_seconds} seconds.")
+            logger.debug(
                 f"Webhook healthcheck failed (attempt {attempt + 1}/{max_retries}). "
                 f"Retrying in {retry_delay_seconds} seconds..."
             )
@@ -96,8 +101,12 @@ async def main() -> None:
             if shutdown_result is not None:
                 await shutdown_result
             cleaned = True
+            if last_error is not None:
+                logger.error(last_error)
             raise SystemExit("Webhook healthcheck failed after multiple retries — exiting")
 
+        if attempt > 0:
+            logger.info(f"Webhook healthcheck passed after {attempt + 1} attempts.")
         logger.success("Bot started")
         stop_event = asyncio.Event()
         loop = asyncio.get_running_loop()

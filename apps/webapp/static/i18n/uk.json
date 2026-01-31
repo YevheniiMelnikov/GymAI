@@ -226,5 +226,7 @@
     "modal.generationFailed.body": "Сталася помилка під час генерації. Спробуйте ще раз.",
     "modal.generationFailed.bodyCreditsRefunded": "Сталася помилка під час генерації. Кредити повернено на баланс. Спробуйте ще раз або напишіть у підтримку.",
     "modal.generationFailed.supportButton": "Написати в підтримку",
-    "modal.generationFailed.closeButton": "Закрити"
+    "modal.generationFailed.closeButton": "Закрити",
+    "diet.empty_hint": "Натисніть “＋”, щоб створити перший раціон",
+    "program.empty_hint": "Натисніть “＋”, щоб створити перше тренування"
 }
