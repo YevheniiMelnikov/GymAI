@@ -553,12 +553,31 @@ const attachSwipeToClose = ({ root, panel, close, isOpen }: SwipeCloseConfig): v
 };
 
 function attachDetailsAnimation(details: HTMLDetailsElement): void {
-  if (!details.querySelector('summary')) {
+  const summary = details.querySelector('summary');
+  if (!summary) {
     return;
   }
 
   let autoScrollTimer: number | null = null;
   let openEndTimer: number | null = null;
+  let clickToggleActive = false;
+
+  const handleSummaryClick = (event: MouseEvent) => {
+    if (details.classList.contains('program-day-rest')) {
+      return;
+    }
+    event.preventDefault();
+    if (clickToggleActive) {
+      return;
+    }
+    clickToggleActive = true;
+    setAccordionOpen(details, !details.open);
+    window.setTimeout(() => {
+      clickToggleActive = false;
+    }, 0);
+  };
+
+  summary.addEventListener('click', handleSummaryClick);
 
   const getContent = (): HTMLElement | null => (
     details.querySelector<HTMLElement>('.program-day-list, .program-exercise-content')

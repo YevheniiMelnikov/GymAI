@@ -1711,7 +1711,12 @@ a:hover{ opacity: .9; }
   padding-block: clamp(4px, 1.4vh, 12px);
 }
 .diet-page .history-empty{
-  margin-top: calc(var(--segmented-stack-top) + var(--segmented-stack-bottom) + var(--segmented-stack-gap));
+  margin-top: calc(
+    var(--segmented-stack-top)
+    + var(--segmented-stack-bottom)
+    + var(--segmented-stack-gap)
+    + clamp(28px, 5vw, 40px)
+  );
 }
 .history-empty__image{
   display: block;
