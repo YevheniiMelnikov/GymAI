@@ -3,8 +3,21 @@ upstream bot_upstream {
     server ${BOT_SERVICE}:${BOT_CONTAINER_PORT};
 }
 
+upstream api_upstream {
+    server ${API_SERVICE}:${API_PORT};
+}
+
+upstream neo4j_upstream {
+    server neo4j:7474;
+}
+
 limit_req_zone $binary_remote_addr zone=api_limit:10m rate=20r/s;
 limit_req_zone $binary_remote_addr zone=webhook_limit:5m rate=5r/s;
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ""      close;
+}
 
 # =========================
 # HTTP (80) → redirect + ACME
@@ -44,8 +57,6 @@ server {
     resolver 127.0.0.11 ipv6=off valid=1s;
     resolver_timeout 5s;
 
-    set $api_upstream http://${API_SERVICE}:${API_PORT};
-
     # ==== STATIC JS BUILD (expected path) → nginx filesystem (real path) ====
     location = /static/js-build-v3/index.js {
         alias /app/staticfiles/js-build-v3-user/index.js;
@@ -81,9 +92,62 @@ server {
         try_files $uri $uri/ =404;
     }
 
+    # ==========================================================
+    # Django admin → Django
+    # ==========================================================
+    location ^~ /admin/ {
+        proxy_pass http://api_upstream;
+
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port  443;
+
+        proxy_connect_timeout 3s;
+        proxy_send_timeout    10s;
+        proxy_read_timeout    60s;
+
+        proxy_redirect off;
+    }
+
+    # ==========================================================
+    # Neo4j Browser via HTTPS
+    # URL: https://<domain>/neo4j/
+    # ==========================================================
+    location = /neo4j {
+        return 301 /neo4j/;
+    }
+
+    location ^~ /neo4j/ {
+        proxy_pass http://neo4j_upstream/browser/;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        $connection_upgrade;
+
+        proxy_read_timeout  300s;
+        proxy_send_timeout  300s;
+
+        proxy_redirect off;
+
+        sub_filter_types text/html application/javascript text/css;
+        sub_filter_once off;
+        sub_filter 'href="/'  'href="/neo4j/';
+        sub_filter 'src="/'   'src="/neo4j/';
+        sub_filter 'url(/'    'url(/neo4j/';
+    }
+
     # ==== API → Django ====
     location /api/ {
-        proxy_pass $api_upstream;
+        proxy_pass http://api_upstream;
 
         limit_req zone=api_limit burst=40 nodelay;
         limit_req_status 429;
@@ -110,7 +174,7 @@ server {
 
     # ==== Internal API → Django ====
     location ^~ /internal/ {
-        proxy_pass $api_upstream;
+        proxy_pass http://api_upstream;
 
         proxy_http_version 1.1;
         proxy_set_header Connection "";
@@ -134,7 +198,7 @@ server {
 
     # ==== Payments webhook → Django ====
     location ^~ /payments-webhook/ {
-        proxy_pass $api_upstream;
+        proxy_pass http://api_upstream;
 
         proxy_http_version 1.1;
         proxy_set_header Connection "";
@@ -157,7 +221,7 @@ server {
 
     # ==== Webapp HTML → Django ====
     location ^~ /webapp/ {
-        proxy_pass $api_upstream;
+        proxy_pass http://api_upstream;
 
         proxy_http_version 1.1;
         proxy_set_header Connection "";
@@ -166,6 +230,9 @@ server {
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Port  443;
+
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        $connection_upgrade;
 
         proxy_connect_timeout 3s;
         proxy_send_timeout    10s;
@@ -226,7 +293,7 @@ server {
 
     # ==== health → Django ====
     location /health/ {
-        proxy_pass $api_upstream;
+        proxy_pass http://api_upstream;
 
         proxy_http_version 1.1;
         proxy_set_header Connection "";
