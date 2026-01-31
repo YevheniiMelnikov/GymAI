@@ -54,6 +54,13 @@ server {
         add_header Expires "0";
     }
 
+    location = /static/js-build-v3/assets/main.css {
+        alias /app/staticfiles/js-build-v3-user/assets/main.css;
+        add_header Cache-Control "no-cache, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+    }
+
     location ^~ /static/js-build-v3/ {
         alias /app/staticfiles/js-build-v3-user/;
         add_header Cache-Control "public, max-age=86400";
