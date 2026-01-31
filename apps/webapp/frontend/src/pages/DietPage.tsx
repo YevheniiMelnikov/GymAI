@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
 import LoadingSpinner from '../components/LoadingSpinner';
+import ProgressBar from '../components/ProgressBar';
 import { applyLang, useI18n } from '../i18n/i18n';
 import { getDietPlan, getDietPlans, HttpError } from '../api/http';
 import { fmtDate } from '../ui/render_program';
@@ -333,314 +334,322 @@ const DietPage: React.FC = () => {
         transition: 'transform 120ms ease, box-shadow 120ms ease',
     };
 
+    const showProgress = progressHelper.isActive;
+
     return (
         <div className="page-container with-bottom-nav diet-page">
             <TopBar title={dietId ? t('diet.detail.title') : t('diet.title')} onBack={dietId ? handleBack : undefined} />
 
             <div className="page-shell">
-                {error && <div className="error-block">{error}</div>}
-                {!dietId && showControls && (
-                    <div className="history-controls" ref={dropdownRef}>
-                        <div className="history-controls__filters">
-                            <label className="filter-toggle">
-                                <span
-                                    className={`filter-toggle__icon${showSavedOnly ? ' filter-toggle__icon--active' : ''}`}
-                                    aria-hidden="true"
-                                >
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                        <path
-                                            d="M12 3.3l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9 6.8 19.3l1-5.8L3.6 9.4l5.8-.8L12 3.3Z"
-                                            stroke="currentColor"
-                                            strokeWidth="1.6"
-                                            strokeLinejoin="round"
-                                            fill="currentColor"
-                                        />
-                                    </svg>
-                                </span>
-                                <input
-                                    type="checkbox"
-                                    checked={showSavedOnly}
-                                    onChange={(event) => setShowSavedOnly(event.target.checked)}
-                                    aria-label={t('saved_label')}
-                                />
-                                <span className="filter-toggle__track" aria-hidden="true">
-                                    <span className="filter-toggle__thumb" />
-                                </span>
-                                <span className="sr-only">{t('saved_label')}</span>
-                            </label>
-                        </div>
-                        <div className="sort-menu">
-                            <button
-                                type="button"
-                                className="sort-trigger"
-                                aria-haspopup="listbox"
-                                aria-expanded={isDropdownOpen}
-                                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                            >
-                                <span className="sort-trigger__icon" aria-hidden="true">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                        <path
-                                            d="M12 3L8.5 6.5H11V13h2V6.5h2.5L12 3Z"
-                                            stroke="currentColor"
-                                            strokeWidth="1.6"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            fill="none"
-                                        />
-                                        <path
-                                            d="M12 21l3.5-3.5H13V11h-2v6.5H8.5L12 21Z"
-                                            stroke="currentColor"
-                                            strokeWidth="1.6"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            fill="none"
-                                        />
-                                    </svg>
-                                </span>
-                                <span>{sortOrder === 'newest' ? t('sort_newest') : t('sort_oldest')}</span>
-                                <span className="sort-trigger__chevron" aria-hidden="true">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                                        <path
-                                            d="M7 10l5 5 5-5"
-                                            stroke="currentColor"
-                                            strokeWidth="1.6"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        />
-                                    </svg>
-                                </span>
-                            </button>
-
-                            {isDropdownOpen && (
-                                <div className="sort-dropdown" role="listbox">
-                                    <button
-                                        type="button"
-                                        className={`sort-option ${sortOrder === 'newest' ? 'is-active' : ''}`}
-                                        onClick={() => {
-                                            setSortOrder('newest');
-                                            setIsDropdownOpen(false);
-                                        }}
-                                    >
-                                        {t('sort_newest')}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={`sort-option ${sortOrder === 'oldest' ? 'is-active' : ''}`}
-                                        onClick={() => {
-                                            setSortOrder('oldest');
-                                            setIsDropdownOpen(false);
-                                        }}
-                                    >
-                                        {t('sort_oldest')}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-                <section className="diet-flow" data-view={dietId ? 'detail' : 'list'} aria-busy={loading}>
-                    <div className="diet-flow__track">
-                        <div className="diet-pane diet-pane--list">
-                            <div className="diet-list" style={{ border: 'none' }}>
-                                {loading && <LoadingSpinner />}
-                                {isListEmpty && (
-                                    <div className="empty-state history-empty">
-                                        <img
-                                            src={emptyImageSrc}
-                                            alt={emptyCaption}
-                                            className="history-empty__image"
-                                            onError={(ev) => {
-                                                const target = ev.currentTarget;
-                                                if (target.src !== fallbackIllustration) {
-                                                    target.src = fallbackIllustration;
-                                                }
-                                            }}
-                                        />
-                                        <p className="history-empty__caption">{emptyCaption}</p>
-                                        <p className="history-empty__hint">{t('diet.empty_hint')}</p>
-                                    </div>
-                                )}
-                                {!loading && visibleDiets.length > 0 &&
-                                    visibleDiets.map((diet) => (
-                                        <button
-                                            key={diet.id}
-                                            type="button"
-                                            className="diet-row"
-                                            onClick={() => handleOpenDiet(diet.id)}
+                {showProgress ? (
+                    <ProgressBar progress={progressHelper.progress} stage={progressHelper.stage} onClose={() => {}} />
+                ) : (
+                    <>
+                        {error && <div className="error-block">{error}</div>}
+                        {!dietId && showControls && (
+                            <div className="history-controls" ref={dropdownRef}>
+                                <div className="history-controls__filters">
+                                    <label className="filter-toggle">
+                                        <span
+                                            className={`filter-toggle__icon${showSavedOnly ? ' filter-toggle__icon--active' : ''}`}
+                                            aria-hidden="true"
                                         >
-                                            <div>
-                                                <p className="diet-row__value">
-                                                    {t('diet.created', {
-                                                        date: fmtDate(diet.created_at, listLocale),
-                                                    })}
-                                                </p>
-                                            </div>
-                                            <span className="diet-row__actions">
-                                                <button
-                                                    type="button"
-                                                    className={`diet-row__favorite${favoriteIds.has(diet.id) ? ' is-active' : ''}`}
-                                                    onClick={(event) => {
-                                                        event.stopPropagation();
-                                                        triggerFavoriteAnimation(event.currentTarget);
-                                                        handleToggleFavoriteId(diet.id);
-                                                    }}
-                                                    aria-pressed={favoriteIds.has(diet.id)}
-                                                    aria-label={t('saved_label')}
-                                                    title={t('saved_label')}
-                                                >
-                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                                        <path
-                                                            d="M12 3.3l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9 6.8 19.3l1-5.8L3.6 9.4l5.8-.8L12 3.3Z"
-                                                            stroke="currentColor"
-                                                            strokeWidth="1.6"
-                                                            strokeLinejoin="round"
-                                                            fill={favoriteIds.has(diet.id) ? 'currentColor' : 'none'}
-                                                        />
-                                                    </svg>
-                                                </button>
-                                                <span className="diet-row__chevron" aria-hidden="true">
-                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                                                        <path
-                                                            d="M7 10l5 5 5-5"
-                                                            stroke="currentColor"
-                                                            strokeWidth="1.6"
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                        />
-                                                    </svg>
-                                                </span>
-                                            </span>
-                                        </button>
-                                    ))}
-                            </div>
-                        </div>
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                                <path
+                                                    d="M12 3.3l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9 6.8 19.3l1-5.8L3.6 9.4l5.8-.8L12 3.3Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.6"
+                                                    strokeLinejoin="round"
+                                                    fill="currentColor"
+                                                />
+                                            </svg>
+                                        </span>
+                                        <input
+                                            type="checkbox"
+                                            checked={showSavedOnly}
+                                            onChange={(event) => setShowSavedOnly(event.target.checked)}
+                                            aria-label={t('saved_label')}
+                                        />
+                                        <span className="filter-toggle__track" aria-hidden="true">
+                                            <span className="filter-toggle__thumb" />
+                                        </span>
+                                        <span className="sr-only">{t('saved_label')}</span>
+                                    </label>
+                                </div>
+                                <div className="sort-menu">
+                                    <button
+                                        type="button"
+                                        className="sort-trigger"
+                                        aria-haspopup="listbox"
+                                        aria-expanded={isDropdownOpen}
+                                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                    >
+                                        <span className="sort-trigger__icon" aria-hidden="true">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                                <path
+                                                    d="M12 3L8.5 6.5H11V13h2V6.5h2.5L12 3Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.6"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    fill="none"
+                                                />
+                                                <path
+                                                    d="M12 21l3.5-3.5H13V11h-2v6.5H8.5L12 21Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.6"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    fill="none"
+                                                />
+                                            </svg>
+                                        </span>
+                                        <span>{sortOrder === 'newest' ? t('sort_newest') : t('sort_oldest')}</span>
+                                        <span className="sort-trigger__chevron" aria-hidden="true">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                                                <path
+                                                    d="M7 10l5 5 5-5"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.6"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                            </svg>
+                                        </span>
+                                    </button>
 
-                        <div className="diet-pane diet-pane--detail">
-                            <div className="diet-detail" aria-busy={detailLoading}>
-                                {detailLoading && !detailPlan && (
-                                    <LoadingSpinner />
-                                )}
-                                {detailPlan && (
-                                    <>
-                                        <div className="diet-detail__actions">
+                                    {isDropdownOpen && (
+                                        <div className="sort-dropdown" role="listbox">
                                             <button
                                                 type="button"
-                                                className={`diet-favorite${isFavorite ? ' is-active' : ''}`}
-                                                onClick={(event) => {
-                                                    triggerFavoriteAnimation(event.currentTarget);
-                                                    handleToggleFavorite();
+                                                className={`sort-option ${sortOrder === 'newest' ? 'is-active' : ''}`}
+                                                onClick={() => {
+                                                    setSortOrder('newest');
+                                                    setIsDropdownOpen(false);
                                                 }}
-                                                aria-pressed={isFavorite}
-                                                aria-label={t('saved_label')}
-                                                title={t('saved_label')}
                                             >
-                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                                    <path
-                                                        d="M12 3.3l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9 6.8 19.3l1-5.8L3.6 9.4l5.8-.8L12 3.3Z"
-                                                        stroke="currentColor"
-                                                        strokeWidth="1.6"
-                                                        strokeLinejoin="round"
-                                                        fill={isFavorite ? 'currentColor' : 'none'}
-                                                    />
-                                                </svg>
+                                                {t('sort_newest')}
                                             </button>
                                             <button
                                                 type="button"
-                                                className="diet-copy"
-                                                onClick={handleCopy}
-                                                aria-label={copyState === 'done' ? t('diet.copy.done') : t('diet.copy')}
-                                                title={copyState === 'done' ? t('diet.copy.done') : t('diet.copy')}
+                                                className={`sort-option ${sortOrder === 'oldest' ? 'is-active' : ''}`}
+                                                onClick={() => {
+                                                    setSortOrder('oldest');
+                                                    setIsDropdownOpen(false);
+                                                }}
                                             >
-                                                {copyState === 'done' ? (
-                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                                        <path
-                                                            d="M20 6L9 17l-5-5"
-                                                            stroke="currentColor"
-                                                            strokeWidth="2"
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                        />
-                                                    </svg>
-                                                ) : (
-                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                                        <rect
-                                                            x="9"
-                                                            y="9"
-                                                            width="10"
-                                                            height="10"
-                                                            rx="2"
-                                                            stroke="currentColor"
-                                                            strokeWidth="1.6"
-                                                        />
-                                                        <path
-                                                            d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"
-                                                            stroke="currentColor"
-                                                            strokeWidth="1.6"
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                        />
-                                                    </svg>
-                                                )}
+                                                {t('sort_oldest')}
                                             </button>
                                         </div>
-                                        {detailDate && (
-                                            <div className="diet-date">{t('diet.created', { date: fmtDate(detailDate, detailLocale) })}</div>
-                                        )}
-                                        <div className="diet-detail__content">
-                                            {detailPlan.meals.map((meal, mealIndex) => (
-                                                <div key={`${mealIndex}-${meal.name ?? 'meal'}`} className="diet-detail__section">
-                                                    {meal.name && (
-                                                        <h4 className="diet-detail__title">{meal.name}</h4>
-                                                    )}
-                                                    <ul className="diet-detail__list">
-                                                        {meal.items.map((item, itemIndex) => (
-                                                            <li key={`${mealIndex}-${itemIndex}`}>
-                                                                {item.name} — {item.grams} {t('diet.grams_unit')}
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            ))}
-                                            {detailPlan.notes && detailPlan.notes.length > 0 && (
-                                                <div className="diet-detail__section">
-                                                    <h4 className="diet-detail__title">{t('diet.notes')}</h4>
-                                                    <ul className="diet-detail__list">
-                                                        {detailPlan.notes.filter(Boolean).map((note, noteIndex) => (
-                                                            <li key={`note-${noteIndex}`}>{note}</li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            )}
-                                            <div className="diet-summary">
-                                                <div className="diet-summary__title">{t('diet.summary')}</div>
-                                                <table className="diet-summary__table">
-                                                    <tbody>
-                                                        <tr>
-                                                            <th scope="row">{t('diet.calories')}</th>
-                                                            <td>{detailPlan.totals.calories} {t('diet.kcal_unit')}</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <th scope="row">{t('diet.protein')}</th>
-                                                            <td>{formatFloat(detailPlan.totals.protein_g)} {t('diet.grams_unit')}</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <th scope="row">{t('diet.fat')}</th>
-                                                            <td>{formatFloat(detailPlan.totals.fat_g)} {t('diet.grams_unit')}</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <th scope="row">{t('diet.carbs')}</th>
-                                                            <td>{formatFloat(detailPlan.totals.carbs_g)} {t('diet.grams_unit')}</td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                </section>
+                        )}
+                        <section className="diet-flow" data-view={dietId ? 'detail' : 'list'} aria-busy={loading}>
+                            <div className="diet-flow__track">
+                                <div className="diet-pane diet-pane--list">
+                                    <div className="diet-list" style={{ border: 'none' }}>
+                                        {loading && <LoadingSpinner />}
+                                        {isListEmpty && (
+                                            <div className="empty-state history-empty">
+                                                <img
+                                                    src={emptyImageSrc}
+                                                    alt={emptyCaption}
+                                                    className="history-empty__image"
+                                                    onError={(ev) => {
+                                                        const target = ev.currentTarget;
+                                                        if (target.src !== fallbackIllustration) {
+                                                            target.src = fallbackIllustration;
+                                                        }
+                                                    }}
+                                                />
+                                                <p className="history-empty__caption">{emptyCaption}</p>
+                                                <p className="history-empty__hint">{t('diet.empty_hint')}</p>
+                                            </div>
+                                        )}
+                                        {!loading && visibleDiets.length > 0 &&
+                                            visibleDiets.map((diet) => (
+                                                <button
+                                                    key={diet.id}
+                                                    type="button"
+                                                    className="diet-row"
+                                                    onClick={() => handleOpenDiet(diet.id)}
+                                                >
+                                                    <div>
+                                                        <p className="diet-row__value">
+                                                            {t('diet.created', {
+                                                                date: fmtDate(diet.created_at, listLocale),
+                                                            })}
+                                                        </p>
+                                                    </div>
+                                                    <span className="diet-row__actions">
+                                                        <button
+                                                            type="button"
+                                                            className={`diet-row__favorite${favoriteIds.has(diet.id) ? ' is-active' : ''}`}
+                                                            onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                triggerFavoriteAnimation(event.currentTarget);
+                                                                handleToggleFavoriteId(diet.id);
+                                                            }}
+                                                            aria-pressed={favoriteIds.has(diet.id)}
+                                                            aria-label={t('saved_label')}
+                                                            title={t('saved_label')}
+                                                        >
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                                <path
+                                                                    d="M12 3.3l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9 6.8 19.3l1-5.8L3.6 9.4l5.8-.8L12 3.3Z"
+                                                                    stroke="currentColor"
+                                                                    strokeWidth="1.6"
+                                                                    strokeLinejoin="round"
+                                                                    fill={favoriteIds.has(diet.id) ? 'currentColor' : 'none'}
+                                                                />
+                                                            </svg>
+                                                        </button>
+                                                        <span className="diet-row__chevron" aria-hidden="true">
+                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                                                                <path
+                                                                    d="M7 10l5 5 5-5"
+                                                                    stroke="currentColor"
+                                                                    strokeWidth="1.6"
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                />
+                                                            </svg>
+                                                        </span>
+                                                    </span>
+                                                </button>
+                                            ))}
+                                    </div>
+                                </div>
+
+                                <div className="diet-pane diet-pane--detail">
+                                    <div className="diet-detail" aria-busy={detailLoading}>
+                                        {detailLoading && !detailPlan && (
+                                            <LoadingSpinner />
+                                        )}
+                                        {detailPlan && (
+                                            <>
+                                                <div className="diet-detail__actions">
+                                                    <button
+                                                        type="button"
+                                                        className={`diet-favorite${isFavorite ? ' is-active' : ''}`}
+                                                        onClick={(event) => {
+                                                            triggerFavoriteAnimation(event.currentTarget);
+                                                            handleToggleFavorite();
+                                                        }}
+                                                        aria-pressed={isFavorite}
+                                                        aria-label={t('saved_label')}
+                                                        title={t('saved_label')}
+                                                    >
+                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                            <path
+                                                                d="M12 3.3l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9 6.8 19.3l1-5.8L3.6 9.4l5.8-.8L12 3.3Z"
+                                                                stroke="currentColor"
+                                                                strokeWidth="1.6"
+                                                                strokeLinejoin="round"
+                                                                fill={isFavorite ? 'currentColor' : 'none'}
+                                                            />
+                                                        </svg>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="diet-copy"
+                                                        onClick={handleCopy}
+                                                        aria-label={copyState === 'done' ? t('diet.copy.done') : t('diet.copy')}
+                                                        title={copyState === 'done' ? t('diet.copy.done') : t('diet.copy')}
+                                                    >
+                                                        {copyState === 'done' ? (
+                                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                                <path
+                                                                    d="M20 6L9 17l-5-5"
+                                                                    stroke="currentColor"
+                                                                    strokeWidth="2"
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                />
+                                                            </svg>
+                                                        ) : (
+                                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                                <rect
+                                                                    x="9"
+                                                                    y="9"
+                                                                    width="10"
+                                                                    height="10"
+                                                                    rx="2"
+                                                                    stroke="currentColor"
+                                                                    strokeWidth="1.6"
+                                                                />
+                                                                <path
+                                                                    d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"
+                                                                    stroke="currentColor"
+                                                                    strokeWidth="1.6"
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                />
+                                                            </svg>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                                {detailDate && (
+                                                    <div className="diet-date">{t('diet.created', { date: fmtDate(detailDate, detailLocale) })}</div>
+                                                )}
+                                                <div className="diet-detail__content">
+                                                    {detailPlan.meals.map((meal, mealIndex) => (
+                                                        <div key={`${mealIndex}-${meal.name ?? 'meal'}`} className="diet-detail__section">
+                                                            {meal.name && (
+                                                                <h4 className="diet-detail__title">{meal.name}</h4>
+                                                            )}
+                                                            <ul className="diet-detail__list">
+                                                                {meal.items.map((item, itemIndex) => (
+                                                                    <li key={`${mealIndex}-${itemIndex}`}>
+                                                                        {item.name} — {item.grams} {t('diet.grams_unit')}
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    ))}
+                                                    {detailPlan.notes && detailPlan.notes.length > 0 && (
+                                                        <div className="diet-detail__section">
+                                                            <h4 className="diet-detail__title">{t('diet.notes')}</h4>
+                                                            <ul className="diet-detail__list">
+                                                                {detailPlan.notes.filter(Boolean).map((note, noteIndex) => (
+                                                                    <li key={`note-${noteIndex}`}>{note}</li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    )}
+                                                    <div className="diet-summary">
+                                                        <div className="diet-summary__title">{t('diet.summary')}</div>
+                                                        <table className="diet-summary__table">
+                                                            <tbody>
+                                                                <tr>
+                                                                    <th scope="row">{t('diet.calories')}</th>
+                                                                    <td>{detailPlan.totals.calories} {t('diet.kcal_unit')}</td>
+                                                                </tr>
+                                                                <tr>
+                                                                    <th scope="row">{t('diet.protein')}</th>
+                                                                    <td>{formatFloat(detailPlan.totals.protein_g)} {t('diet.grams_unit')}</td>
+                                                                </tr>
+                                                                <tr>
+                                                                    <th scope="row">{t('diet.fat')}</th>
+                                                                    <td>{formatFloat(detailPlan.totals.fat_g)} {t('diet.grams_unit')}</td>
+                                                                </tr>
+                                                                <tr>
+                                                                    <th scope="row">{t('diet.carbs')}</th>
+                                                                    <td>{formatFloat(detailPlan.totals.carbs_g)} {t('diet.grams_unit')}</td>
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </>
+                )}
             </div>
 
             {!dietId && !progressHelper.isActive && (

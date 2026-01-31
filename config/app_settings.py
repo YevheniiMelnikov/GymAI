@@ -119,7 +119,7 @@ class Settings(BaseSettings):
     AI_COACH_GRAPH_ATTACH_TIMEOUT: Annotated[float, Field(default=45.0, description="Maximum time to wait for the graph engine to become reachable during startup.")]
     AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=10.0, description="Default timeout for AI agent tool calls in seconds.")]
     AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=180.0, description="Timeout for search tool calls in seconds.")]
-    AI_COACH_GENERATION_SEARCH_TIMEOUT: Annotated[float, Field(default=120.0, description="Search timeout cap in seconds for workout/diet generation modes.")]
+    AI_COACH_GENERATION_SEARCH_TIMEOUT: Annotated[float, Field(default=300.0, description="Search timeout cap in seconds for workout/diet generation modes.")]
     AI_COACH_GENERATION_TIMEOUT: Annotated[float, Field(default=600.0, description="Timeout in seconds for program/subscription generation runs (minimum 10 minutes).")]
     AI_COACH_MEMIFY_DELAY_SECONDS: Annotated[float, Field(default=3600.0, description="Delay in seconds before scheduling Cognee memify for profile datasets.")]
     AI_COACH_CHAT_SUMMARY_PAIR_LIMIT: Annotated[int, Field(default=10, description="Number of client/coach message pairs required before summarizing chat history.")]

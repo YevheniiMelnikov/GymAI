@@ -22,6 +22,7 @@ import { renderSegmented, SegmentId } from '../components/Segmented';
 import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
 import LoadingSpinner from '../components/LoadingSpinner';
+import ProgressBar from '../components/ProgressBar';
 import { triggerFavoriteAnimation } from '../utils/animations';
 import { loadFavoriteIds, toggleFavoriteId } from '../utils/favorites';
 import { useGenerationProgress } from '../hooks/useGenerationProgress';
@@ -461,15 +462,20 @@ const ProgramPage: React.FC = () => {
         transition: 'transform 120ms ease, box-shadow 120ms ease',
     };
 
+    const showProgress = progressHelper.isActive;
+
     return (
         <div className="page-container with-bottom-nav">
             <TopBar title={t('program.title')} />
 
             <div className="page-shell">
-                <>
-                    <div id="content" aria-busy={loading}>
-                        <div className="history-panel program-panel">
-                            <div ref={switcherRef} id="segmented" className="segmented-container" />
+                {showProgress ? (
+                    <ProgressBar progress={progressHelper.progress} stage={progressHelper.stage} onClose={() => {}} />
+                ) : (
+                    <>
+                        <div id="content" aria-busy={loading}>
+                            <div className="history-panel program-panel">
+                                <div ref={switcherRef} id="segmented" className="segmented-container" />
 
                                 {(currentItemId !== null || dateText) && (
                                     <div className="program-meta">
@@ -526,7 +532,8 @@ const ProgramPage: React.FC = () => {
                         </div>
 
                         <div className="history-footer" />
-                </>
+                    </>
+                )}
             </div>
             {creationAction && !isExerciseEditOpen && !isTechniqueOpen && !progressHelper.isActive && (
                 <button
