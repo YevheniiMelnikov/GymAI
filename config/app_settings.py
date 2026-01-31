@@ -268,7 +268,9 @@ class Settings(BaseSettings):
     TG_SUPPORT_CONTACT: Annotated[str, Field(default="", description="Telegram username or link for user support.")]
     PUBLIC_OFFER: Annotated[str, Field(default="", description="URL to the public offer document.")]
     PRIVACY_POLICY: Annotated[str, Field(default="", description="URL to the privacy policy document.")]
-    EMAIL: Annotated[str, Field(default="", description="Contact email address.")]
+    OWNER_EMAIL: Annotated[str, Field(default="", description="Contact email address.")]
+    OWNER_NAME: Annotated[str, Field(default="Unknown owner", description="Business owner name for bot info.")]
+    OWNER_ADDRESS: Annotated[str, Field(default="Unknown address", description="Business owner address for bot info.")]
     BACKUP_RETENTION_DAYS: int = Field(default=30, description="Number of days to retain database and storage backups.")
     ENABLE_KB_BACKUPS: bool = Field(default=False, description="Enable scheduled backups for Neo4j and Qdrant.")
     COGNEE_GDRIVE_SUMMARY_TTL_DAYS: int = Field(default=7, description="Days to retain Google Drive ingestion summary in Redis; 0 disables expiry.")

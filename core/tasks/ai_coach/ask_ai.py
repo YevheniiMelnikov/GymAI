@@ -212,6 +212,7 @@ async def _notify_ai_answer_error(
     profile_id: int | None,
     request_id: str,
     error: str,
+    credits_refunded: bool = False,
     dispatch: bool = False,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
@@ -219,6 +220,7 @@ async def _notify_ai_answer_error(
         "request_id": request_id,
         "error": error,
         "force": True,
+        "credits_refunded": credits_refunded,
     }
     if profile_id is not None:
         payload["profile_id"] = profile_id
@@ -239,6 +241,7 @@ async def _handle_ai_answer_failure_impl(payload: dict[str, Any], detail: str) -
         logger.debug(f"event=ask_ai_failure_skip request_id={request_id} reason=already_failed")
         return
     marked_failed = await state.mark_failed(request_id, detail)
+    refunded = False
     if marked_failed:
         logger.error(f"event=ask_ai_gave_up request_id={request_id} profile_id={profile_id} detail={detail}")
         if profile_id is not None and await state.is_charged(request_id):
@@ -252,6 +255,7 @@ async def _handle_ai_answer_failure_impl(payload: dict[str, Any], detail: str) -
                 queue="ai_coach",
                 routing_key="ai_coach",
             )
+            refunded = True
     else:
         logger.debug(f"event=ask_ai_failure_skip request_id={request_id} reason=mark_failed_skipped")
 
@@ -261,6 +265,7 @@ async def _handle_ai_answer_failure_impl(payload: dict[str, Any], detail: str) -
             profile_id=profile_id,
             request_id=request_id,
             error=reason,
+            credits_refunded=refunded,
             dispatch=True,
         )
 

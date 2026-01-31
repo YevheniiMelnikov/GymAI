@@ -2,6 +2,8 @@ import html
 import re
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 
+from bot.texts import MessageText, translate
+from bot.utils.urls import support_contact_url
 from core.schemas import QAResponseBlock
 
 
@@ -67,3 +69,11 @@ def chunk_formatted_message(
     if current:
         chunks.append(current)
     return chunks
+
+
+def build_coach_error_message(language: str, *, credits_refunded: bool = False) -> str:
+    refund_note = translate(MessageText.coach_agent_refund_note, language) if credits_refunded else ""
+    return translate(MessageText.coach_agent_error, language).format(
+        tg=support_contact_url(),
+        refund_note=refund_note,
+    )

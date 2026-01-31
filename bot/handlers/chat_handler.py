@@ -10,7 +10,7 @@ from loguru import logger
 from bot.states import States
 from bot.texts import translate, MessageText
 from bot.utils.ai_coach.ask_ai import start_ask_ai_prompt, prepare_ask_ai_request, enqueue_ai_question
-from bot.utils.urls import support_contact_url
+from bot.utils.text import build_coach_error_message
 from config.app_settings import settings
 from core.exceptions import AskAiPreparationError
 from core.schemas import Profile
@@ -129,10 +129,7 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
 
         if not queued:
             logger.error(f"event=ask_ai_enqueue_failed request_id={request_id} profile_id={profile.id}")
-            await answer_msg(
-                message,
-                translate(MessageText.coach_agent_error, lang).format(tg=support_contact_url()),
-            )
+            await answer_msg(message, build_coach_error_message(lang))
             return
 
         await notify_request_in_progress(message, lang, show_alert=False)
@@ -150,7 +147,4 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
         await state.update_data(**state_payload)
     except Exception:
         logger.exception(f"event=ask_ai_process_failed profile_id={profile.id}")
-        await answer_msg(
-            message,
-            translate(MessageText.coach_agent_error, lang).format(tg=support_contact_url()),
-        )
+        await answer_msg(message, build_coach_error_message(lang))

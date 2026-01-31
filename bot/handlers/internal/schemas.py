@@ -12,6 +12,7 @@ class AiAnswerNotify(BaseModel):
     blocks: list[QAResponseBlock] = Field(default_factory=list)
     error: str | None = None
     force: bool = False
+    credits_refunded: bool | None = None
 
     @field_validator("status", mode="before")
     @classmethod
@@ -27,6 +28,7 @@ class AiDietNotify(BaseModel):
     error: str | None = None
     force: bool = False
     cost: int | None = None
+    credits_refunded: bool | None = None
 
     @field_validator("status", mode="before")
     @classmethod

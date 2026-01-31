@@ -9,7 +9,8 @@ from bot.handlers.internal.schemas import AiDietNotify
 from bot.keyboards import diet_view_kb
 from bot.texts import MessageText, translate
 from bot.utils.ai_coach.ask_ai import send_chunk_with_reply_fallback
-from bot.utils.urls import get_webapp_url, support_contact_url
+from bot.utils.urls import get_webapp_url
+from bot.utils.text import build_coach_error_message
 from config.app_settings import settings
 from core.ai_coach.state.diet import AiDietState
 from core.exceptions import ProfileNotFoundError, UserServiceError
@@ -70,7 +71,7 @@ async def _internal_ai_diet_ready_impl(request: web.Request) -> web.Response:  #
     if payload.status != "success":
         reason = payload.error or "unknown_error"
         await state_tracker.mark_failed(request_id, reason)
-        error_message = translate(MessageText.coach_agent_error, language).format(tg=support_contact_url())
+        error_message = build_coach_error_message(language, credits_refunded=bool(payload.credits_refunded))
         try:
             await send_chunk_with_reply_fallback(
                 bot=bot,
@@ -116,7 +117,7 @@ async def _internal_ai_diet_ready_impl(request: web.Request) -> web.Response:  #
             await send_chunk_with_reply_fallback(
                 bot=bot,
                 chat_id=profile.tg_id,
-                text=translate(MessageText.coach_agent_error, language).format(tg=support_contact_url()),
+                text=build_coach_error_message(language, credits_refunded=bool(payload.credits_refunded)),
                 parse_mode=ParseMode.HTML,
                 reply_markup=None,
                 reply_to_message_id=None,

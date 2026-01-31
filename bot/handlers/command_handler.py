@@ -16,6 +16,7 @@ from core.schemas import Profile
 from bot.utils.menus import prompt_profile_completion_questionnaire, show_main_menu
 from bot.utils.bot import prompt_language_selection
 from bot.texts import MessageText, translate
+from bot.utils.urls import get_webapp_url
 from bot.states import States
 from core.services import APIService
 
@@ -97,7 +98,27 @@ async def cmd_info(message: Message, state: FSMContext) -> None:
     profile = Profile.model_validate(profile_data) if profile_data else None
     lang = profile.language if profile else settings.DEFAULT_LANG
     await message.answer(
-        translate(MessageText.info, lang).format(privacy_policy=settings.PRIVACY_POLICY),
+        translate(MessageText.info, lang).format(
+            privacy_policy=settings.PRIVACY_POLICY,
+            email=settings.OWNER_EMAIL or "unknown",
+            owner_name=settings.OWNER_NAME or "Unknown owner",
+            owner_address=settings.OWNER_ADDRESS or "Unknown address",
+        ),
+        disable_web_page_preview=True,
+    )
+    with suppress(TelegramBadRequest):
+        await message.delete()
+
+
+@cmd_router.message(Command(CommandName.help))
+async def cmd_help(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile", {})
+    profile = Profile.model_validate(profile_data) if profile_data else None
+    lang = profile.language if profile else settings.DEFAULT_LANG
+    faq_url = get_webapp_url("faq", lang) or settings.WEBAPP_PUBLIC_URL or ""
+    await message.answer(
+        translate(MessageText.help, lang).format(faq_url=faq_url),
         disable_web_page_preview=True,
     )
     with suppress(TelegramBadRequest):

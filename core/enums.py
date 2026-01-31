@@ -42,6 +42,7 @@ class CommandName(str, Enum):
     menu = "menu"
     language = "language"
     info = "info"
+    help = "help"
 
     def __str__(self) -> str:
         return self.value

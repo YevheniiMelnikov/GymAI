@@ -135,9 +135,14 @@ subscription_renewal_prompt:
 
 
 coach_agent_error:
-  eng: "🆘 An error occurred while processing your request. Please contact <a href='{tg}'>support</a>️"
-  ru: "🆘 При обработке вашего запроса возникла ошибка. Пожалуйста, свяжитесь с <a href='{tg}'>поддержкой</a>️"
-  ua: "🆘 Під час обробки вашого запиту сталася помилка. Будь ласка, зверніться до <a href='{tg}'>підтримки</a>️"
+  eng: "🆘 An error occurred while processing your request. Please contact <a href='{tg}'>support</a>️{refund_note}"
+  ru: "🆘 При обработке вашего запроса возникла ошибка. Пожалуйста, свяжитесь с <a href='{tg}'>поддержкой</a>️{refund_note}"
+  ua: "🆘 Під час обробки вашого запиту сталася помилка. Будь ласка, зверніться до <a href='{tg}'>підтримки</a>️{refund_note}"
+
+coach_agent_refund_note:
+  eng: "\nCredits were returned to your balance."
+  ru: "\nКредиты были возвращены на баланс."
+  ua: "\nКредити були повернені на баланс."
 
 profile_deleted:
   eng: "Your profile has been deleted\nIf you wish, you can create a new one using the command /start"
@@ -145,9 +150,14 @@ profile_deleted:
   ua: "Ваш профіль було видалено\nПри бажанні можна створити новий, для цього скористайтеся командою /start"
 
 info:
-  eng: "ℹ️ Read our <a href='{privacy_policy}'>Privacy Policy</a>\nФОП Мельников Євгеній Іванович\nevgeniy@workmail.com"
-  ru: "ℹ️ Ознакомьтесь с <a href='{privacy_policy}'>Политикой конфиденциальности</a>\nФОП Мельников Євгеній Іванович\nevgeniy@workmail.com"
-  ua: "ℹ️ Ознайомтеся з <a href='{privacy_policy}'>Політикою конфіденційності</a>\nФОП Мельников Євгеній Іванович\nevgeniy@workmail.com"
+  eng: "ℹ️ Read our <a href='{privacy_policy}'>Privacy Policy</a>\n<b>Owner:</b> {owner_name}\n<b>Email:</b> {email}\n<b>Address:</b> {owner_address}"
+  ru: "ℹ️ Ознакомьтесь с <a href='{privacy_policy}'>Политикой конфиденциальности</a>\n<b>Владелец:</b> {owner_name}\n<b>Email:</b> {email}\n<b>Адрес:</b> {owner_address}"
+  ua: "ℹ️ Ознайомтеся з <a href='{privacy_policy}'>Політикою конфіденційності</a>\n<b>Власник:</b> {owner_name}\n<b>Email:</b> {email}\n<b>Адреса:</b> {owner_address}"
+
+help:
+  eng: "This bot creates training plans, adapts them to your progress (subscription format), and builds nutrition plans.\nMore details are available in the <a href='{faq_url}'>FAQ</a> section."
+  ru: "Этот бот составляет тренировочные планы, адаптирует их по мере вашего прогресса (формат подписки) и составляет планы питания.\nБольше информации — в разделе <a href='{faq_url}'>FAQ</a>."
+  ua: "Цей бот складає тренувальні плани, адаптує їх у міру вашого прогресу (формат підписки) та формує плани харчування.\nБільше інформації — у розділі <a href='{faq_url}'>FAQ</a>."
 
 credit_balance_menu:
   eng: "<b>Credits balance: </b>{credits}\n\nOpen the top-up page to choose a package 👇"

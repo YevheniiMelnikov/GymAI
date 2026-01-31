@@ -10,7 +10,8 @@ from pydantic import ValidationError
 
 from bot.keyboards import program_view_kb as _program_view_kb, weekly_survey_kb
 from bot.texts import MessageText, translate
-from bot.utils.urls import support_contact_url, get_webapp_url
+from bot.utils.urls import get_webapp_url
+from bot.utils.text import build_coach_error_message
 from bot.handlers.internal.schemas import WeeklySurveyNotify, SubscriptionRenewalNotify
 from bot.handlers.internal.workout_plans import FINALIZERS, PlanFinalizeContext
 from config.app_settings import settings
@@ -126,7 +127,10 @@ async def _process_ai_plan_ready(
                     f"profile_id={resolved_profile_id} request_id={request_id} detail={detail}"
                 )
                 return
-            message = translate(MessageText.coach_agent_error, profile.language).format(tg=support_contact_url())
+            message = build_coach_error_message(
+                profile.language,
+                credits_refunded=bool(payload.get("credits_refunded")),
+            )
             try:
                 await bot.send_message(chat_id=profile.tg_id, text=message)
                 logger.info(

@@ -49,6 +49,8 @@ class MessageText(AutoName):
     invalid_content = auto()
     unexpected_error = auto()
     coach_agent_error = auto()
+    coach_agent_refund_note = auto()
+    help = auto()
 
     default_status = auto()
     request_in_progress = auto()

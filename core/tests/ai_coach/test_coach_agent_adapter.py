@@ -9,7 +9,7 @@ os.environ.setdefault("SPREADSHEET_ID", "x")
 os.environ.setdefault("TG_SUPPORT_CONTACT", "x")
 os.environ.setdefault("PUBLIC_OFFER", "x")
 os.environ.setdefault("PRIVACY_POLICY", "x")
-os.environ.setdefault("EMAIL", "x")
+os.environ.setdefault("OWNER_EMAIL", "x")
 
 import json
 from types import SimpleNamespace

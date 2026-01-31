@@ -48,7 +48,7 @@ def patch_liqpay(monkeypatch):
     settings.PAYMENT_CALLBACK_URL = "https://callback/"
     settings.CHECKOUT_URL = "https://checkout/"
     settings.BOT_LINK = "https://bot/"
-    settings.EMAIL = "test@example.com"
+    settings.OWNER_EMAIL = "test@example.com"
 
 
 def test_get_payment_link():

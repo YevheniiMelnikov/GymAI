@@ -9,8 +9,12 @@ from pydantic import ValidationError
 from bot.handlers.internal.auth import require_internal_auth
 from bot.handlers.internal.schemas import AiAnswerNotify
 from bot.texts import MessageText, translate
-from bot.utils.urls import support_contact_url
-from bot.utils.text import format_plain_answer, format_answer_blocks, chunk_formatted_message
+from bot.utils.text import (
+    format_plain_answer,
+    format_answer_blocks,
+    chunk_formatted_message,
+    build_coach_error_message,
+)
 from bot.utils.menus import send_main_menu_to_chat
 from bot.utils.ai_coach.ask_ai import send_chunk_with_reply_fallback
 from config.app_settings import settings
@@ -94,7 +98,7 @@ async def _internal_ai_answer_ready_impl(request: web.Request) -> web.Response:
     if payload.status != "success":
         reason = payload.error or "unknown_error"
         await state_tracker.mark_failed(request_id, reason)
-        error_message = translate(MessageText.coach_agent_error, language).format(tg=support_contact_url())
+        error_message = build_coach_error_message(language, credits_refunded=bool(payload.credits_refunded))
         try:
             await send_chunk_with_reply_fallback(
                 bot=bot,
@@ -120,7 +124,7 @@ async def _internal_ai_answer_ready_impl(request: web.Request) -> web.Response:
             settings.DISABLE_MANUAL_PLACEHOLDER,
         )
         if not settings.DISABLE_MANUAL_PLACEHOLDER:
-            fallback = translate(MessageText.coach_agent_error, language).format(tg=support_contact_url())
+            fallback = build_coach_error_message(language, credits_refunded=bool(payload.credits_refunded))
             try:
                 await send_chunk_with_reply_fallback(
                     bot=bot,

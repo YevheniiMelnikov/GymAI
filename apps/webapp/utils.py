@@ -160,7 +160,7 @@ def build_payment_gateway() -> LiqPayGateway:
         settings.PAYMENT_PRIVATE_KEY,
         server_url=settings.PAYMENT_CALLBACK_URL,
         result_url=settings.BOT_LINK,
-        email=settings.EMAIL,
+        email=settings.OWNER_EMAIL,
         checkout_url=settings.CHECKOUT_URL,
     )
 

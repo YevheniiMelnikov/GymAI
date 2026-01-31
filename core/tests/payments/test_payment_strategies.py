@@ -28,7 +28,7 @@ sys.modules.setdefault(
     ),
 )
 settings_mod = types.ModuleType("config.app_settings")
-settings_mod.settings = types.SimpleNamespace(EMAIL="e", TG_SUPPORT_CONTACT="t")
+settings_mod.settings = types.SimpleNamespace(OWNER_EMAIL="e", TG_SUPPORT_CONTACT="t")
 sys.modules["config.app_settings"] = settings_mod
 
 
