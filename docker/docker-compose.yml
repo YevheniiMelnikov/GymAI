@@ -2,29 +2,32 @@ x-app-image: &app_image gymbot-app:latest
 x-coach-image: &coach_image gymbot-coach:latest
 
 x-common-env: &common_env
-  environment:
-    PYTHONPATH: /app
-    DJANGO_SETTINGS_MODULE: config.settings
-    PYTHONUNBUFFERED: 1
-    PYTHONDONTWRITEBYTECODE: 1
-    REDIS_HOST: ${REDIS_HOST:-redis}
-    REDIS_PORT: ${REDIS_PORT:-6379}
-    RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
-    RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
-    POSTGRES_DB: ${DB_NAME}
-    POSTGRES_USER: ${DB_USER}
-    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-    POSTGRES_HOST: ${DB_HOST}
-    POSTGRES_PORT: ${DB_PORT}
-    AI_COACH_HOST: ${AI_COACH_HOST:-ai_coach}
-    AI_COACH_PORT: ${COACH_PORT:-9000}
-    BOT_INTERNAL_HOST: ${BOT_SERVICE:-bot}
-    BOT_INTERNAL_PORT: ${BOT_CONTAINER_PORT:-8088}
-    VECTOR_DB_PROVIDER: ${VECTOR_DB_PROVIDER:-qdrant}
-    VECTOR_DB_URL: ${VECTOR_DB_URL:-http://qdrant:6333}
-    VECTOR_DB_KEY: ${VECTOR_DB_KEY:-}
+  PYTHONPATH: /app
+  DJANGO_SETTINGS_MODULE: config.settings
+  PYTHONUNBUFFERED: 1
+  PYTHONDONTWRITEBYTECODE: 1
+  REDIS_HOST: ${REDIS_HOST:-redis}
+  REDIS_PORT: ${REDIS_PORT:-6379}
+  RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+  RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+  POSTGRES_DB: ${DB_NAME}
+  POSTGRES_USER: ${DB_USER}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+  POSTGRES_HOST: ${DB_HOST}
+  POSTGRES_PORT: ${DB_PORT}
+  AI_COACH_HOST: ${AI_COACH_HOST:-ai_coach}
+  AI_COACH_PORT: ${COACH_PORT:-9000}
+  BOT_INTERNAL_HOST: ${BOT_SERVICE:-bot}
+  BOT_INTERNAL_PORT: ${BOT_CONTAINER_PORT:-8088}
+  VECTOR_DB_PROVIDER: ${VECTOR_DB_PROVIDER:-qdrant}
+  VECTOR_DB_URL: ${VECTOR_DB_URL:-http://qdrant:6333}
+  VECTOR_DB_KEY: ${VECTOR_DB_KEY:-}
+
+x-common-service: &common_service
   env_file:
     - .env
+  environment:
+    <<: *common_env
   volumes:
     - staticfiles:/app/staticfiles
     - cognee_storage:/app/cognee_storage
@@ -116,9 +119,10 @@ services:
       args:
         INSTALL_DEV: false
         EXTRAS: ""
-    <<: *common_env
+    <<: *common_service
     entrypoint: /app/docker/entrypoint.sh
     environment:
+      <<: *common_env
       GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
       RUN_MIGRATIONS: true
       API_PORT: ${API_PORT:-8000}
@@ -154,7 +158,6 @@ services:
       - staticfiles:/app/staticfiles
       - cognee_storage:/app/cognee_storage
       - ../${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:/app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:ro
-      - ../apps/webapp/static:/app/apps/webapp/static
     restart: unless-stopped
 
   celery_worker:
@@ -167,10 +170,11 @@ services:
       args:
         INSTALL_DEV: false
         EXTRAS: ""
-    <<: *common_env
+    <<: *common_service
     entrypoint: /app/docker/entrypoint.sh
     command: celery -A config.celery:celery_app worker -l info -Q default,critical,maintenance -P threads
     environment:
+      <<: *common_env
       SERVICE_ROLE: worker
       COGNEE_STORAGE_PATH: /app/cognee_storage
       GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
@@ -202,10 +206,11 @@ services:
       args:
         INSTALL_DEV: false
         EXTRAS: coach
-    <<: *common_env
+    <<: *common_service
     entrypoint: /app/docker/entrypoint.sh
     command: celery -A config.celery:celery_app worker -l info -Q ai_coach -P threads --concurrency ${AI_COACH_WORKER_CONCURRENCY:-2}
     environment:
+      <<: *common_env
       SERVICE_ROLE: ai_coach_worker
       COGNEE_STORAGE_PATH: /app/cognee_storage
       GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
@@ -237,10 +242,11 @@ services:
       args:
         INSTALL_DEV: false
         EXTRAS: ""
-    <<: *common_env
+    <<: *common_service
     entrypoint: /app/docker/entrypoint.sh
     command: celery -A config.celery:celery_app beat -l info
     environment:
+      <<: *common_env
       SERVICE_ROLE: beat
       COGNEE_STORAGE_PATH: /app/cognee_storage
       GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
@@ -271,8 +277,9 @@ services:
       args:
         INSTALL_DEV: false
         EXTRAS: coach
-    <<: *common_env
+    <<: *common_service
     environment:
+      <<: *common_env
       TZ: Europe/Kyiv
       SERVICE_ROLE: ai_coach
       SKIP_COLLECTSTATIC: "true"
@@ -285,8 +292,6 @@ services:
       OPENAI_API_KEY: ${LLM_API_KEY}
       OPENAI_BASE_URL: https://openrouter.ai/api/v1
       COACH_PORT: ${COACH_PORT:-9000}
-    env_file:
-      - .env
     entrypoint: /app/docker/entrypoint.sh
     command: >
       bash -lc "uvicorn ai_coach.api:app --host 0.0.0.0 --port ${COACH_PORT:-9000}"
@@ -321,8 +326,9 @@ services:
       args:
         INSTALL_DEV: false
         EXTRAS: ""
-    <<: *common_env
+    <<: *common_service
     environment:
+      <<: *common_env
       TZ: Europe/Kyiv
       API_URL: ${API_URL:-http://api:8000}
       GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
