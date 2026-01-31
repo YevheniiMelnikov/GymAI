@@ -1710,6 +1710,13 @@ a:hover{ opacity: .9; }
   min-height: clamp(120px, 22vh, 220px);
   padding-block: clamp(4px, 1.4vh, 12px);
 }
+@media (min-width: 768px){
+  .history-empty{
+    max-width: 520px;
+    margin-inline: auto;
+    padding-inline: 24px;
+  }
+}
 .diet-page .history-empty{
   margin-top: calc(
     var(--segmented-stack-top)
