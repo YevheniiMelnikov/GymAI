@@ -233,6 +233,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
         instructions: str | None = None,
     ) -> DietPlan:
         deps.mode = CoachMode.diet
+        deps.max_run_seconds = max(600.0, float(settings.AI_COACH_MAX_RUN_SECONDS))
         deps.disabled_tools.add("tool_search_exercises")
         logger.debug(
             f"agent.stage stage=disable_tool profile_id={deps.profile_id} mode=diet tool=tool_search_exercises"

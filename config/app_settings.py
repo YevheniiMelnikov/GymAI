@@ -114,7 +114,7 @@ class Settings(BaseSettings):
     AI_COACH_MAX_EXERCISE_SEARCH_CALLS: Annotated[int, Field(default=15, description="Maximum number of exercise catalog searches per run in program/subscription/update modes.")]
     AI_COACH_EXERCISE_SEARCH_LIMIT: Annotated[int, Field(default=120, description="Maximum number of exercises returned per tool_search_exercises call when no explicit limit is provided.")]
     AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60, description="Default timeout for requests to the AI Coach in seconds.")]
-    AI_COACH_MAX_RUN_SECONDS: Annotated[float, Field(default=200.0, description="Time budget in seconds for a single AI coach agent run before aborting.")]
+    AI_COACH_MAX_RUN_SECONDS: Annotated[float, Field(default=600.0, description="Time budget in seconds for a single AI coach agent run before aborting.")]
     AI_COACH_GLOBAL_PROJECTION_TIMEOUT: Annotated[float, Field(default=15.0, description="Timeout for global projection operations in seconds.")]
     AI_COACH_GRAPH_ATTACH_TIMEOUT: Annotated[float, Field(default=45.0, description="Maximum time to wait for the graph engine to become reachable during startup.")]
     AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=10.0, description="Default timeout for AI agent tool calls in seconds.")]
