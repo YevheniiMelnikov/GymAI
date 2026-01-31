@@ -17,6 +17,7 @@ from bot.utils.menus import prompt_profile_completion_questionnaire, show_main_m
 from bot.utils.bot import prompt_language_selection
 from bot.texts import MessageText, translate
 from bot.utils.urls import get_webapp_url
+from bot.keyboards import faq_help_kb
 from bot.states import States
 from core.services import APIService
 
@@ -116,9 +117,11 @@ async def cmd_help(message: Message, state: FSMContext) -> None:
     profile_data = data.get("profile", {})
     profile = Profile.model_validate(profile_data) if profile_data else None
     lang = profile.language if profile else settings.DEFAULT_LANG
-    faq_url = get_webapp_url("faq", lang) or settings.WEBAPP_PUBLIC_URL or ""
+    faq_url = get_webapp_url("faq", lang)
+    help_keyboard = faq_help_kb(lang, faq_webapp_url=faq_url)
     await message.answer(
-        translate(MessageText.help, lang).format(faq_url=faq_url),
+        translate(MessageText.help, lang),
+        reply_markup=help_keyboard,
         disable_web_page_preview=True,
     )
     with suppress(TelegramBadRequest):

@@ -37,6 +37,14 @@ def main_menu_kb(
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
+def faq_help_kb(lang: str, *, faq_webapp_url: str | None = None) -> KbMarkup | None:
+    if not faq_webapp_url:
+        return None
+    builder = KeyboardBuilder(lang)
+    buttons = [[builder.add(ButtonText.faq, webapp_url=faq_webapp_url)]]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
 def balance_menu_kb(lang: str) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [[builder.add(ButtonText.prev_menu, "back")]]
